@@ -1,0 +1,225 @@
+"""Intelligent Supervisor Agent implementation.
+
+This module provides the supervisor agent that orchestrates
+specialist agents using them as tools.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Callable
+
+from langchain.agents import create_agent
+from langchain_core.messages import AIMessage, HumanMessage
+from langgraph.config import get_stream_writer
+
+from ..middleware import DatetimeContextMiddleware, SummarizationMiddleware
+from ..prompts import SUPERVISOR_PROMPT
+from .config import config
+from .llm import get_answer_model
+from .registry import get_all_agent_tools, get_all_capabilities
+from .utils import STREAM_WRITER_KEY, log_progress
+
+if TYPE_CHECKING:
+    from .state import ChatbotState
+
+
+def _build_supervisor_prompt() -> str:
+    """Build the supervisor prompt with agent capabilities.
+
+    Returns:
+        The formatted supervisor prompt with all agent capabilities.
+    """
+    capabilities = get_all_capabilities()
+
+    capabilities_text = ""
+    for agent_name, agent_caps in capabilities.items():
+        # Format capabilities nicely
+        caps_lines = agent_caps.strip().split("\n")
+        formatted_caps = "\n  ".join(caps_lines)
+        capabilities_text += f"- {agent_name}:\n  {formatted_caps}\n\n"
+
+    return SUPERVISOR_PROMPT.format(agent_capabilities=capabilities_text)
+
+
+def create_supervisor_agent(include_datetime: bool | None = None):  # type: ignore[no-untyped-def]
+    """Create the intelligent supervisor agent.
+
+    The supervisor uses specialist agents as tools to handle
+    user queries by routing to the appropriate agent.
+
+    Args:
+        include_datetime: Whether to include datetime context middleware.
+            If None, uses the config value (default: True).
+
+    Returns:
+        The configured supervisor agent.
+    """
+    # Get all registered agents as tools
+    agent_tools = get_all_agent_tools()
+
+    # Build dynamic prompt with capabilities
+    system_prompt = _build_supervisor_prompt()
+
+    # Build middleware list
+    middleware: list[Any] = []
+
+    # Add datetime middleware if enabled
+    datetime_enabled = (
+        include_datetime if include_datetime is not None else config.include_datetime
+    )
+    if datetime_enabled:
+        middleware.append(DatetimeContextMiddleware(enabled=True))
+
+    # Add summarization middleware if enabled
+    if config.summarization_enabled:
+        middleware.append(
+            SummarizationMiddleware(
+                enabled=True,
+                trigger_tokens=config.summarization_trigger_tokens,
+                keep_messages=config.summarization_keep_messages,
+            )
+        )
+
+    # Create agent with lazy model initialization
+    agent: Any = create_agent(
+        model=get_answer_model(),
+        tools=agent_tools,
+        middleware=middleware,
+        system_prompt=system_prompt,
+    )
+
+    return agent
+
+
+def _extract_text_content(content: str | list) -> str:
+    """Extract text from message content.
+
+    Handles both string content and structured content (list of dicts
+    with 'type' and 'text' fields, as returned by some models).
+
+    Args:
+        content: The message content (string or list).
+
+    Returns:
+        The extracted text as a string.
+    """
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        # Extract text from structured content blocks
+        text_parts = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                text_parts.append(block.get("text", ""))
+            elif isinstance(block, str):
+                text_parts.append(block)
+        return "\n".join(text_parts) if text_parts else str(content)
+
+    return str(content)
+
+
+def _build_conversation_context(messages: list, max_messages: int = 10) -> list:
+    """Build conversation context from recent messages.
+
+    Args:
+        messages: List of conversation messages.
+        max_messages: Maximum number of messages to include.
+
+    Returns:
+        List of recent messages for context.
+    """
+    if len(messages) > max_messages:
+        return messages[-max_messages:]
+    return messages
+
+
+async def supervisor_agent_node(
+    state: "ChatbotState",
+    register_agents_func: Callable[[], None] | None = None,
+) -> "ChatbotState":
+    """Execute the supervisor agent node.
+
+    This node runs the intelligent supervisor that:
+    1. Analyzes the user query with conversation context
+    2. Decides whether to respond directly or use agent tools
+    3. Orchestrates agent calls for complex queries
+    4. Returns a natural, formatted response
+
+    Args:
+        state: The current chatbot state.
+        register_agents_func: Optional function to register agents before processing.
+
+    Returns:
+        Updated state with the supervisor's response.
+    """
+    # Register agents if a function is provided
+    if register_agents_func is not None:
+        register_agents_func()
+
+    log_progress("Analyzing query and processing...\n")
+
+    user_query = state.get("user_query", "")
+    messages = state.get("messages", [])
+
+    # Build conversation context
+    context_messages = _build_conversation_context(messages)
+
+    # Add the current query to messages for the supervisor
+    input_messages = list(context_messages)
+    if not input_messages or input_messages[-1].content != user_query:
+        input_messages.append(HumanMessage(content=user_query))
+
+    try:
+        # Create and run the supervisor
+        supervisor = create_supervisor_agent()
+
+        # Get current stream writer and pass it through config for tools
+        config: dict = {"recursion_limit": 25}
+        try:
+            writer = get_stream_writer()
+            if writer is not None:
+                config["configurable"] = {STREAM_WRITER_KEY: writer}
+        except (RuntimeError, Exception):
+            pass
+
+        result = await supervisor.ainvoke(
+            {"messages": input_messages},
+            config=config,
+        )
+
+        # Extract the response
+        response_message = result["messages"][-1]
+        raw_content = (
+            response_message.content
+            if hasattr(response_message, "content")
+            else str(response_message)
+        )
+        response_text = _extract_text_content(raw_content)
+
+        log_progress("Response ready.\n")
+
+        # Update state with response
+        state.update(
+            {
+                "chatbot_response": response_text,
+                "messages": [AIMessage(content=response_text)],
+                "workflow_step": "complete",
+            }
+        )
+
+    except Exception as e:
+        log_progress(f"Error in supervisor: {e}\n")
+        error_response = (
+            "I encountered an error processing your request. "
+            "Please try rephrasing your question."
+        )
+        state.update(
+            {
+                "chatbot_response": error_response,
+                "messages": [AIMessage(content=error_response)],
+                "workflow_step": "error",
+            }
+        )
+
+    return state

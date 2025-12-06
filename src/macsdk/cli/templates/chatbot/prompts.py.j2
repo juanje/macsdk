@@ -1,0 +1,26 @@
+"""Chatbot prompts and customization.
+
+Customize your chatbot's behavior by modifying these prompts.
+The supervisor will use these to understand the chatbot's purpose.
+"""
+
+# Chatbot identity and context
+CHATBOT_NAME = "{{ display_name }}"
+CHATBOT_DESCRIPTION = """{{ description }}"""
+
+# Additional context for the supervisor
+# This helps the supervisor understand the chatbot's domain
+ADDITIONAL_CONTEXT = """
+You are a helpful assistant. Be concise and informative.
+When using specialist agents, synthesize their responses into
+a coherent answer for the user.
+"""
+
+# You can also define custom response guidelines
+RESPONSE_GUIDELINES = """
+- Be helpful and professional
+- If you don't know something, say so
+- Use the available specialist agents when appropriate
+- Summarize technical information clearly for non-experts
+"""
+

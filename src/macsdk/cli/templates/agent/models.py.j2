@@ -1,0 +1,60 @@
+"""Response models for {{ name }}.
+
+Define structured responses that the agent returns.
+The supervisor uses these to understand agent output.
+
+BaseAgentResponse already includes:
+- response_text: str - Human-readable response
+- tools_used: list[str] - Tools that were called
+
+Add your own fields for domain-specific data.
+"""
+
+# Uncomment these imports when adding custom fields:
+# from typing import Optional
+# from pydantic import Field
+
+from macsdk.core import BaseAgentResponse
+
+
+class AgentResponse(BaseAgentResponse):
+    """Response model for {{ name }}.
+
+    Add fields relevant to your agent's domain.
+    These help the supervisor understand the structured data.
+
+    Example fields (customize for your use case):
+
+        # For an API agent:
+        api_status: Optional[str] = Field(
+            None, description="Status from the API call"
+        )
+        data_count: Optional[int] = Field(
+            None, description="Number of items retrieved"
+        )
+
+        # For a job/task agent:
+        job_id: Optional[str] = Field(
+            None, description="Job or task identifier"
+        )
+        status: Optional[str] = Field(
+            None, description="Job status (pending, running, completed, failed)"
+        )
+        error_summary: Optional[str] = Field(
+            None, description="Summary of any errors encountered"
+        )
+
+        # For a search/RAG agent:
+        sources: list[str] = Field(
+            default_factory=list, description="Sources used for the response"
+        )
+        confidence: Optional[float] = Field(
+            None, description="Confidence score (0.0 to 1.0)"
+        )
+    """
+
+    # Add your custom fields here:
+    # status: Optional[str] = Field(None, description="Operation status")
+    # data: Optional[dict] = Field(None, description="Retrieved data")
+    pass
+

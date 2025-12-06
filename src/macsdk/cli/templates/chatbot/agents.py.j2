@@ -1,0 +1,88 @@
+"""Agent registration.
+
+This module registers all specialist agents with the chatbot.
+The register_all_agents() function is called when the chatbot starts.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+{% if with_rag %}
+
+from macsdk.agents import RAGAgent
+from macsdk.core import get_registry, register_agent
+
+
+def register_all_agents() -> None:
+    """Register all specialist agents.
+
+    The RAG agent is pre-configured. Customize it in config.yml.
+    Add more agents below or use:
+
+        macsdk add-agent . --package my-agent
+    """
+    registry = get_registry()
+
+    # RAG Agent for documentation Q&A
+    # Configure sources, glossary, etc. in config.yml
+    if not registry.is_registered("rag_agent"):
+        register_agent(RAGAgent())
+
+    # Add more agents here:
+    # from my_agent import MyAgent
+    # if not registry.is_registered("my_agent"):
+    #     register_agent(MyAgent())
+{% else %}
+
+from macsdk.core import get_registry
+
+# Import register_agent when you add agents:
+# from macsdk.core import register_agent
+
+
+def register_all_agents() -> None:
+    """Register all specialist agents.
+
+    Add your agents here. Example:
+
+        from macsdk.core import register_agent
+        from my_agent import MyAgent
+
+        if not registry.is_registered("my_agent"):
+            register_agent(MyAgent())
+
+    Or use the CLI to add agents:
+
+        macsdk add-agent . --package my-agent
+    """
+    registry = get_registry()
+    # Add your agents here:
+    # from my_agent import MyAgent
+    # if not registry.is_registered("my_agent"):
+    #     register_agent(MyAgent())
+    _ = registry  # Avoid unused variable warning
+{% endif %}
+
+
+def get_registered_agents() -> list[dict[str, Any]]:
+    """Get information about all registered agents.
+
+    Returns:
+        List of dicts with agent info (name, description, tools_count).
+    """
+    # First ensure agents are registered
+    register_all_agents()
+
+    registry = get_registry()
+    agents_info: list[dict[str, Any]] = []
+
+    for name, agent in registry.get_all().items():
+        info = {
+            "name": name,
+            "description": getattr(agent, "capabilities", "No description"),
+            "tools_count": len(getattr(agent, "tools", [])),
+        }
+        agents_info.append(info)
+
+    return agents_info
+

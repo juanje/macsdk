@@ -1,0 +1,80 @@
+"""Graph definitions for MACSDK chatbots.
+
+This module defines the LangGraph workflow builder for chatbots,
+supporting both CLI (interactive) and web (single-query) modes.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Callable, Literal
+
+from langgraph.graph import END, START, StateGraph
+
+from .state import ChatbotState
+from .supervisor import supervisor_agent_node
+
+if TYPE_CHECKING:
+    from langgraph.graph.graph import CompiledGraph
+
+
+def should_exit(state: ChatbotState) -> Literal["exit", "continue"]:
+    """Check if user wants to exit.
+
+    Args:
+        state: Current chatbot state.
+
+    Returns:
+        "exit" if user typed exit, "continue" otherwise.
+    """
+    user_query = state.get("user_query", "")
+    if user_query.strip().lower() == "exit":
+        return "exit"
+    return "continue"
+
+
+def create_chatbot_graph(
+    register_agents_func: Callable[[], None] | None = None,
+) -> "CompiledGraph":
+    """Create chatbot graph for CLI with interactive loop.
+
+    The graph flow is:
+    START -> supervisor -> END
+
+    Args:
+        register_agents_func: Optional function to register agents.
+            This function will be called before processing each query.
+
+    Returns:
+        Compiled graph for CLI usage.
+    """
+    graph_builder: StateGraph[ChatbotState] = StateGraph(ChatbotState)
+
+    # Create supervisor node with agent registration
+    async def supervisor_node(state: ChatbotState) -> ChatbotState:
+        return await supervisor_agent_node(state, register_agents_func)
+
+    # Add the supervisor node
+    graph_builder.add_node("supervisor", supervisor_node)
+
+    # Simple flow: START -> supervisor -> END
+    graph_builder.add_edge(START, "supervisor")
+    graph_builder.add_edge("supervisor", END)
+
+    return graph_builder.compile()
+
+
+def create_web_chatbot_graph(
+    register_agents_func: Callable[[], None] | None = None,
+) -> "CompiledGraph":
+    """Create chatbot graph for web interface (single query mode).
+
+    The web graph is simpler - just processes one query and returns.
+
+    Args:
+        register_agents_func: Optional function to register agents.
+
+    Returns:
+        Compiled graph for web usage.
+    """
+    # Web graph is identical to CLI graph in current implementation
+    return create_chatbot_graph(register_agents_func)

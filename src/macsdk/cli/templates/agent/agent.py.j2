@@ -1,0 +1,136 @@
+"""Agent implementation for {{ name }}.
+
+This module defines the specialist agent that implements
+the MACSDK SpecialistAgent protocol.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Annotated
+
+from langchain.agents import create_agent
+from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import InjectedToolArg, tool
+
+from macsdk.core import get_answer_model, run_agent_with_tools
+
+from .models import AgentResponse
+from .prompts import SYSTEM_PROMPT
+from .tools import get_service_status, search_logs
+
+if TYPE_CHECKING:
+    from langchain_core.tools import BaseTool
+
+
+CAPABILITIES = """{{ description }}"""
+
+
+def create_{{ agent_slug }}():
+    """Create the {{ name }} agent.
+
+    Returns:
+        Configured agent instance.
+    """
+    # Active tools for this agent
+    # These example tools use mock data - replace with real implementations
+    tools = [
+        get_service_status,  # Check service health (mock)
+        search_logs,         # Search application logs (mock)
+        # Add your custom tools here
+    ]
+
+    return create_agent(
+        model=get_answer_model(),
+        tools=tools,
+        middleware=[],
+        response_format=AgentResponse,
+    )
+
+
+async def run_{{ agent_slug }}(
+    query: str,
+    context: dict | None = None,
+    config: RunnableConfig | None = None,
+) -> dict:
+    """Run the {{ name }} agent.
+
+    Args:
+        query: User query to process.
+        context: Optional context from previous interactions.
+        config: Optional runnable configuration.
+
+    Returns:
+        Agent response dictionary.
+    """
+    agent = create_{{ agent_slug }}()
+    return await run_agent_with_tools(
+        agent=agent,
+        query=query,
+        system_prompt=SYSTEM_PROMPT,
+        agent_name="{{ agent_slug }}",
+        context=context,
+        config=config,
+    )
+
+
+class {{ agent_class }}:
+    """Agent that implements the SpecialistAgent protocol.
+
+    This class provides the interface that MACSDK expects:
+    - name: Unique identifier for the agent
+    - capabilities: Description of what the agent can do
+    - run(): Execute the agent
+    - as_tool(): Return the agent as a callable tool
+    """
+
+    name: str = "{{ agent_slug }}"
+    capabilities: str = CAPABILITIES
+
+    async def run(
+        self,
+        query: str,
+        context: dict | None = None,
+        config: RunnableConfig | None = None,
+    ) -> dict:
+        """Execute the agent.
+
+        Args:
+            query: User query to process.
+            context: Optional context from previous interactions.
+            config: Optional runnable configuration.
+
+        Returns:
+            Agent response dictionary.
+        """
+        return await run_{{ agent_slug }}(query, context, config)
+
+    def as_tool(self) -> "BaseTool":
+        """Return this agent as a LangChain tool.
+
+        This allows the supervisor to call this agent as a tool,
+        enabling dynamic agent orchestration.
+
+        Returns:
+            A LangChain tool wrapping this agent.
+        """
+        agent_instance = self
+
+        @tool
+        async def invoke_{{ agent_slug }}(
+            query: str,
+            config: Annotated[RunnableConfig, InjectedToolArg],
+        ) -> str:
+            """Invoke the {{ name }} agent.
+
+            Args:
+                query: The query to process.
+                config: Runnable configuration (injected).
+
+            Returns:
+                The agent's response text.
+            """
+            result = await agent_instance.run(query, config=config)
+            return result["response"]
+
+        return invoke_{{ agent_slug }}
+

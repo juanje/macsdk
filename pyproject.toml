@@ -1,0 +1,171 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "macsdk"
+version = "0.1.0"
+description = "Multi-Agent Chatbot SDK - Build customizable multi-agent chatbots with ease"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Juanje Ojeda", email = "juanje@redhat.com" }]
+keywords = ["chatbot", "multi-agent", "langchain", "langgraph", "llm", "ai", "sdk"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "langchain>=1.0.0",
+    "langchain-core>=1.0.0",
+    "langchain-google-genai>=2.0.0",
+    "langgraph>=1.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "websockets>=13.0",
+    "click>=8.0.0",
+    "jinja2>=3.0.0",
+    "rich>=13.0.0",
+    "pyyaml>=6.0.0",
+]
+
+[project.optional-dependencies]
+rag = [
+    "chromadb>=0.4.0",
+    "langchain-chroma>=0.1.0",
+    "langchain-community>=0.2.0",
+    "beautifulsoup4>=4.12.0",
+    "tiktoken>=0.5.0",
+    "tqdm>=4.66.0",
+    "certifi>=2023.0.0",
+]
+api = [
+    "aiohttp>=3.9.0",
+    "jsonpath-ng>=1.6.0",
+]
+all = [
+    "macsdk[rag,api]",
+]
+
+[project.scripts]
+macsdk = "macsdk.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/juanje/macsdk"
+Documentation = "https://github.com/juanje/macsdk#readme"
+Repository = "https://github.com/juanje/macsdk"
+
+
+[tool.hatch.build]
+include = ["src/macsdk"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/macsdk"]
+
+# Include Jinja2 templates (including chatbot static files) in the wheel
+[tool.hatch.build.targets.wheel.force-include]
+"src/macsdk/cli/templates" = "macsdk/cli/templates"
+
+[tool.uv]
+package = true
+
+[tool.uv.workspace]
+members = ["examples/*"]
+
+[tool.uv.sources]
+# Workspace members reference macsdk from the root
+macsdk = { workspace = true }
+# Examples can reference each other
+api-agent = { workspace = true }
+
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18.2",
+    "ruff>=0.14.1",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# Suppress deprecation warnings from external libraries (langchain/langgraph)
+filterwarnings = [
+    "ignore:AgentStatePydantic has been moved:DeprecationWarning",
+]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+[tool.coverage.run]
+source = ["src/macsdk"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore line length in files with multiline strings/descriptions
+"**/prompts.py" = ["E501", "W291"]
+"**/models.py" = ["E501"]
+"**/tools.py" = ["E501"]
+"**/cli/commands/*.py" = ["E501"]
+"**/state.py" = ["E501"]
+"examples/**/agent.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+# Use namespace packages to avoid conftest.py conflict
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = ["src"]
+
+# Ignore missing stubs for external libraries
+[[tool.mypy.overrides]]
+module = [
+    "langgraph.*",
+    "langchain.*",
+    "langchain_core.*",
+    "langchain_google_genai.*",
+    "langchain_chroma.*",
+    "langchain_community.*",
+    "langchain_text_splitters.*",
+    "pydantic_settings.*",
+    "yaml",
+    "bs4",
+    "chromadb",
+    "tqdm",
+    "certifi",
+    "aiohttp",
+    "jsonpath_ng",
+]
+ignore_missing_imports = true
+
+# Less strict for test files
+[[tool.mypy.overrides]]
+module = ["tests.*", "conftest"]
+disallow_untyped_defs = false

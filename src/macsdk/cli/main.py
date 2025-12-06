@@ -1,0 +1,169 @@
+"""Main CLI entry point for MACSDK.
+
+This module uses lazy imports to ensure fast startup time.
+Heavy dependencies (langchain, langgraph) are only loaded
+when commands that need them are executed.
+"""
+
+from __future__ import annotations
+
+import click
+
+# Import version from lightweight module (avoids loading heavy __init__.py)
+from .._version import __repo_url__, __version__
+
+
+@click.group()
+@click.version_option(version=__version__, prog_name="macsdk")
+def cli() -> None:
+    """MACSDK - Multi-Agent Chatbot SDK.
+
+    Build customizable multi-agent chatbots with ease.
+
+    \b
+    Quick Start:
+      macsdk new chatbot my-chatbot    Create a new chatbot project
+      macsdk new agent my-agent        Create a new agent
+      macsdk add-agent . --path ../agent   Add an agent to current chatbot
+    """
+    pass
+
+
+@cli.command()
+@click.argument("project_type", type=click.Choice(["chatbot", "agent"]))
+@click.argument("name")
+@click.option("--display-name", "-n", help="Display name (chatbot only)")
+@click.option("--description", "-d", help="Description")
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(),
+    default=".",
+    help="Output directory (default: current directory)",
+)
+@click.option(
+    "--macsdk-git",
+    "-G",
+    is_flag=True,
+    help="Install macsdk from GitHub (latest development version)",
+)
+@click.option(
+    "--macsdk-path",
+    "-M",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Install macsdk from a local path",
+)
+@click.option(
+    "--with-rag/--no-rag",
+    "-R/-r",
+    default=False,
+    help="Include RAG agent (chatbot only, default: no)",
+)
+def new(
+    project_type: str,
+    name: str,
+    display_name: str | None,
+    description: str | None,
+    output_dir: str,
+    macsdk_git: bool,
+    macsdk_path: str | None,
+    with_rag: bool,
+) -> None:
+    """Create a new chatbot or agent project.
+
+    \b
+    MACSDK Source Options:
+      Default:      Install from pip (when published)
+      --macsdk-git: Install from GitHub repo (latest version)
+      --macsdk-path: Install from local path (for development)
+
+    \b
+    Chatbot Options:
+      --with-rag:   Include RAG agent for documentation Q&A
+      --no-rag:     Don't include RAG agent (default)
+
+    \b
+    Examples:
+      macsdk new chatbot my-assistant --display-name "My Assistant"
+      macsdk new chatbot docs-bot --with-rag  # With RAG for docs Q&A
+      macsdk new agent weather-agent
+      macsdk new chatbot my-bot --macsdk-git
+      macsdk new agent my-agent --macsdk-path /path/to/macsdk
+    """
+    # Lazy import to avoid loading heavy dependencies
+    from .commands.new import create_agent_project, create_chatbot_project
+
+    # Determine macsdk source configuration
+    macsdk_source: dict[str, str] | None = None
+    if macsdk_path:
+        macsdk_source = {"type": "path", "value": macsdk_path}
+    elif macsdk_git:
+        macsdk_source = {"type": "git", "value": __repo_url__}
+
+    if project_type == "chatbot":
+        create_chatbot_project(
+            name, display_name, description, output_dir, macsdk_source, with_rag
+        )
+    else:
+        if with_rag:
+            click.echo("Note: --with-rag is only applicable to chatbots, ignoring.")
+        create_agent_project(name, description, output_dir, macsdk_source)
+
+
+@cli.command(name="add-agent")
+@click.argument(
+    "chatbot_dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    default=".",
+)
+@click.option("--package", "-p", help="Agent pip package name")
+@click.option("--git", "-g", help="Agent git repository URL")
+@click.option("--path", "-P", help="Agent local directory path")
+def add_agent(
+    chatbot_dir: str,
+    package: str | None,
+    git: str | None,
+    path: str | None,
+) -> None:
+    """Add an agent to a chatbot project.
+
+    CHATBOT_DIR is the path to the chatbot project directory.
+    Use "." for the current directory.
+
+    \b
+    Examples:
+      macsdk add-agent . --package weather-agent
+      macsdk add-agent ./my-chatbot --git https://github.com/user/agent
+      macsdk add-agent . --path ../my-local-agent
+    """
+    # Lazy import
+    from .commands.add import add_agent_to_chatbot
+
+    add_agent_to_chatbot(chatbot_dir, package, git, path)
+
+
+@cli.command(name="list-agents")
+@click.argument(
+    "chatbot_dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    default=".",
+)
+def list_agents(chatbot_dir: str) -> None:
+    """List registered agents in a chatbot project.
+
+    CHATBOT_DIR is the path to the chatbot project directory.
+    Use "." for the current directory.
+
+    \b
+    Examples:
+      macsdk list-agents .
+      macsdk list-agents ./my-chatbot
+    """
+    # Lazy import
+    from .commands.list_cmd import list_agents_in_chatbot
+
+    list_agents_in_chatbot(chatbot_dir)
+
+
+if __name__ == "__main__":
+    cli()

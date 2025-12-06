@@ -1,0 +1,205 @@
+"""Tools for the agent.
+
+Define the tools (functions) that this agent can use.
+Each tool should be decorated with @tool and have a clear docstring.
+
+Tools are the primary way agents interact with external systems,
+APIs, databases, or perform specific operations.
+
+This file includes:
+1. Active example tools (with mock data) - ready to use for testing
+2. Template for creating your own tools
+3. Example of using MACSDK API tools (commented)
+
+Replace the mock implementations with real ones for production.
+"""
+
+from langchain_core.tools import tool
+
+# =============================================================================
+# ACTIVE TOOLS (with mock data for testing)
+# =============================================================================
+
+
+@tool
+async def get_service_status(service_name: str) -> str:
+    """Get the status of a service.
+
+    This is a mock implementation for demonstration.
+    Replace with actual service monitoring logic.
+
+    Args:
+        service_name: Name of the service to check.
+
+    Returns:
+        Status information as a formatted string.
+    """
+    # MOCK DATA - Replace with real implementation
+    mock_services = {
+        "api-gateway": {"status": "healthy", "uptime": "5d 12h", "load": "23%"},
+        "database": {"status": "healthy", "uptime": "30d 4h", "connections": 45},
+        "cache": {"status": "degraded", "uptime": "2d 8h", "hit_rate": "78%"},
+        "queue": {"status": "healthy", "uptime": "15d 0h", "pending": 12},
+    }
+
+    service = mock_services.get(service_name.lower())
+    if service:
+        return f"Service '{service_name}': {service}"
+    available = list(mock_services.keys())
+    return f"Service '{service_name}' not found. Available: {available}"
+
+
+@tool
+async def search_logs(
+    query: str,
+    service: str = "all",
+    limit: int = 10,
+) -> str:
+    """Search application logs for matching entries.
+
+    This is a mock implementation for demonstration.
+    Replace with actual log search logic (e.g., Elasticsearch, Loki).
+
+    Args:
+        query: Search term to look for in logs.
+        service: Service name to filter logs (default: all).
+        limit: Maximum number of results to return.
+
+    Returns:
+        Matching log entries as a formatted string.
+    """
+    # MOCK DATA - Replace with real log search implementation
+    mock_logs = [
+        {
+            "time": "2024-01-15 10:23:45",
+            "level": "ERROR",
+            "service": "api-gateway",
+            "msg": "Connection timeout to database",
+        },
+        {
+            "time": "2024-01-15 10:24:01",
+            "level": "WARN",
+            "service": "cache",
+            "msg": "Cache miss rate above threshold",
+        },
+        {
+            "time": "2024-01-15 10:25:12",
+            "level": "INFO",
+            "service": "api-gateway",
+            "msg": "Request processed successfully",
+        },
+        {
+            "time": "2024-01-15 10:26:33",
+            "level": "ERROR",
+            "service": "database",
+            "msg": "Query timeout exceeded",
+        },
+        {
+            "time": "2024-01-15 10:27:00",
+            "level": "INFO",
+            "service": "queue",
+            "msg": "Message processed",
+        },
+    ]
+
+    # Filter by service if specified
+    if service != "all":
+        mock_logs = [log for log in mock_logs if log["service"] == service]
+
+    # Filter by query (simple substring match)
+    query_lower = query.lower()
+    matching = [
+        log
+        for log in mock_logs
+        if query_lower in log["msg"].lower() or query_lower in log["level"].lower()
+    ]
+
+    if not matching:
+        suffix = f" in service '{service}'" if service != "all" else ""
+        return f"No logs found matching '{query}'{suffix}"
+
+    # Format results
+    results = [f"Found {len(matching[:limit])} logs matching '{query}':"]
+    for log in matching[:limit]:
+        line = f"  [{log['time']}] {log['level']:5} [{log['service']}] {log['msg']}"
+        results.append(line)
+
+    return "\n".join(results)
+
+
+# =============================================================================
+# API TOOLS EXAMPLE (using MACSDK's api_get/api_post)
+# =============================================================================
+
+# To use MACSDK's API tools, first register your service:
+#
+# from macsdk.core.api_registry import register_api_service
+# from macsdk.tools import api_get, api_post
+#
+# register_api_service(
+#     name="myapi",
+#     base_url="https://api.example.com",
+#     token=os.environ.get("API_TOKEN"),  # Optional
+#     timeout=30,
+#     max_retries=3,
+# )
+#
+# @tool
+# async def get_items() -> str:
+#     """Get all items from the API."""
+#     return await api_get.ainvoke({
+#         "service": "myapi",
+#         "endpoint": "/items",
+#     })
+#
+# @tool
+# async def get_item_names() -> str:
+#     """Get just the names using JSONPath extraction."""
+#     return await api_get.ainvoke({
+#         "service": "myapi",
+#         "endpoint": "/items",
+#         "extract": "$[*].name",  # JSONPath expression
+#     })
+#
+# @tool
+# async def create_item(name: str, value: int) -> str:
+#     """Create a new item."""
+#     return await api_post.ainvoke({
+#         "service": "myapi",
+#         "endpoint": "/items",
+#         "body": {"name": name, "value": value},
+#     })
+#
+# See examples/api-agent/ for a complete example using MACSDK API tools.
+
+
+# =============================================================================
+# CUSTOM TOOLS TEMPLATE
+# =============================================================================
+
+# Use this template to create your own tools:
+#
+# @tool
+# async def my_custom_tool(
+#     param1: str,
+#     param2: int = 10,
+# ) -> str:
+#     """Brief description of what the tool does.
+#
+#     Detailed explanation of the tool's purpose and behavior.
+#     Include information about side effects, if any.
+#
+#     Args:
+#         param1: Description of first parameter.
+#         param2: Description of second parameter (default: 10).
+#
+#     Returns:
+#         Description of the return value.
+#
+#     Example:
+#         >>> my_custom_tool("value", param2=20)
+#         "Expected output"
+#     """
+#     # Your implementation here
+#     result = f"Processed {param1} with {param2}"
+#     return result

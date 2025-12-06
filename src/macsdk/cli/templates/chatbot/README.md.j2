@@ -1,0 +1,126 @@
+# {{ display_name }}
+
+{{ description }}
+
+## Installation
+
+```bash
+uv sync
+```
+
+## Configuration
+
+Before running the chatbot, you need to configure your Google API key.
+
+### Option 1: Environment file (recommended)
+
+Copy the example file and add your API key:
+
+```bash
+cp .env.example .env
+# Edit .env and add your GOOGLE_API_KEY
+```
+
+### Option 2: YAML configuration
+
+Copy the example config and customize:
+
+```bash
+cp config.yml.example config.yml
+# Edit config.yml to customize LLM models, temperatures, etc.
+```
+
+Note: API keys should always be in `.env`, not in `config.yml`.
+
+### Option 3: Environment variable
+
+Export the variable directly:
+
+```bash
+export GOOGLE_API_KEY=your_key_here
+```
+
+You can get an API key from: https://aistudio.google.com/apikey
+
+### Configuration Options in config.yml
+
+```yaml
+# LLM Configuration
+llm_model: gemini-2.5-flash      # Model for responses
+llm_temperature: 0.3             # Creativity (0.0 - 1.0)
+llm_reasoning_effort: medium     # low, medium, high
+
+# Classifier (for query routing)
+classifier_model: gemini-2.5-flash
+classifier_temperature: 0.0
+
+# Server settings (for web interface)
+server_host: 0.0.0.0
+server_port: 8000
+```
+
+## Usage
+
+### Show Commands
+
+```bash
+uv run {{ script_name }}
+```
+
+### Interactive Chat (CLI)
+
+```bash
+uv run {{ script_name }} chat
+```
+
+### Web Interface
+
+```bash
+uv run {{ script_name }} web
+# Open http://localhost:8000
+```
+
+{% if with_rag %}
+### Index Documentation (for RAG)
+
+```bash
+uv run {{ script_name }} index
+uv run {{ script_name }} index --force  # Re-index
+```
+
+{% endif %}
+### List Agents
+
+```bash
+uv run {{ script_name }} agents
+```
+
+### Show Configuration
+
+```bash
+uv run {{ script_name }} info
+```
+
+## Customization
+
+### Adding Agents
+
+Use the MACSDK CLI to add agents:
+
+```bash
+macsdk add-agent . --package my-agent
+```
+
+Or manually edit `src/{{ project_slug }}/agents.py`.
+
+### Customizing Behavior
+
+Edit `src/{{ project_slug }}/prompts.py` to customize:
+- Chatbot name and description
+- Additional context for the supervisor
+- Response guidelines
+
+### Custom Configuration
+
+Edit `src/{{ project_slug }}/config.py` to add your own settings.
+

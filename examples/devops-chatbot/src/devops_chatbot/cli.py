@@ -1,0 +1,326 @@
+"""CLI for DevOps Assistant.
+
+This provides commands for running and inspecting the chatbot.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import click
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
+console = Console()
+
+
+@click.group(invoke_without_command=True)
+@click.pass_context
+@click.option("--version", "-v", is_flag=True, help="Show version and exit")
+def cli(ctx: click.Context, version: bool) -> None:
+    """DevOps Assistant - A DevOps chatbot with RAG for documentation and API tools"""
+    if version:
+        console.print("[bold cyan]DevOps Assistant[/] [dim]v0.1.0[/]")
+        return
+
+    # Show help if no subcommand
+    if ctx.invoked_subcommand is None:
+        _show_welcome()
+
+
+def _show_welcome() -> None:
+    """Show a welcome panel with available commands."""
+    title = Text("DevOps Assistant", style="bold cyan")
+    subtitle = Text(
+        "DevOps chatbot with RAG for documentation and API tools", style="dim"
+    )
+
+    commands_table = Table(show_header=False, box=None, padding=(0, 2))
+    commands_table.add_column("Command", style="green")
+    commands_table.add_column("Description", style="dim")
+
+    commands_table.add_row("chat", "Start interactive CLI chat")
+    commands_table.add_row("web", "Start web interface")
+    commands_table.add_row("agents", "List registered agents")
+    commands_table.add_row("info", "Show configuration")
+    commands_table.add_row("index", "Index documentation for RAG")
+
+    panel = Panel(
+        commands_table,
+        title=title,
+        subtitle=subtitle,
+        border_style="cyan",
+        padding=(1, 2),
+    )
+    console.print(panel)
+
+    console.print("\n[dim]Examples:[/]")
+    console.print("  [green]devops-chatbot chat[/]   Start CLI chat")
+    console.print("  [green]devops-chatbot web[/]    Start web at localhost:8000")
+    console.print("  [green]devops-chatbot --help[/] Show all options\n")
+
+
+@cli.command(name="tools", hidden=True)
+@click.pass_context
+def tools_redirect(ctx: click.Context) -> None:
+    """Redirect to agents command with helpful message."""
+    console.print()
+    console.print(
+        "[yellow]💡 Tip:[/] Chatbots use [cyan]agents[/], not tools directly.\n"
+        "   Each agent has its own tools. Showing agents instead:\n"
+    )
+    ctx.invoke(list_agents)
+
+
+@cli.command(name="agents")
+def list_agents() -> None:
+    """List all registered agents and their capabilities."""
+    # Lazy import to avoid loading heavy dependencies
+    from . import agents
+
+    registered = agents.get_registered_agents()
+
+    console.print()
+    if not registered:
+        console.print(
+            Panel(
+                "[dim]No agents registered yet.\n\n"
+                "Add agents in [white]src/devops_chatbot/agents.py[/][/]",
+                title="[bold]🤖 Agents[/]",
+                border_style="yellow",
+            )
+        )
+        return
+
+    table = Table(
+        title="[bold]🤖 Registered Agents[/]",
+        show_header=True,
+        header_style="bold magenta",
+        border_style="dim",
+        title_justify="left",
+    )
+    table.add_column("Agent", style="cyan", no_wrap=True)
+    table.add_column("Description", style="white")
+    table.add_column("Tools", style="green", justify="center")
+
+    for agent_info in registered:
+        name = agent_info.get("name", "Unknown")
+        description = agent_info.get("description", "No description")
+        tools_count = agent_info.get("tools_count", 0)
+        table.add_row(name, description, str(tools_count))
+
+    console.print(table)
+    console.print(f"\n[dim]Total: {len(registered)} agents registered[/]\n")
+
+
+@cli.command()
+def info() -> None:
+    """Show chatbot information and configuration."""
+    # Lazy import
+    from macsdk.core import ConfigurationError, create_config
+
+    from . import agents
+
+    console.print()
+
+    # Build info content
+    info_text = Text()
+    info_text.append(
+        "DevOps chatbot with RAG for documentation and API tools\n\n", style="dim"
+    )
+
+    # Show config status
+    try:
+        config = create_config(search_path=Path.cwd())
+
+        # Supervisor configuration
+        info_text.append("Supervisor Model: ", style="dim")
+        info_text.append(f"{config.llm_model}\n", style="cyan")
+        info_text.append("Temperature: ", style="dim")
+        info_text.append(f"{config.llm_temperature}\n", style="cyan")
+
+        # Registered agents
+        registered = agents.get_registered_agents()
+        agent_names = [a.get("name", "?") for a in registered]
+        info_text.append("Agents: ", style="dim")
+        info_text.append(f"{', '.join(agent_names)}\n", style="cyan")
+
+        # RAG sources configuration (separate from agent registration)
+        try:
+            from macsdk.agents.rag import get_rag_config
+
+            rag_config = get_rag_config()
+            info_text.append("RAG Sources: ", style="dim")
+            if rag_config.enabled and rag_config.sources:
+                info_text.append(
+                    f"{len(rag_config.sources)} configured\n", style="green"
+                )
+            else:
+                info_text.append("None configured\n", style="yellow")
+        except Exception:
+            info_text.append("RAG Sources: ", style="dim")
+            info_text.append("None (config.yml not found)\n", style="yellow")
+
+        info_text.append("\n")
+        info_text.append("✓ Configuration loaded successfully", style="green")
+
+    except ConfigurationError as e:
+        info_text.append(f"⚠ Configuration error: {e}", style="red")
+
+    panel = Panel(
+        info_text,
+        title="[bold cyan]DevOps Assistant[/]",
+        border_style="cyan",
+        padding=(1, 2),
+    )
+    console.print(panel)
+    console.print(
+        "\n[dim]Use[/] [green]devops-chatbot agents[/] [dim]to see agent details.[/]\n"
+    )
+
+
+@cli.command()
+@click.option("--force", "-f", is_flag=True, help="Force re-indexing even if exists")
+def index(force: bool) -> None:
+    """Index documentation for RAG.
+
+    This command crawls and indexes the documentation sources
+    configured in config.yml. Run this before using RAG queries.
+    """
+    try:
+        # Lazy import heavy RAG dependencies
+        from macsdk.agents.rag import clear_rag_cache, create_retriever, get_rag_config
+
+        console.print()
+        console.print(
+            Panel(
+                "[dim]Loading documentation sources...[/]",
+                title="[bold cyan]📚 RAG Indexer[/]",
+                border_style="cyan",
+            )
+        )
+
+        # Load config
+        config = get_rag_config()
+        if not config.enabled:
+            console.print("\n[yellow]⚠ RAG is disabled in config.yml[/]\n")
+            return
+
+        # Show sources table
+        console.print()
+        table = Table(
+            title=f"[bold]Sources to index ({len(config.sources)})[/]",
+            show_header=True,
+            header_style="bold",
+            border_style="dim",
+        )
+        table.add_column("#", style="dim", width=3)
+        table.add_column("Name", style="cyan")
+        table.add_column("URL", style="dim")
+
+        for i, source in enumerate(config.sources, 1):
+            table.add_row(str(i), source.name, source.url)
+
+        console.print(table)
+
+        if force:
+            console.print("\n[yellow]🔄 Force re-indexing enabled[/]")
+            clear_rag_cache()
+
+        console.print()
+        with console.status("[cyan]Indexing documentation...[/]", spinner="dots"):
+            retriever = create_retriever(config=config, force_reindex=force)
+
+        if retriever:
+            console.print("[green]✓ Indexing complete![/]")
+            console.print("[dim]You can now use RAG queries in the chat.[/]\n")
+        else:
+            console.print("[red]✗ Indexing failed. Check the errors above.[/]\n")
+
+    except Exception as e:
+        console.print(f"\n[red]✗ Error during indexing:[/] {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+def chat() -> None:
+    """Start interactive chat with the chatbot."""
+    # Lazy import heavy dependencies
+    from macsdk.core import ConfigurationError, create_chatbot_graph, create_config
+    from macsdk.interfaces import run_cli_chatbot
+
+    from . import agents
+
+    try:
+        # Load config from project root
+        _config = create_config(search_path=Path.cwd())
+        _config.validate_api_key()
+
+        graph = create_chatbot_graph(agents.register_all_agents)
+        run_cli_chatbot(
+            graph=graph,
+            title="DevOps Assistant",
+        )
+    except ConfigurationError as e:
+        console.print(f"[red]✗ Configuration Error:[/] {e}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.option("--host", "-h", default="0.0.0.0", help="Host to bind to")
+@click.option("--port", "-p", default=8000, help="Port to bind to")
+def web(host: str, port: int) -> None:
+    """Start the web interface.
+
+    Launches a FastAPI server with WebSocket support for real-time chat.
+    Open your browser at http://localhost:PORT after starting.
+    """
+    # Lazy import heavy dependencies
+    from macsdk.core import ConfigurationError, create_chatbot_graph, create_config
+    from macsdk.interfaces import run_web_server
+
+    from . import agents
+
+    try:
+        _config = create_config(search_path=Path.cwd())
+        _config.validate_api_key()
+
+        # Look for static files in project root
+        static_dir = Path.cwd() / "static"
+        if not static_dir.exists():
+            static_dir = None
+
+        console.print()
+        console.print(
+            Panel(
+                f"[dim]Starting server at[/] [cyan]http://{host}:{port}[/]\n"
+                "[dim]Press[/] [white]Ctrl+C[/] [dim]to stop[/]",
+                title="[bold cyan]🌐 Web Interface[/]",
+                border_style="cyan",
+            )
+        )
+        console.print()
+
+        graph = create_chatbot_graph(agents.register_all_agents)
+        run_web_server(
+            graph=graph,
+            title="DevOps Assistant",
+            static_dir=static_dir,
+            host=host,
+            port=port,
+        )
+    except ConfigurationError as e:
+        console.print(f"[red]✗ Configuration Error:[/] {e}")
+        sys.exit(1)
+
+
+def main() -> None:
+    """Entry point for the CLI."""
+    cli()
+
+
+if __name__ == "__main__":
+    main()

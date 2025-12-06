@@ -1,0 +1,102 @@
+# {{ name }}
+
+{{ description }}
+
+## Installation
+
+```bash
+uv sync
+```
+
+## Configuration
+
+Before running the agent, you need to configure your Google API key.
+
+### Option 1: Environment file (recommended)
+
+```bash
+cp .env.example .env
+# Edit .env and add your GOOGLE_API_KEY
+```
+
+### Option 2: Export directly
+
+```bash
+export GOOGLE_API_KEY=your_key_here
+```
+
+### Option 3: YAML configuration (standalone mode)
+
+```bash
+cp config.yml.example config.yml
+```
+
+**Note:** When registered with a chatbot, the agent uses the chatbot's
+configuration. The agent's `config.yml` is only used in standalone mode.
+
+## Usage
+
+### Show Commands
+
+```bash
+uv run {{ script_name }}
+```
+
+### Interactive Chat
+
+```bash
+uv run {{ script_name }} chat
+```
+
+### List Available Tools
+
+```bash
+uv run {{ script_name }} tools
+```
+
+### Show Agent Info
+
+```bash
+uv run {{ script_name }} info
+```
+
+## Development
+
+```bash
+uv run pytest
+uv run ruff check src/
+uv run ruff format src/
+```
+
+## Integration
+
+Register this agent with your chatbot:
+
+```python
+from {{ agent_slug }} import {{ agent_class }}
+from macsdk.core import register_agent
+
+register_agent({{ agent_class }}())
+```
+
+Or use the MACSDK CLI:
+
+```bash
+macsdk add-agent . --path ./{{ name }}
+```
+
+## Customization
+
+### Adding Tools
+
+Edit `src/{{ agent_slug }}/tools.py` to add new tools.
+Remember to also update the `TOOLS` list in `cli.py`.
+
+### Modifying the Prompt
+
+Edit `src/{{ agent_slug }}/prompts.py` to change agent behavior.
+
+### Structured Responses
+
+Edit `src/{{ agent_slug }}/models.py` to add domain-specific fields
+to the agent's response structure.

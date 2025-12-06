@@ -1,0 +1,93 @@
+# {{ display_name }} Configuration
+# Copy this file to config.yml and customize as needed.
+#
+# This file is loaded automatically if present.
+# API keys should be in .env, not here.
+
+# =============================================================================
+# LLM Configuration
+# =============================================================================
+# llm_model: gemini-2.5-flash      # Model for responses
+# llm_temperature: 0.3             # Creativity (0.0 - 1.0)
+# llm_reasoning_effort: medium     # low, medium, high
+
+# =============================================================================
+# Classifier Configuration (for routing queries)
+# =============================================================================
+# classifier_model: gemini-2.5-flash
+# classifier_temperature: 0.0
+# classifier_reasoning_effort: low
+
+# =============================================================================
+# Middleware Configuration
+# =============================================================================
+# include_datetime: true           # Inject current datetime into prompts
+
+# Context summarization (for long conversations)
+# summarization_enabled: false
+# summarization_trigger_tokens: 100000
+# summarization_keep_messages: 6
+
+# =============================================================================
+# Web Server Configuration (for macsdk web interface)
+# =============================================================================
+# server_host: 0.0.0.0
+# server_port: 8000
+# message_max_length: 5000
+# warmup_timeout: 15.0
+{% if with_rag %}
+
+# =============================================================================
+# RAG (Retrieval-Augmented Generation) Configuration
+# =============================================================================
+# The RAG agent indexes documentation and answers questions from it.
+
+rag:
+  enabled: true
+
+  # Documentation sources to index
+  # Add your own URLs here. Tags help filter searches.
+  sources:
+    - name: "langchain"
+      url: "https://python.langchain.com/docs/introduction/"
+      tags: ["framework", "llm", "agents"]
+
+    # Example: Internal documentation with custom SSL certificate
+    # - name: "internal_docs"
+    #   url: "https://docs.internal.company.com/"
+    #   tags: ["internal", "api"]
+    #   cert_url: "https://certs.company.com/root-ca.pem"  # Or use cert_path
+
+  # Indexing settings
+  # chunk_size: 1000          # Size of text chunks
+  # chunk_overlap: 200        # Overlap between chunks
+  # max_depth: 3              # Crawl depth for URLs
+  # embedding_model: "models/embedding-001"
+
+  # Retrieval settings
+  # retriever_k: 6            # Number of documents to retrieve
+  # max_rewrites: 2           # Max query rewrites before fallback
+  # model_name: "gemini-2.5-flash"
+  # temperature: 0.3
+
+  # Caching
+  # enable_llm_cache: true    # Cache LLM responses (faster, cheaper)
+
+  # Domain-specific glossary (IMPORTANT for your domain!)
+  # This helps RAG understand your technical terms and acronyms
+  glossary:
+    # Add your domain-specific terms here:
+    # MACSDK: "Multi-Agent Chatbot SDK"
+    # LLM: "Large Language Model"
+    # RAG: "Retrieval-Augmented Generation"
+
+  # Storage paths
+  # chroma_db_dir: "./chroma_db"
+{% endif %}
+
+# =============================================================================
+# Custom Settings
+# =============================================================================
+# Add your chatbot-specific settings below:
+# my_custom_setting: value
+

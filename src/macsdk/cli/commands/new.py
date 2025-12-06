@@ -1,0 +1,211 @@
+"""Command for creating new chatbots and agents.
+
+This module provides functions for generating project scaffolding
+using Jinja2 templates for clean separation of concerns.
+"""
+
+from __future__ import annotations
+
+import re
+import shutil
+from pathlib import Path
+
+from rich.console import Console
+
+from ..templates import TEMPLATES_DIR, render_template
+
+console = Console()
+
+
+def slugify(name: str) -> str:
+    """Convert name to valid Python package name."""
+    # Replace hyphens and spaces with underscores
+    slug = re.sub(r"[-\s]+", "_", name.lower())
+    # Remove invalid characters
+    slug = re.sub(r"[^a-z0-9_]", "", slug)
+    # Ensure it starts with a letter
+    if slug and not slug[0].isalpha():
+        slug = "pkg_" + slug
+    return slug
+
+
+def _generate_uv_sources(macsdk_source: dict[str, str] | None) -> str:
+    """Generate uv.sources section for pyproject.toml.
+
+    Args:
+        macsdk_source: Optional dict with 'type' and 'value'.
+
+    Returns:
+        UV sources section string or empty string.
+    """
+    if macsdk_source is None:
+        return ""
+
+    source_type = macsdk_source["type"]
+    value = macsdk_source["value"]
+
+    if source_type == "git":
+        return f'\n[tool.uv.sources]\nmacsdk = {{ git = "{value}" }}\n'
+    elif source_type == "path":
+        return (
+            f'\n[tool.uv.sources]\nmacsdk = {{ path = "{value}", editable = true }}\n'
+        )
+
+    return ""
+
+
+# =============================================================================
+# PUBLIC API - Called by CLI
+# =============================================================================
+
+
+def create_chatbot_project(
+    name: str,
+    display_name: str | None,
+    description: str | None,
+    output_dir: str,
+    macsdk_source: dict[str, str] | None = None,
+    with_rag: bool = False,
+) -> None:
+    """Create a new chatbot project using Jinja2 templates.
+
+    Args:
+        name: Project name (e.g., my-chatbot).
+        display_name: Human-readable display name.
+        description: Project description.
+        output_dir: Output directory path.
+        macsdk_source: Optional dict with 'type' (pip/git/path) and 'value'.
+        with_rag: Include RAG agent for documentation Q&A.
+    """
+    project_slug = slugify(name)
+    display_name = display_name or name.replace("-", " ").replace("_", " ").title()
+    description = description or "A multi-agent chatbot built with MACSDK"
+
+    output_path = Path(output_dir) / name
+
+    if output_path.exists():
+        console.print(f"[red]Error:[/red] Directory '{name}' already exists")
+        raise SystemExit(1)
+
+    # Prepare template context
+    context = {
+        "name": name,
+        "project_slug": project_slug,
+        "display_name": display_name,
+        "description": description,
+        "config_class_name": project_slug.title().replace("_", ""),
+        "script_name": project_slug.replace("_", "-"),
+        "with_rag": with_rag,
+        "uv_sources": _generate_uv_sources(macsdk_source),
+    }
+
+    # Create directory structure
+    src_dir = output_path / "src" / project_slug
+    src_dir.mkdir(parents=True)
+
+    # Render and write templates
+    templates = [
+        ("chatbot/__init__.py.j2", src_dir / "__init__.py"),
+        ("chatbot/agents.py.j2", src_dir / "agents.py"),
+        ("chatbot/prompts.py.j2", src_dir / "prompts.py"),
+        ("chatbot/config.py.j2", src_dir / "config.py"),
+        ("chatbot/cli.py.j2", src_dir / "cli.py"),
+        ("chatbot/__main__.py.j2", src_dir / "__main__.py"),
+        ("chatbot/pyproject.toml.j2", output_path / "pyproject.toml"),
+        ("chatbot/env.example.j2", output_path / ".env.example"),
+        ("chatbot/config.yml.example.j2", output_path / "config.yml.example"),
+        ("chatbot/README.md.j2", output_path / "README.md"),
+        ("shared/gitignore.j2", output_path / ".gitignore"),
+    ]
+
+    for template_name, output_file in templates:
+        content = render_template(template_name, context)
+        output_file.write_text(content)
+
+    # Copy static files for web interface
+    static_src = TEMPLATES_DIR / "chatbot" / "static"
+    static_dst = output_path / "static"
+    if static_src.exists():
+        shutil.copytree(static_src, static_dst)
+
+    # Output success message
+    console.print(f"\n[green]✓[/green] Created chatbot project: [bold]{name}[/bold]")
+    if with_rag:
+        console.print("[green]✓[/green] RAG agent included")
+    console.print("\n[dim]Next steps:[/dim]")
+    console.print(f"  cd {name}")
+    console.print("  uv sync")
+    if with_rag:
+        console.print("  # Edit config.yml to configure RAG sources")
+    console.print(f"  uv run {project_slug.replace('_', '-')}")
+
+
+def create_agent_project(
+    name: str,
+    description: str | None,
+    output_dir: str,
+    macsdk_source: dict[str, str] | None = None,
+) -> None:
+    """Create a new agent project using Jinja2 templates.
+
+    Args:
+        name: Agent name (e.g., my-agent).
+        description: Agent description.
+        output_dir: Output directory path.
+        macsdk_source: Optional dict with 'type' (pip/git/path) and 'value'.
+    """
+    agent_slug = slugify(name)
+    description = description or "A specialist agent for MACSDK chatbots"
+
+    output_path = Path(output_dir) / name
+
+    if output_path.exists():
+        console.print(f"[red]Error:[/red] Directory '{name}' already exists")
+        raise SystemExit(1)
+
+    # Prepare template context
+    agent_class = "".join(word.title() for word in agent_slug.split("_")) + "Agent"
+    context = {
+        "name": name,
+        "agent_slug": agent_slug,
+        "agent_class": agent_class,
+        "description": description,
+        "description_lower": description.lower(),
+        "script_name": agent_slug.replace("_", "-"),
+        "uv_sources": _generate_uv_sources(macsdk_source),
+        "with_rag": False,  # Agents don't have RAG by default
+    }
+
+    # Create directory structure
+    src_dir = output_path / "src" / agent_slug
+    src_dir.mkdir(parents=True)
+    tests_dir = output_path / "tests"
+    tests_dir.mkdir(parents=True)
+
+    # Render and write templates
+    templates = [
+        ("agent/__init__.py.j2", src_dir / "__init__.py"),
+        ("agent/models.py.j2", src_dir / "models.py"),
+        ("agent/prompts.py.j2", src_dir / "prompts.py"),
+        ("agent/tools.py.j2", src_dir / "tools.py"),
+        ("agent/agent.py.j2", src_dir / "agent.py"),
+        ("agent/cli.py.j2", src_dir / "cli.py"),
+        ("agent/test_agent.py.j2", tests_dir / "test_agent.py"),
+        ("agent/pyproject.toml.j2", output_path / "pyproject.toml"),
+        ("agent/env.example.j2", output_path / ".env.example"),
+        ("agent/config.yml.example.j2", output_path / "config.yml.example"),
+        ("agent/README.md.j2", output_path / "README.md"),
+        ("shared/gitignore.j2", output_path / ".gitignore"),
+    ]
+
+    for template_name, output_file in templates:
+        content = render_template(template_name, context)
+        output_file.write_text(content)
+
+    # Output success message
+    console.print(f"\n[green]✓[/green] Created agent: [bold]{name}[/bold]")
+    console.print("\n[dim]Next steps:[/dim]")
+    console.print(f"  cd {name}")
+    console.print("  # Implement your tools in tools.py")
+    console.print("  uv sync")
+    console.print("  uv run pytest")
