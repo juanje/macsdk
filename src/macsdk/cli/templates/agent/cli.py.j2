@@ -65,9 +65,9 @@ def _show_welcome() -> None:
 def tools() -> None:
     """List available tools and their descriptions."""
     # Lazy import to avoid loading heavy dependencies
-    from .tools import get_service_status, search_logs
+    from .tools import get_alerts, get_service_status, get_services
 
-    TOOLS = [get_service_status, search_logs]
+    TOOLS = [get_services, get_service_status, get_alerts]
 
     console.print()
     table = Table(
@@ -96,9 +96,9 @@ def info() -> None:
     """Show agent information and capabilities."""
     # Lazy import
     from .agent import CAPABILITIES
-    from .tools import get_service_status, search_logs
+    from .tools import get_alerts, get_service_status, get_services
 
-    TOOLS = [get_service_status, search_logs]
+    TOOLS = [get_services, get_service_status, get_alerts]
 
     console.print()
     panel = Panel(

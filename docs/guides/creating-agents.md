@@ -59,87 +59,89 @@ uv run infra-agent tools
 
 ```
 🔧 Available Tools
-┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Tool               ┃ Description                                   ┃
-┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ get_service_status │ Get the status of a service.                  │
-│ search_logs        │ Search application logs for matching entries. │
-└────────────────────┴───────────────────────────────────────────────┘
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Tool               ┃ Description                                          ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ get_services       │ List all infrastructure services and their status.   │
+│ get_service_status │ Get the status of a specific service.                │
+│ get_alerts         │ List all active alerts.                              │
+└────────────────────┴──────────────────────────────────────────────────────┘
 ```
 
 ## Implementing Tools
 
-Edit `tools.py` to customize the generated example tools:
+Generated agents use MACSDK's `api_get` tool to call a demo DevOps API.
+The generated `tools.py` shows how to register an API service and create tools:
 
 ```python
-from langchain_core.tools import tool
-
-@tool
-async def get_service_status(service_name: str) -> str:
-    """Get the status of a service.
-    
-    Args:
-        service_name: Name of the service to check.
-        
-    Returns:
-        Service status information.
-    """
-    # Replace with real monitoring API calls
-    return f"Service {service_name}: Running (healthy)"
-
-@tool
-async def search_logs(query: str, service: str = "all") -> str:
-    """Search application logs for matching entries.
-    
-    Args:
-        query: Search query string.
-        service: Service name to filter logs (default: all).
-        
-    Returns:
-        Matching log entries.
-    """
-    # Replace with real log search implementation
-    return f"Found 3 log entries matching '{query}' in {service}"
-
-# Export tools for CLI inspection
-TOOLS = [get_service_status, search_logs]
-```
-
-## Using MACSDK API Tools
-
-For agents that interact with REST APIs, use MACSDK's built-in tools.
-
-### Basic API Service
-
-```python
-import os
 from langchain_core.tools import tool
 from macsdk.core.api_registry import register_api_service
-from macsdk.tools import api_get, api_post
+from macsdk.tools import api_get
 
-# Register the API service once
+# Register your API service
 register_api_service(
-    name="my_api",
-    base_url="https://api.example.com",
+    name="devops",
+    base_url="https://my-json-server.typicode.com/juanje/devops-mock-api",
     timeout=10,
-    max_retries=2,
+)
+
+@tool
+async def get_services() -> str:
+    """List all services and their status."""
+    return await api_get.ainvoke({
+        "service": "devops",
+        "endpoint": "/services",
+    })
+
+@tool
+async def get_service_status(service_id: int) -> str:
+    """Get status of a specific service."""
+    return await api_get.ainvoke({
+        "service": "devops",
+        "endpoint": f"/services/{service_id}",
+    })
+
+@tool
+async def get_alerts() -> str:
+    """List all active alerts."""
+    return await api_get.ainvoke({
+        "service": "devops",
+        "endpoint": "/alerts",
+    })
+```
+
+## Customizing for Your API
+
+Replace the demo API with your own:
+
+```python
+from langchain_core.tools import tool
+from macsdk.core.api_registry import register_api_service
+from macsdk.tools import api_get
+
+# Register your API service
+register_api_service(
+    name="myapi",
+    base_url="https://api.example.com",
+    token=os.environ.get("API_TOKEN"),  # Optional authentication
+    timeout=10,
 )
 
 @tool
 async def get_users() -> str:
     """Get all users from the API."""
     return await api_get.ainvoke({
-        "service": "my_api",
+        "service": "myapi",
         "endpoint": "/users",
     })
 
 @tool
 async def get_user_names() -> str:
-    """Get just the names of all users."""
+    """Get just the names using JSONPath extraction."""
     return await api_get.ainvoke({
-        "service": "my_api",
+        "service": "myapi",
         "endpoint": "/users",
-        "extract": "$[*].name",  # JSONPath extraction
+        "extract": "$[*].name",  # JSONPath expression
     })
 ```
 

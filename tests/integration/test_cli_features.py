@@ -107,8 +107,9 @@ class TestAgentCLI:
 
         assert result.returncode == 0
         assert "Tools" in result.stdout
+        assert "get_services" in result.stdout
         assert "get_service_status" in result.stdout
-        assert "search_logs" in result.stdout
+        assert "get_alerts" in result.stdout
         assert "Total:" in result.stdout
 
     def test_agent_info_command(self, generated_agent: Path) -> None:

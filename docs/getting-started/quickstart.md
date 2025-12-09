@@ -84,38 +84,25 @@ macsdk new agent infra-agent --description "Monitors infrastructure services"
 cd infra-agent
 ```
 
-The generated agent includes example tools in `src/infra_agent/tools.py`:
+The generated agent includes tools that connect to a demo DevOps API.
+You can see them with:
 
-```python
-from langchain_core.tools import tool
-
-@tool
-async def get_service_status(service_name: str) -> str:
-    """Get the status of a service.
-    
-    Args:
-        service_name: Name of the service to check.
-        
-    Returns:
-        Service status information.
-    """
-    # Replace with real monitoring API calls
-    return f"Service {service_name}: Running (healthy)"
-
-@tool
-async def search_logs(query: str, service: str = "all") -> str:
-    """Search application logs for matching entries.
-    
-    Args:
-        query: Search query string.
-        service: Service name to filter logs (default: all).
-        
-    Returns:
-        Matching log entries.
-    """
-    # Replace with real log search implementation
-    return f"Found 3 log entries matching '{query}' in {service}"
+```bash
+uv run infra-agent tools
 ```
+
+```
+🔧 Available Tools
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Tool               ┃ Description                                          ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ get_services       │ List all infrastructure services and their status.   │
+│ get_service_status │ Get the status of a specific service.                │
+│ get_alerts         │ List all active alerts.                              │
+└────────────────────┴──────────────────────────────────────────────────────┘
+```
+
+These tools use MACSDK's `api_get` to call a real API. Edit `tools.py` to connect to your own APIs.
 
 ## 7. Add Agent to Chatbot
 

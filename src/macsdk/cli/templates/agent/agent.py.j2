@@ -17,7 +17,7 @@ from macsdk.middleware import DatetimeContextMiddleware
 
 from .models import AgentResponse
 from .prompts import SYSTEM_PROMPT
-from .tools import get_service_status, search_logs
+from .tools import get_alerts, get_service_status, get_services
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
@@ -26,10 +26,11 @@ if TYPE_CHECKING:
 CAPABILITIES = """{{ description }}"""
 
 # Active tools for this agent
-# These example tools use mock data - replace with real implementations
+# These tools use a demo DevOps API - customize in tools.py for your use case
 TOOLS = [
-    get_service_status,  # Check service health (mock)
-    search_logs,         # Search application logs (mock)
+    get_services,        # List all services and their status
+    get_service_status,  # Get status of a specific service
+    get_alerts,          # List active alerts
     # Add your custom tools here
 ]
 

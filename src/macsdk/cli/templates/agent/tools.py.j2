@@ -3,203 +3,140 @@
 Define the tools (functions) that this agent can use.
 Each tool should be decorated with @tool and have a clear docstring.
 
-Tools are the primary way agents interact with external systems,
-APIs, databases, or perform specific operations.
+This agent uses MACSDK's API tools to interact with a mock DevOps API.
+The API is hosted at my-json-server.typicode.com for demonstration.
 
-This file includes:
-1. Active example tools (with mock data) - ready to use for testing
-2. Template for creating your own tools
-3. Example of using MACSDK API tools (commented)
-
-Replace the mock implementations with real ones for production.
+Replace the API service registration with your own API to customize.
 """
+
+from __future__ import annotations
 
 from langchain_core.tools import tool
 
 # =============================================================================
-# ACTIVE TOOLS (with mock data for testing)
+# SERVICE REGISTRATION (lazy initialization)
+# =============================================================================
+
+_api_registered = False
+
+
+def _ensure_api_registered() -> None:
+    """Register the API service on first use."""
+    global _api_registered
+    if not _api_registered:
+        from macsdk.core.api_registry import register_api_service
+
+        # Register DevOps Mock API as a service
+        # This is a demo API - replace with your own API endpoint
+        register_api_service(
+            name="devops",
+            base_url="https://my-json-server.typicode.com/juanje/devops-mock-api",
+            timeout=10,
+            max_retries=2,
+        )
+        _api_registered = True
+
+
+# =============================================================================
+# SERVICE HEALTH TOOLS
 # =============================================================================
 
 
 @tool
-async def get_service_status(service_name: str) -> str:
-    """Get the status of a service.
+async def get_services() -> str:
+    """List all infrastructure services and their health status.
 
-    This is a mock implementation for demonstration.
-    Replace with actual service monitoring logic.
-
-    Args:
-        service_name: Name of the service to check.
+    Returns services with status (healthy, degraded, warning, critical).
 
     Returns:
-        Status information as a formatted string.
+        List of services as JSON string.
     """
-    # MOCK DATA - Replace with real implementation
-    mock_services = {
-        "api-gateway": {"status": "healthy", "uptime": "5d 12h", "load": "23%"},
-        "database": {"status": "healthy", "uptime": "30d 4h", "connections": 45},
-        "cache": {"status": "degraded", "uptime": "2d 8h", "hit_rate": "78%"},
-        "queue": {"status": "healthy", "uptime": "15d 0h", "pending": 12},
-    }
+    from macsdk.tools import api_get
 
-    service = mock_services.get(service_name.lower())
-    if service:
-        return f"Service '{service_name}': {service}"
-    available = list(mock_services.keys())
-    return f"Service '{service_name}' not found. Available: {available}"
+    _ensure_api_registered()
+    return await api_get.ainvoke(
+        {
+            "service": "devops",
+            "endpoint": "/services",
+        }
+    )
 
 
 @tool
-async def search_logs(
-    query: str,
-    service: str = "all",
-    limit: int = 10,
-) -> str:
-    """Search application logs for matching entries.
-
-    This is a mock implementation for demonstration.
-    Replace with actual log search logic (e.g., Elasticsearch, Loki).
+async def get_service_status(service_id: int) -> str:
+    """Get the status of a specific service.
 
     Args:
-        query: Search term to look for in logs.
-        service: Service name to filter logs (default: all).
-        limit: Maximum number of results to return.
+        service_id: The service's ID (1-5).
 
     Returns:
-        Matching log entries as a formatted string.
+        Service details including name, status, and uptime.
     """
-    # MOCK DATA - Replace with real log search implementation
-    mock_logs = [
-        {
-            "time": "2024-01-15 10:23:45",
-            "level": "ERROR",
-            "service": "api-gateway",
-            "msg": "Connection timeout to database",
-        },
-        {
-            "time": "2024-01-15 10:24:01",
-            "level": "WARN",
-            "service": "cache",
-            "msg": "Cache miss rate above threshold",
-        },
-        {
-            "time": "2024-01-15 10:25:12",
-            "level": "INFO",
-            "service": "api-gateway",
-            "msg": "Request processed successfully",
-        },
-        {
-            "time": "2024-01-15 10:26:33",
-            "level": "ERROR",
-            "service": "database",
-            "msg": "Query timeout exceeded",
-        },
-        {
-            "time": "2024-01-15 10:27:00",
-            "level": "INFO",
-            "service": "queue",
-            "msg": "Message processed",
-        },
-    ]
+    from macsdk.tools import api_get
 
-    # Filter by service if specified
-    if service != "all":
-        mock_logs = [log for log in mock_logs if log["service"] == service]
-
-    # Filter by query (simple substring match)
-    query_lower = query.lower()
-    matching = [
-        log
-        for log in mock_logs
-        if query_lower in log["msg"].lower() or query_lower in log["level"].lower()
-    ]
-
-    if not matching:
-        suffix = f" in service '{service}'" if service != "all" else ""
-        return f"No logs found matching '{query}'{suffix}"
-
-    # Format results
-    results = [f"Found {len(matching[:limit])} logs matching '{query}':"]
-    for log in matching[:limit]:
-        line = f"  [{log['time']}] {log['level']:5} [{log['service']}] {log['msg']}"
-        results.append(line)
-
-    return "\n".join(results)
+    _ensure_api_registered()
+    return await api_get.ainvoke(
+        {
+            "service": "devops",
+            "endpoint": f"/services/{service_id}",
+        }
+    )
 
 
 # =============================================================================
-# API TOOLS EXAMPLE (using MACSDK's api_get/api_post)
+# ALERT TOOLS
 # =============================================================================
 
-# To use MACSDK's API tools, first register your service:
+
+@tool
+async def get_alerts() -> str:
+    """List all active alerts.
+
+    Returns alerts with severity (info, warning, critical) and acknowledgment status.
+    Use this to identify issues that need attention.
+
+    Returns:
+        List of alerts as JSON string.
+    """
+    from macsdk.tools import api_get
+
+    _ensure_api_registered()
+    return await api_get.ainvoke(
+        {
+            "service": "devops",
+            "endpoint": "/alerts",
+        }
+    )
+
+
+# =============================================================================
+# CUSTOMIZATION
+# =============================================================================
+
+# To use your own API, modify the _ensure_api_registered function above:
 #
-# from macsdk.core.api_registry import register_api_service
-# from macsdk.tools import api_get, api_post
+# def _ensure_api_registered() -> None:
+#     global _api_registered
+#     if not _api_registered:
+#         from macsdk.core.api_registry import register_api_service
+#         register_api_service(
+#             name="myapi",
+#             base_url="https://api.example.com",
+#             token=os.environ.get("API_TOKEN"),  # Optional authentication
+#             timeout=30,
+#         )
+#         _api_registered = True
 #
-# register_api_service(
-#     name="myapi",
-#     base_url="https://api.example.com",
-#     token=os.environ.get("API_TOKEN"),  # Optional
-#     timeout=30,
-#     max_retries=3,
-# )
+# Then create tools that call your endpoints:
 #
 # @tool
 # async def get_items() -> str:
 #     """Get all items from the API."""
+#     from macsdk.tools import api_get
+#     _ensure_api_registered()
 #     return await api_get.ainvoke({
 #         "service": "myapi",
 #         "endpoint": "/items",
 #     })
 #
-# @tool
-# async def get_item_names() -> str:
-#     """Get just the names using JSONPath extraction."""
-#     return await api_get.ainvoke({
-#         "service": "myapi",
-#         "endpoint": "/items",
-#         "extract": "$[*].name",  # JSONPath expression
-#     })
-#
-# @tool
-# async def create_item(name: str, value: int) -> str:
-#     """Create a new item."""
-#     return await api_post.ainvoke({
-#         "service": "myapi",
-#         "endpoint": "/items",
-#         "body": {"name": name, "value": value},
-#     })
-#
-# See examples/api-agent/ for a complete example using MACSDK API tools.
-
-
-# =============================================================================
-# CUSTOM TOOLS TEMPLATE
-# =============================================================================
-
-# Use this template to create your own tools:
-#
-# @tool
-# async def my_custom_tool(
-#     param1: str,
-#     param2: int = 10,
-# ) -> str:
-#     """Brief description of what the tool does.
-#
-#     Detailed explanation of the tool's purpose and behavior.
-#     Include information about side effects, if any.
-#
-#     Args:
-#         param1: Description of first parameter.
-#         param2: Description of second parameter (default: 10).
-#
-#     Returns:
-#         Description of the return value.
-#
-#     Example:
-#         >>> my_custom_tool("value", param2=20)
-#         "Expected output"
-#     """
-#     # Your implementation here
-#     result = f"Processed {param1} with {param2}"
-#     return result
+# See examples/api-agent/ for a complete example with more tools.

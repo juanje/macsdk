@@ -1,13 +1,13 @@
 """Tests for {{ name }}.
 
 These tests verify that the agent implements the
-SpecialistAgent protocol correctly and that tools work.
+SpecialistAgent protocol correctly and that tools are defined.
 """
 
 import pytest
 
 from {{ agent_slug }} import CAPABILITIES, {{ agent_class }}
-from {{ agent_slug }}.tools import get_service_status, search_logs
+from {{ agent_slug }}.tools import get_alerts, get_service_status, get_services
 
 
 class Test{{ agent_class }}:
@@ -41,30 +41,23 @@ class Test{{ agent_class }}:
 class TestTools:
     """Tests for agent tools."""
 
-    @pytest.mark.asyncio
-    async def test_get_service_status_known_service(self) -> None:
-        """get_service_status returns info for known services."""
-        # The tool is decorated, so we call .invoke() or the underlying func
-        result = await get_service_status.ainvoke({"service_name": "api-gateway"})
-        assert "api-gateway" in result
-        assert "healthy" in result
+    def test_get_services_is_callable(self) -> None:
+        """get_services tool is defined and callable."""
+        assert get_services is not None
+        assert hasattr(get_services, "ainvoke")
 
-    @pytest.mark.asyncio
-    async def test_get_service_status_unknown_service(self) -> None:
-        """get_service_status handles unknown services."""
-        result = await get_service_status.ainvoke({"service_name": "unknown-service"})
-        assert "not found" in result
+    def test_get_service_status_is_callable(self) -> None:
+        """get_service_status tool is defined and callable."""
+        assert get_service_status is not None
+        assert hasattr(get_service_status, "ainvoke")
 
-    @pytest.mark.asyncio
-    async def test_search_logs_finds_matches(self) -> None:
-        """search_logs finds matching entries."""
-        result = await search_logs.ainvoke({"query": "ERROR"})
-        assert "ERROR" in result
-        assert "Found" in result
+    def test_get_alerts_is_callable(self) -> None:
+        """get_alerts tool is defined and callable."""
+        assert get_alerts is not None
+        assert hasattr(get_alerts, "ainvoke")
 
-    @pytest.mark.asyncio
-    async def test_search_logs_no_matches(self) -> None:
-        """search_logs handles no matches gracefully."""
-        result = await search_logs.ainvoke({"query": "nonexistent-pattern-xyz"})
-        assert "No logs found" in result
-
+    def test_tools_have_descriptions(self) -> None:
+        """All tools have descriptions for the LLM."""
+        tools = [get_services, get_service_status, get_alerts]
+        for tool in tools:
+            assert tool.description, f"Tool {tool.name} has no description"
