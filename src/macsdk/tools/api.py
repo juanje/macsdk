@@ -1,7 +1,8 @@
 """REST API tools for MACSDK agents.
 
 Generic tools for calling REST APIs with automatic authentication,
-retry logic, error handling, and optional JSONPath extraction.
+retry logic, error handling, SSL certificate support, and optional
+JSONPath extraction.
 """
 
 from __future__ import annotations
@@ -9,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import ssl
 from typing import Annotated, Any
 
 import aiohttp
@@ -88,11 +90,22 @@ async def _make_request(
     if body:
         request_headers.setdefault("Content-Type", "application/json")
 
+    # Configure SSL context
+    ssl_context: ssl.SSLContext | bool = True
+    if not service_config.ssl_verify:
+        # Disable SSL verification (insecure, for test servers)
+        ssl_context = False
+    elif service_config.ssl_cert:
+        # Use custom SSL certificate
+        ssl_context = ssl.create_default_context()
+        ssl_context.load_verify_locations(service_config.ssl_cert)
+
     # Retry logic with exponential backoff
     last_error = None
     for attempt in range(service_config.max_retries):
         try:
-            async with aiohttp.ClientSession() as session:
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.request(
                     method=method,
                     url=url,

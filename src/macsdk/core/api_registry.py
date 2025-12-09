@@ -29,6 +29,8 @@ class APIServiceConfig(BaseModel):
     timeout: int = 30
     max_retries: int = 3
     rate_limit: int | None = None  # requests per hour
+    ssl_cert: str | None = None  # Path to SSL certificate file
+    ssl_verify: bool = True  # Set to False to disable SSL verification (insecure!)
 
     class Config:
         """Pydantic configuration."""
@@ -44,6 +46,8 @@ def register_api_service(
     timeout: int = 30,
     max_retries: int = 3,
     rate_limit: int | None = None,
+    ssl_cert: str | None = None,
+    ssl_verify: bool = True,
 ) -> None:
     """Register an API service for use by API tools.
 
@@ -55,15 +59,35 @@ def register_api_service(
         timeout: Request timeout in seconds.
         max_retries: Maximum number of retry attempts.
         rate_limit: Optional rate limit (requests per hour).
+        ssl_cert: Optional path to SSL certificate file for HTTPS verification.
+        ssl_verify: Whether to verify SSL certificates (default: True).
+                    Set to False for test servers (insecure!).
 
     Example:
+        >>> # Basic service with token
         >>> register_api_service(
         ...     "github",
         ...     "https://api.github.com",
         ...     token=os.environ["GITHUB_TOKEN"],
         ...     rate_limit=5000,
         ... )
+        >>> # With custom SSL certificate
+        >>> register_api_service(
+        ...     "internal_api",
+        ...     "https://api.internal.company.com",
+        ...     token=os.environ["INTERNAL_TOKEN"],
+        ...     ssl_cert="/path/to/company-ca.pem",
+        ... )
+        >>> # Test server without SSL verification (insecure!)
+        >>> register_api_service(
+        ...     "test_api",
+        ...     "https://test.local:8443",
+        ...     ssl_verify=False,
+        ... )
     """
+    if not ssl_verify:
+        logger.warning(f"SSL verification disabled for service '{name}' - INSECURE!")
+
     _api_services[name] = APIServiceConfig(
         name=name,
         base_url=base_url.rstrip("/"),
@@ -72,6 +96,8 @@ def register_api_service(
         timeout=timeout,
         max_retries=max_retries,
         rate_limit=rate_limit,
+        ssl_cert=ssl_cert,
+        ssl_verify=ssl_verify,
     )
     logger.info(f"Registered API service: {name} ({base_url})")
 
@@ -130,6 +156,13 @@ def load_api_services_from_config(config: dict[str, Any]) -> None:
           jira:
             base_url: "https://company.atlassian.net/rest/api/3"
             token: ${JIRA_TOKEN}
+          internal:
+            base_url: "https://api.internal.company.com"
+            token: ${INTERNAL_TOKEN}
+            ssl_cert: "/path/to/company-ca.pem"
+          test_server:
+            base_url: "https://test.local:8443"
+            ssl_verify: false  # Disable SSL verification (insecure!)
     """
     services = config.get("api_services", {})
 
@@ -143,4 +176,6 @@ def load_api_services_from_config(config: dict[str, Any]) -> None:
                 timeout=service_config.get("timeout", 30),
                 max_retries=service_config.get("max_retries", 3),
                 rate_limit=service_config.get("rate_limit"),
+                ssl_cert=service_config.get("ssl_cert"),
+                ssl_verify=service_config.get("ssl_verify", True),
             )

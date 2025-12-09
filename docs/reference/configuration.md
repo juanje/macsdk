@@ -120,6 +120,71 @@ rag:
   chroma_db_dir: "./chroma_db"
 ```
 
+## API Services Configuration
+
+Configure external API services for your agents to use with MACSDK's API tools:
+
+```yaml
+# =============================================================================
+# API Services Configuration
+# =============================================================================
+api_services:
+  # Public API with authentication
+  github:
+    base_url: "https://api.github.com"
+    token: ${GITHUB_TOKEN}  # Bearer token (from env var)
+    rate_limit: 5000
+    timeout: 30
+    max_retries: 3
+
+  # Internal API with custom SSL certificate
+  internal_api:
+    base_url: "https://api.internal.company.com"
+    token: ${INTERNAL_TOKEN}
+    ssl_cert: "/path/to/company-ca.pem"
+    headers:
+      X-Custom-Header: "value"
+
+  # Test server (disable SSL verification)
+  test_server:
+    base_url: "https://localhost:8443"
+    ssl_verify: false  # ⚠️ Insecure! Only for development
+```
+
+### API Service Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `base_url` | string | required | Base URL for the API |
+| `token` | string | - | Bearer token for authentication |
+| `headers` | dict | `{}` | Custom HTTP headers |
+| `timeout` | int | `30` | Request timeout in seconds |
+| `max_retries` | int | `3` | Number of retry attempts |
+| `rate_limit` | int | - | Requests per hour limit |
+| `ssl_cert` | string | - | Path to SSL certificate file |
+| `ssl_verify` | bool | `true` | Verify SSL certificates |
+
+### Using API Services in Code
+
+```python
+from macsdk.core.api_registry import register_api_service
+from macsdk.tools import api_get
+
+# Register programmatically
+register_api_service(
+    name="github",
+    base_url="https://api.github.com",
+    token=os.environ["GITHUB_TOKEN"],
+)
+
+# Use in tools
+result = await api_get.ainvoke({
+    "service": "github",
+    "endpoint": "/repos/owner/repo",
+    "extract": "$.name",  # JSONPath
+})
+```
+
 ## Environment Variables
 
 All configuration options can be set via environment variables:

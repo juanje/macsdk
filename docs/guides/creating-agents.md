@@ -105,9 +105,12 @@ TOOLS = [get_weather, get_forecast]
 
 ## Using MACSDK API Tools
 
-For agents that interact with REST APIs, use MACSDK's built-in tools:
+For agents that interact with REST APIs, use MACSDK's built-in tools.
+
+### Basic API Service
 
 ```python
+import os
 from langchain_core.tools import tool
 from macsdk.core.api_registry import register_api_service
 from macsdk.tools import api_get, api_post
@@ -136,16 +139,69 @@ async def get_user_names() -> str:
         "endpoint": "/users",
         "extract": "$[*].name",  # JSONPath extraction
     })
+```
+
+### API with Authentication
+
+```python
+# Service with Bearer token
+register_api_service(
+    name="github",
+    base_url="https://api.github.com",
+    token=os.environ["GITHUB_TOKEN"],  # Adds Authorization: Bearer header
+    rate_limit=5000,
+)
 
 @tool
-async def create_user(name: str, email: str) -> str:
-    """Create a new user."""
-    return await api_post.ainvoke({
-        "service": "my_api",
-        "endpoint": "/users",
-        "body": {"name": name, "email": email},
+async def get_repo_info(owner: str, repo: str) -> str:
+    """Get information about a GitHub repository."""
+    return await api_get.ainvoke({
+        "service": "github",
+        "endpoint": f"/repos/{owner}/{repo}",
+        "extract": "$.full_name",
     })
 ```
+
+### API with Custom SSL Certificate
+
+For internal APIs with self-signed or custom certificates:
+
+```python
+# Service with custom SSL certificate
+register_api_service(
+    name="internal_api",
+    base_url="https://api.internal.company.com",
+    token=os.environ["INTERNAL_TOKEN"],
+    ssl_cert="/path/to/company-ca.pem",
+)
+```
+
+### Test Server (No SSL Verification)
+
+For development/test servers only:
+
+```python
+# ⚠️ INSECURE - Only for development!
+register_api_service(
+    name="test_api",
+    base_url="https://localhost:8443",
+    ssl_verify=False,
+)
+```
+
+### Service Options Reference
+
+| Option | Description |
+|--------|-------------|
+| `token` | Bearer token for authentication |
+| `headers` | Custom HTTP headers dict |
+| `timeout` | Request timeout in seconds (default: 30) |
+| `max_retries` | Retry attempts (default: 3) |
+| `rate_limit` | Requests per hour limit |
+| `ssl_cert` | Path to SSL certificate file |
+| `ssl_verify` | Verify SSL (default: True) |
+
+See `macsdk list-tools` for all available API tools.
 
 ## Defining Capabilities
 

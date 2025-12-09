@@ -99,7 +99,7 @@ List tools provided by the MACSDK.
 macsdk list-tools
 ```
 
-Shows all reusable tools available for building agents:
+Shows all reusable tools and API service configuration options:
 
 ```
 🔧 MACSDK Tools
@@ -115,6 +115,19 @@ Shows all reusable tools available for building agents:
 │ fetch_and_save │ Remote   │ Download and save a file locally      │
 │ fetch_json     │ Remote   │ Fetch JSON with JSONPath extraction   │
 └────────────────┴──────────┴───────────────────────────────────────┘
+
+⚙️  API Service Options
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Option      ┃ Description                                         ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ token       │ Bearer token for authentication                     │
+│ headers     │ Custom HTTP headers                                 │
+│ timeout     │ Request timeout (default: 30s)                      │
+│ max_retries │ Retry attempts (default: 3)                         │
+│ rate_limit  │ Requests per hour limit                             │
+│ ssl_cert    │ Path to SSL certificate file                        │
+│ ssl_verify  │ Verify SSL (default: true, false for test servers)  │
+└─────────────┴─────────────────────────────────────────────────────┘
 ```
 
 ---

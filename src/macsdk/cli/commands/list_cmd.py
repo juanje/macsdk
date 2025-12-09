@@ -69,6 +69,17 @@ SDK_TOOLS = [
     },
 ]
 
+# Service configuration options
+SERVICE_CONFIG_OPTIONS = [
+    ("token", "Bearer token for authentication"),
+    ("headers", "Custom HTTP headers"),
+    ("timeout", "Request timeout (default: 30s)"),
+    ("max_retries", "Retry attempts (default: 3)"),
+    ("rate_limit", "Requests per hour limit"),
+    ("ssl_cert", "Path to SSL certificate file"),
+    ("ssl_verify", "Verify SSL (default: true, set false for test servers)"),
+]
+
 
 # =============================================================================
 # PUBLIC API - Called by CLI
@@ -77,6 +88,7 @@ SDK_TOOLS = [
 
 def list_sdk_tools() -> None:
     """List tools provided by the MACSDK."""
+    # Tools table
     table = Table(title="🔧 MACSDK Tools")
     table.add_column("Tool", style="cyan", no_wrap=True)
     table.add_column("Category", style="yellow")
@@ -94,24 +106,54 @@ def list_sdk_tools() -> None:
     console.print(table)
     console.print()
 
+    # Service configuration options
+    config_table = Table(title="⚙️  API Service Options")
+    config_table.add_column("Option", style="cyan", no_wrap=True)
+    config_table.add_column("Description", style="white")
+
+    for opt_name, opt_desc in SERVICE_CONFIG_OPTIONS:
+        config_table.add_row(opt_name, opt_desc)
+
+    console.print(config_table)
+    console.print()
+
     # Usage example
     usage_text = """\
-[bold]Usage in your agent:[/bold]
+[bold]Register a service:[/bold]
 
-[cyan]from macsdk.tools import api_get, fetch_file[/cyan]
 [cyan]from macsdk.core.api_registry import register_api_service[/cyan]
 
-[dim]# Register your API service[/dim]
-[cyan]register_api_service("myapi", "https://api.example.com")[/cyan]
+[dim]# Basic service with token[/dim]
+[cyan]register_api_service([/cyan]
+[cyan]    "github",[/cyan]
+[cyan]    "https://api.github.com",[/cyan]
+[cyan]    token=os.environ["GITHUB_TOKEN"],[/cyan]
+[cyan])[/cyan]
 
-[dim]# Use in a tool[/dim]
+[dim]# Internal service with custom SSL cert[/dim]
+[cyan]register_api_service([/cyan]
+[cyan]    "internal",[/cyan]
+[cyan]    "https://api.internal.company.com",[/cyan]
+[cyan]    token=os.environ["INTERNAL_TOKEN"],[/cyan]
+[cyan]    ssl_cert="/path/to/company-ca.pem",[/cyan]
+[cyan])[/cyan]
+
+[dim]# Test server (no SSL verification)[/dim]
+[cyan]register_api_service([/cyan]
+[cyan]    "test",[/cyan]
+[cyan]    "https://localhost:8443",[/cyan]
+[cyan]    ssl_verify=False,  [red]# Insecure![/red][/cyan]
+[cyan])[/cyan]
+
+[bold]Use in your tools:[/bold]
+
 [cyan]@tool[/cyan]
 [cyan]async def get_users():[/cyan]
 [cyan]    return await api_get.ainvoke({[/cyan]
-[cyan]        "service": "myapi",[/cyan]
+[cyan]        "service": "github",[/cyan]
 [cyan]        "endpoint": "/users",[/cyan]
-[cyan]        "extract": "$[*].name",  # JSONPath[/cyan]
+[cyan]        "extract": "$[*].login",  # JSONPath[/cyan]
 [cyan]    })[/cyan]
 """
 
-    console.print(Panel(usage_text, title="Example", border_style="green"))
+    console.print(Panel(usage_text, title="Examples", border_style="green"))
