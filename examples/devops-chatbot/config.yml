@@ -45,17 +45,12 @@ rag:
   enabled: true
 
   # Documentation sources to index
-  # Add your own URLs here. Tags help filter searches.
   sources:
-    - name: "langchain"
-      url: "https://python.langchain.com/docs/introduction/"
-      tags: ["framework", "llm", "agents"]
-
-    # Example: Internal documentation with custom SSL certificate
-    # - name: "internal_docs"
-    #   url: "https://docs.internal.company.com/"
-    #   tags: ["internal", "api"]
-    #   cert_url: "https://certs.company.com/root-ca.pem"  # Or use cert_path
+    # MACSDK Documentation (local markdown files)
+    - name: "macsdk_docs"
+      url: "../../docs/"
+      type: "markdown"
+      tags: ["macsdk", "sdk", "documentation"]
 
   # Indexing settings
   # chunk_size: 1000          # Size of text chunks
@@ -72,13 +67,13 @@ rag:
   # Caching
   # enable_llm_cache: true    # Cache LLM responses (faster, cheaper)
 
-  # Domain-specific glossary (IMPORTANT for your domain!)
-  # This helps RAG understand your technical terms and acronyms
+  # Domain-specific glossary
   glossary:
-    # Add your domain-specific terms here:
-    # MACSDK: "Multi-Agent Chatbot SDK"
-    # LLM: "Large Language Model"
-    # RAG: "Retrieval-Augmented Generation"
+    MACSDK: "Multi-Agent Chatbot SDK - A framework for building multi-agent chatbots"
+    LLM: "Large Language Model"
+    RAG: "Retrieval-Augmented Generation - A technique for answering questions using indexed documents"
+    LangChain: "A framework for building applications with LLMs"
+    LangGraph: "A framework for building graph-based agent workflows"
 
   # Storage paths
   # chroma_db_dir: "./chroma_db"

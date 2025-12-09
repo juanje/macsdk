@@ -52,10 +52,16 @@ rag:
   #   - markdown: Markdown files (local or remote)
   #
   sources:
-    # HTML documentation (default type)
-    - name: "langchain"
-      url: "https://python.langchain.com/docs/introduction/"
-      tags: ["framework", "llm", "agents"]
+    # MACSDK Documentation (local markdown files)
+    - name: "macsdk_docs"
+      url: "../../docs/"
+      type: "markdown"
+      tags: ["macsdk", "sdk", "documentation"]
+
+    # Example: HTML documentation (web crawling)
+    # - name: "langchain"
+    #   url: "https://python.langchain.com/docs/introduction/"
+    #   tags: ["framework", "llm", "agents"]
 
     # Example: Markdown file from GitHub (raw URL)
     # - name: "project_readme"
@@ -68,12 +74,6 @@ rag:
     #   url: "./docs/guide.md"
     #   type: "markdown"
     #   tags: ["guide"]
-
-    # Example: Local markdown directory (loads all .md files recursively)
-    # - name: "all_docs"
-    #   url: "./docs/"
-    #   type: "markdown"
-    #   tags: ["documentation"]
 
     # Example: Internal documentation with custom SSL certificate
     # - name: "internal_docs"
