@@ -40,9 +40,9 @@ class TestMainCLI:
         assert result.exit_code == 0
         assert "CHATBOT_DIR" in result.output
 
-    def test_cli_has_list_agents_command(self) -> None:
-        """CLI has 'list-agents' command."""
+    def test_cli_has_list_tools_command(self) -> None:
+        """CLI has 'list-tools' command."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["list-agents", "--help"])
+        result = runner.invoke(cli, ["list-tools", "--help"])
         assert result.exit_code == 0
-        assert "CHATBOT_DIR" in result.output
+        assert "tools" in result.output.lower()

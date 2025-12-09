@@ -108,4 +108,3 @@ class ToolProgressCallback(BaseCallbackHandler):
             f"[{self.agent_name}] ⚠️ Tool error: {error!s}\n",
             self.config,
         )
-

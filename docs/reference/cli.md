@@ -91,16 +91,31 @@ macsdk add-agent ./my-chatbot --git https://github.com/org/agent.git
 macsdk add-agent . --path ../my-agent
 ```
 
-### `macsdk list-agents`
+### `macsdk list-tools`
 
-List registered agents in a chatbot project.
+List tools provided by the MACSDK.
 
 ```bash
-macsdk list-agents [CHATBOT_DIR]
+macsdk list-tools
 ```
 
-**Arguments:**
-- `CHATBOT_DIR`: Path to chatbot project directory (default: `.`)
+Shows all reusable tools available for building agents:
+
+```
+🔧 MACSDK Tools
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Tool           ┃ Category ┃ Description                           ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ api_get        │ API      │ GET request to a registered service   │
+│ api_post       │ API      │ POST request with JSON body           │
+│ api_put        │ API      │ PUT request with JSON body            │
+│ api_delete     │ API      │ DELETE request to an endpoint         │
+│ api_patch      │ API      │ PATCH request with JSON body          │
+│ fetch_file     │ Remote   │ Fetch file with grep/head/tail        │
+│ fetch_and_save │ Remote   │ Download and save a file locally      │
+│ fetch_json     │ Remote   │ Fetch JSON with JSONPath extraction   │
+└────────────────┴──────────┴───────────────────────────────────────┘
+```
 
 ---
 

@@ -142,27 +142,21 @@ def add_agent(
     add_agent_to_chatbot(chatbot_dir, package, git, path)
 
 
-@cli.command(name="list-agents")
-@click.argument(
-    "chatbot_dir",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True),
-    default=".",
-)
-def list_agents(chatbot_dir: str) -> None:
-    """List registered agents in a chatbot project.
+@cli.command(name="list-tools")
+def list_tools() -> None:
+    """List tools provided by the MACSDK.
 
-    CHATBOT_DIR is the path to the chatbot project directory.
-    Use "." for the current directory.
+    Shows all reusable tools available for building agents,
+    including API tools, remote file tools, and more.
 
     \b
     Examples:
-      macsdk list-agents .
-      macsdk list-agents ./my-chatbot
+      macsdk list-tools
     """
     # Lazy import
-    from .commands.list_cmd import list_agents_in_chatbot
+    from .commands.list_cmd import list_sdk_tools
 
-    list_agents_in_chatbot(chatbot_dir)
+    list_sdk_tools()
 
 
 if __name__ == "__main__":
