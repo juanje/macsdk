@@ -47,10 +47,34 @@ rag:
 
   # Documentation sources to index
   # Add your own URLs here. Tags help filter searches.
+  #
+  # Supported types:
+  #   - html (default): Web pages crawled recursively
+  #   - markdown: Markdown files (local or remote)
+  #
   sources:
+    # HTML documentation (default type)
     - name: "langchain"
       url: "https://python.langchain.com/docs/introduction/"
       tags: ["framework", "llm", "agents"]
+
+    # Example: Markdown file from GitHub (raw URL)
+    # - name: "project_readme"
+    #   url: "https://raw.githubusercontent.com/user/repo/main/README.md"
+    #   type: "markdown"
+    #   tags: ["readme"]
+
+    # Example: Local markdown file
+    # - name: "local_docs"
+    #   url: "./docs/guide.md"
+    #   type: "markdown"
+    #   tags: ["guide"]
+
+    # Example: Local markdown directory (loads all .md files recursively)
+    # - name: "all_docs"
+    #   url: "./docs/"
+    #   type: "markdown"
+    #   tags: ["documentation"]
 
     # Example: Internal documentation with custom SSL certificate
     # - name: "internal_docs"

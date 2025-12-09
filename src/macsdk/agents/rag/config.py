@@ -26,10 +26,24 @@ DEFAULT_RAG_SOURCE = {
 
 
 class RAGSourceConfig(BaseModel):
-    """Configuration for a single documentation source."""
+    """Configuration for a single documentation source.
+
+    Supported types:
+    - html: Web pages (crawled recursively)
+    - markdown: Markdown files (local path or remote URL)
+
+    For markdown type, the url/path field can be:
+    - A URL to a .md file (https://...)
+    - A local file path (/path/to/file.md or ./relative/path.md)
+    - A directory path to load all .md files recursively
+    """
 
     name: str = Field(description="Human-readable name for the source")
-    url: str = Field(description="URL to crawl and index")
+    url: str = Field(description="URL or local path to the source")
+    type: str = Field(
+        default="html",
+        description="Source type: 'html' for web pages, 'markdown' for .md files",
+    )
     tags: list[str] = Field(
         default_factory=list,
         description="Tags for filtering and metadata",

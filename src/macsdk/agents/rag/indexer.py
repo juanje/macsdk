@@ -1,13 +1,18 @@
 """Document loading and indexing utilities for RAG agent.
 
 This module provides functionality to:
-- Load documents from multiple URLs in parallel
+- Load documents from multiple sources (HTML pages, Markdown files)
+- Support for local and remote Markdown files
 - Split documents into chunks
 - Create embeddings and store in ChromaDB
 - Manage document metadata (source, tags)
 
+Supported source types:
+- html: Web pages (crawled recursively with BeautifulSoup)
+- markdown: Markdown files (local paths or remote URLs)
+
 Optimizations:
-- Parallel URL loading using ThreadPoolExecutor
+- Parallel source loading using ThreadPoolExecutor
 - Progress tracking with tqdm
 - Batch embedding creation via ChromaDB
 """
@@ -20,10 +25,13 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 import bs4
+import requests
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import RecursiveUrlLoader
+from langchain_core.documents import Document
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -36,7 +44,7 @@ from .cert_manager import get_cert_for_source
 from .config import RAGConfig, RAGSourceConfig, get_rag_config
 
 if TYPE_CHECKING:
-    from langchain_core.documents import Document
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +71,139 @@ def simple_extractor(html: str) -> str:
 
     # Fallback to getting all text if main content structure isn't found
     return str(soup.get_text(separator=" ", strip=True))
+
+
+def _is_url(path: str) -> bool:
+    """Check if a path is a URL.
+
+    Args:
+        path: Path or URL string.
+
+    Returns:
+        True if it's a URL, False if it's a local path.
+    """
+    parsed = urlparse(path)
+    return parsed.scheme in ("http", "https")
+
+
+def _load_markdown_from_url(url: str, cert_path: Path | None = None) -> str:
+    """Download markdown content from a URL.
+
+    Args:
+        url: URL to the markdown file.
+        cert_path: Optional path to SSL certificate.
+
+    Returns:
+        Markdown content as string.
+    """
+    verify: bool | str = True
+    if cert_path:
+        verify = str(cert_path)
+
+    response = requests.get(url, timeout=30, verify=verify)
+    response.raise_for_status()
+    return str(response.text)
+
+
+def _load_markdown_documents(
+    source: RAGSourceConfig,
+    config: RAGConfig,
+) -> tuple[str, list[Document], str | None]:
+    """Load documents from a Markdown source (local or remote).
+
+    Args:
+        source: Source configuration.
+        config: RAG configuration.
+
+    Returns:
+        Tuple of (source_path, docs, error_message).
+    """
+    path_or_url = source.url
+    logger.info(f"[PARALLEL] Loading markdown from {path_or_url}")
+
+    try:
+        docs: list[Document] = []
+        tags_str = ",".join(source.tags) if source.tags else ""
+
+        if _is_url(path_or_url):
+            # Remote markdown file
+            cert_path = get_cert_for_source(source)
+            content = _load_markdown_from_url(path_or_url, cert_path)
+
+            doc = Document(
+                page_content=content,
+                metadata={
+                    "source": path_or_url,
+                    "source_name": source.name,
+                    "source_url": path_or_url,
+                    "tags": tags_str,
+                    "type": "markdown",
+                },
+            )
+            docs.append(doc)
+            logger.info(f"[PARALLEL] Loaded remote markdown: {path_or_url}")
+
+        else:
+            # Local markdown file or directory
+            local_path = Path(path_or_url).expanduser().resolve()
+
+            if not local_path.exists():
+                return (path_or_url, [], f"Path does not exist: {local_path}")
+
+            if local_path.is_file():
+                # Single file
+                if local_path.suffix.lower() in (".md", ".markdown"):
+                    content = local_path.read_text(encoding="utf-8")
+                    doc = Document(
+                        page_content=content,
+                        metadata={
+                            "source": str(local_path),
+                            "source_name": source.name,
+                            "source_url": path_or_url,
+                            "tags": tags_str,
+                            "type": "markdown",
+                            "filename": local_path.name,
+                        },
+                    )
+                    docs.append(doc)
+                else:
+                    return (path_or_url, [], f"Not a markdown file: {local_path}")
+
+            elif local_path.is_dir():
+                # Directory - load all .md files recursively
+                md_files = list(local_path.rglob("*.md")) + list(
+                    local_path.rglob("*.markdown")
+                )
+
+                for md_file in md_files:
+                    try:
+                        content = md_file.read_text(encoding="utf-8")
+                        relative_path = md_file.relative_to(local_path)
+                        doc = Document(
+                            page_content=content,
+                            metadata={
+                                "source": str(md_file),
+                                "source_name": source.name,
+                                "source_url": path_or_url,
+                                "tags": tags_str,
+                                "type": "markdown",
+                                "filename": md_file.name,
+                                "relative_path": str(relative_path),
+                            },
+                        )
+                        docs.append(doc)
+                    except Exception as e:
+                        logger.warning(f"Failed to load {md_file}: {e}")
+
+                logger.info(
+                    f"[PARALLEL] Loaded {len(docs)} markdown files from {local_path}"
+                )
+
+        return (path_or_url, docs, None)
+
+    except Exception as e:
+        logger.error(f"[PARALLEL] Failed to load markdown from {path_or_url}: {e}")
+        return (path_or_url, [], str(e))
 
 
 def _get_collection_name_for_sources(
@@ -160,11 +301,11 @@ def load_existing_retriever(
         return None
 
 
-def _load_url_documents(
+def _load_html_documents(
     source: RAGSourceConfig,
     config: RAGConfig,
-) -> tuple[str, list["Document"], str | None]:
-    """Load documents from a single URL.
+) -> tuple[str, list[Document], str | None]:
+    """Load documents from a web URL (HTML).
 
     Args:
         source: Source configuration.
@@ -174,7 +315,7 @@ def _load_url_documents(
         Tuple of (url, docs, error_message).
     """
     url = source.url
-    logger.info(f"[PARALLEL] Starting to load {url}")
+    logger.info(f"[PARALLEL] Starting to load HTML from {url}")
 
     try:
         # Get certificate if needed
@@ -202,6 +343,7 @@ def _load_url_documents(
                 doc.metadata["source_name"] = source.name
                 doc.metadata["source_url"] = url
                 doc.metadata["tags"] = tags_str
+                doc.metadata["type"] = "html"
 
             logger.info(f"[PARALLEL] Completed loading {url} - {len(docs)} docs")
             return (url, docs, None)
@@ -217,6 +359,28 @@ def _load_url_documents(
     except Exception as e:
         logger.error(f"[PARALLEL] Failed to load {url}: {e}")
         return (url, [], str(e))
+
+
+def _load_source_documents(
+    source: RAGSourceConfig,
+    config: RAGConfig,
+) -> tuple[str, list[Document], str | None]:
+    """Load documents from a source based on its type.
+
+    Args:
+        source: Source configuration.
+        config: RAG configuration.
+
+    Returns:
+        Tuple of (source_path, docs, error_message).
+    """
+    source_type = source.type.lower()
+
+    if source_type == "markdown":
+        return _load_markdown_documents(source, config)
+    else:
+        # Default to HTML
+        return _load_html_documents(source, config)
 
 
 def create_retriever(
@@ -283,9 +447,9 @@ def create_retriever(
 
     try:
         with ThreadPoolExecutor(max_workers=min(len(sources), 4)) as executor:
-            # Submit all URL loading tasks
+            # Submit all source loading tasks
             future_to_source = {
-                executor.submit(_load_url_documents, source, config): source
+                executor.submit(_load_source_documents, source, config): source
                 for source in sources
             }
             logger.info(f"All {len(sources)} tasks submitted")
