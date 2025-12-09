@@ -13,6 +13,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, tool
 
 from macsdk.core import get_answer_model, run_agent_with_tools
+from macsdk.middleware import DatetimeContextMiddleware
 
 from .models import AgentResponse
 from .prompts import SYSTEM_PROMPT
@@ -24,6 +25,14 @@ if TYPE_CHECKING:
 
 CAPABILITIES = """{{ description }}"""
 
+# Active tools for this agent
+# These example tools use mock data - replace with real implementations
+TOOLS = [
+    get_service_status,  # Check service health (mock)
+    search_logs,         # Search application logs (mock)
+    # Add your custom tools here
+]
+
 
 def create_{{ agent_slug }}():
     """Create the {{ name }} agent.
@@ -31,18 +40,10 @@ def create_{{ agent_slug }}():
     Returns:
         Configured agent instance.
     """
-    # Active tools for this agent
-    # These example tools use mock data - replace with real implementations
-    tools = [
-        get_service_status,  # Check service health (mock)
-        search_logs,         # Search application logs (mock)
-        # Add your custom tools here
-    ]
-
     return create_agent(
         model=get_answer_model(),
-        tools=tools,
-        middleware=[],
+        tools=TOOLS,
+        middleware=[DatetimeContextMiddleware()],
         response_format=AgentResponse,
     )
 
@@ -79,12 +80,14 @@ class {{ agent_class }}:
     This class provides the interface that MACSDK expects:
     - name: Unique identifier for the agent
     - capabilities: Description of what the agent can do
+    - tools: List of available tools
     - run(): Execute the agent
     - as_tool(): Return the agent as a callable tool
     """
 
     name: str = "{{ agent_slug }}"
     capabilities: str = CAPABILITIES
+    tools: list = TOOLS
 
     async def run(
         self,
