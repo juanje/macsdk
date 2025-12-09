@@ -1,12 +1,16 @@
-"""Tools for interacting with JSONPlaceholder REST API.
+"""Tools for interacting with DevOps Mock API.
 
-This agent demonstrates how to use MACSDK's API tools with the
-ApiServiceRegistry. JSONPlaceholder is a free fake REST API.
+This agent demonstrates how to use MACSDK's API tools for DevOps scenarios:
+- Pipeline monitoring and troubleshooting
+- Service health checks
+- Alert management
+- Log retrieval
 
 The pattern shown here is:
 1. Register the API service on startup
-2. Create domain-specific tools that use api_get/api_post from MACSDK
+2. Create domain-specific tools that use api_get from MACSDK
 3. Use JSONPath to extract specific fields when needed
+4. Use fetch_file to download logs for investigation
 """
 
 from __future__ import annotations
@@ -14,302 +18,385 @@ from __future__ import annotations
 from langchain_core.tools import tool
 
 from macsdk.core.api_registry import register_api_service
-from macsdk.tools import api_get, api_post
+from macsdk.tools import api_get, fetch_file
 
 # =============================================================================
 # SERVICE REGISTRATION
 # =============================================================================
 
-# Register JSONPlaceholder as an API service
-# This should be called once at startup (e.g., in __init__.py or agent.py)
+# Register DevOps Mock API as a service
+# Hosted on my-json-server.typicode.com using juanje/devops-mock-api repo
 register_api_service(
-    name="jsonplaceholder",
-    base_url="https://jsonplaceholder.typicode.com",
+    name="devops",
+    base_url="https://my-json-server.typicode.com/juanje/devops-mock-api",
     timeout=10,
     max_retries=2,
 )
 
 
 # =============================================================================
-# USER TOOLS
+# PIPELINE TOOLS
 # =============================================================================
 
 
 @tool
-async def get_user(user_id: int) -> str:
-    """Get information about a user by their ID.
+async def list_pipelines() -> str:
+    """List all CI/CD pipelines.
 
-    Retrieves user details from JSONPlaceholder API including
-    name, email, phone, website, company, and address.
+    Returns all pipelines with their status (passed, failed, running, pending).
+
+    Returns:
+        List of pipelines as JSON string.
+    """
+    return await api_get.ainvoke(
+        {
+            "service": "devops",
+            "endpoint": "/pipelines",
+        }
+    )
+
+
+@tool
+async def get_pipeline(pipeline_id: int) -> str:
+    """Get details of a specific pipeline.
 
     Args:
-        user_id: The user's ID (1-10 are available).
+        pipeline_id: The pipeline's ID.
 
     Returns:
-        User information as JSON string.
+        Pipeline details as JSON string.
     """
     return await api_get.ainvoke(
         {
-            "service": "jsonplaceholder",
-            "endpoint": f"/users/{user_id}",
+            "service": "devops",
+            "endpoint": f"/pipelines/{pipeline_id}",
         }
     )
 
 
 @tool
-async def list_users() -> str:
-    """List all available users.
+async def get_failed_pipelines() -> str:
+    """Get all failed pipelines.
 
-    Returns a list of all users with their basic info.
+    Useful for quickly identifying pipelines that need attention.
 
     Returns:
-        List of users as JSON string.
+        List of failed pipelines as JSON string.
     """
     return await api_get.ainvoke(
         {
-            "service": "jsonplaceholder",
-            "endpoint": "/users",
+            "service": "devops",
+            "endpoint": "/pipelines",
+            "params": {"status": "failed"},
         }
     )
 
 
 @tool
-async def get_user_names() -> str:
-    """Get just the names of all users.
+async def get_pipeline_names_by_status(status: str) -> str:
+    """Get pipeline names filtered by status.
 
     Demonstrates using JSONPath to extract specific fields.
 
+    Args:
+        status: Pipeline status (passed, failed, running, pending).
+
     Returns:
-        List of user names.
+        List of pipeline names.
     """
     return await api_get.ainvoke(
         {
-            "service": "jsonplaceholder",
-            "endpoint": "/users",
-            "extract": "$[*].name",  # JSONPath to extract just names
-        }
-    )
-
-
-@tool
-async def get_user_emails() -> str:
-    """Get emails of all users.
-
-    Demonstrates using JSONPath to extract specific fields.
-
-    Returns:
-        List of user emails.
-    """
-    return await api_get.ainvoke(
-        {
-            "service": "jsonplaceholder",
-            "endpoint": "/users",
-            "extract": "$[*].email",  # JSONPath to extract just emails
+            "service": "devops",
+            "endpoint": "/pipelines",
+            "params": {"status": status},
+            "extract": "$[*].name",
         }
     )
 
 
 # =============================================================================
-# POST TOOLS
+# JOB TOOLS
 # =============================================================================
 
 
 @tool
-async def get_posts_by_user(user_id: int) -> str:
-    """Get all posts written by a specific user.
+async def get_jobs_for_pipeline(pipeline_id: int) -> str:
+    """Get all jobs for a specific pipeline.
+
+    Returns jobs with their status, duration, and any errors.
 
     Args:
-        user_id: The user's ID.
+        pipeline_id: The pipeline's ID.
 
     Returns:
-        List of posts by the user as JSON string.
+        List of jobs as JSON string.
     """
     return await api_get.ainvoke(
         {
-            "service": "jsonplaceholder",
-            "endpoint": "/posts",
-            "params": {"userId": user_id},
+            "service": "devops",
+            "endpoint": "/jobs",
+            "params": {"pipelineId": pipeline_id},
         }
     )
 
 
 @tool
-async def get_post(post_id: int) -> str:
-    """Get a specific post by ID.
+async def get_failed_jobs() -> str:
+    """Get all failed jobs across all pipelines.
 
-    Args:
-        post_id: The post's ID (1-100 are available).
+    Useful for identifying what went wrong in failed pipelines.
 
     Returns:
-        Post details as JSON string.
+        List of failed jobs with error details as JSON string.
     """
     return await api_get.ainvoke(
         {
-            "service": "jsonplaceholder",
-            "endpoint": f"/posts/{post_id}",
+            "service": "devops",
+            "endpoint": "/jobs",
+            "params": {"status": "failed"},
         }
     )
 
 
 @tool
-async def get_post_titles_by_user(user_id: int) -> str:
-    """Get just the titles of posts by a user.
+async def get_job(job_id: int) -> str:
+    """Get details of a specific job.
 
-    Demonstrates combining query params with JSONPath extraction.
+    Includes error message and log_url if the job failed.
 
     Args:
-        user_id: The user's ID.
+        job_id: The job's ID.
 
     Returns:
-        List of post titles.
+        Job details as JSON string.
     """
     return await api_get.ainvoke(
         {
-            "service": "jsonplaceholder",
-            "endpoint": "/posts",
-            "params": {"userId": user_id},
-            "extract": "$[*].title",  # Extract just titles
+            "service": "devops",
+            "endpoint": f"/jobs/{job_id}",
         }
     )
 
 
 @tool
-async def create_post(user_id: int, title: str, body: str) -> str:
-    """Create a new post (simulated - JSONPlaceholder doesn't persist).
+async def get_job_log(log_url: str) -> str:
+    """Download and return the contents of a job log.
 
-    Demonstrates using api_post to create resources.
-
-    Note: JSONPlaceholder simulates creation but doesn't persist data.
-    The response will include a generated ID.
+    Use this after finding a failed job to investigate the error.
+    The log_url can be found in the job's details.
 
     Args:
-        user_id: ID of the user creating the post.
-        title: Post title.
-        body: Post content.
+        log_url: The URL to the log file (from job's log_url field).
 
     Returns:
-        Created post details as JSON string.
+        Log file contents as string.
     """
-    return await api_post.ainvoke(
+    return await fetch_file.ainvoke({"url": log_url})
+
+
+# =============================================================================
+# SERVICE HEALTH TOOLS
+# =============================================================================
+
+
+@tool
+async def list_services() -> str:
+    """List all infrastructure services and their health status.
+
+    Returns services with status (healthy, degraded, warning, critical).
+
+    Returns:
+        List of services as JSON string.
+    """
+    return await api_get.ainvoke(
         {
-            "service": "jsonplaceholder",
-            "endpoint": "/posts",
-            "body": {
-                "userId": user_id,
-                "title": title,
-                "body": body,
-            },
+            "service": "devops",
+            "endpoint": "/services",
+        }
+    )
+
+
+@tool
+async def get_service(service_id: int) -> str:
+    """Get details of a specific service.
+
+    Args:
+        service_id: The service's ID.
+
+    Returns:
+        Service details as JSON string.
+    """
+    return await api_get.ainvoke(
+        {
+            "service": "devops",
+            "endpoint": f"/services/{service_id}",
+        }
+    )
+
+
+@tool
+async def get_unhealthy_services() -> str:
+    """Get services that are not healthy.
+
+    Returns services with status 'degraded', 'warning', or 'critical'.
+
+    Returns:
+        List of unhealthy services as JSON string.
+    """
+    # Get degraded services
+    degraded = await api_get.ainvoke(
+        {
+            "service": "devops",
+            "endpoint": "/services",
+            "params": {"status": "degraded"},
+        }
+    )
+    warning = await api_get.ainvoke(
+        {
+            "service": "devops",
+            "endpoint": "/services",
+            "params": {"status": "warning"},
+        }
+    )
+    return f"Degraded: {degraded}\nWarning: {warning}"
+
+
+@tool
+async def get_service_names_and_status() -> str:
+    """Get a summary of all services with their names and status.
+
+    Demonstrates using JSONPath to extract multiple fields.
+
+    Returns:
+        Service names and status.
+    """
+    names = await api_get.ainvoke(
+        {
+            "service": "devops",
+            "endpoint": "/services",
+            "extract": "$[*].name",
+        }
+    )
+    statuses = await api_get.ainvoke(
+        {
+            "service": "devops",
+            "endpoint": "/services",
+            "extract": "$[*].status",
+        }
+    )
+    return f"Services: {names}\nStatuses: {statuses}"
+
+
+# =============================================================================
+# ALERT TOOLS
+# =============================================================================
+
+
+@tool
+async def list_alerts() -> str:
+    """List all active alerts.
+
+    Returns alerts with severity (info, warning, critical).
+
+    Returns:
+        List of alerts as JSON string.
+    """
+    return await api_get.ainvoke(
+        {
+            "service": "devops",
+            "endpoint": "/alerts",
+        }
+    )
+
+
+@tool
+async def get_unacknowledged_alerts() -> str:
+    """Get alerts that haven't been acknowledged yet.
+
+    These are alerts that need attention.
+
+    Returns:
+        List of unacknowledged alerts as JSON string.
+    """
+    return await api_get.ainvoke(
+        {
+            "service": "devops",
+            "endpoint": "/alerts",
+            "params": {"acknowledged": "false"},
+        }
+    )
+
+
+@tool
+async def get_critical_alerts() -> str:
+    """Get critical severity alerts.
+
+    These are high-priority issues that need immediate attention.
+
+    Returns:
+        List of critical alerts as JSON string.
+    """
+    return await api_get.ainvoke(
+        {
+            "service": "devops",
+            "endpoint": "/alerts",
+            "params": {"severity": "critical"},
         }
     )
 
 
 # =============================================================================
-# COMMENT TOOLS
+# DEPLOYMENT TOOLS
 # =============================================================================
 
 
 @tool
-async def get_comments_on_post(post_id: int) -> str:
-    """Get all comments on a specific post.
+async def list_deployments() -> str:
+    """List all deployments across environments.
 
-    Args:
-        post_id: The post's ID.
+    Shows deployment history for production, staging, etc.
 
     Returns:
-        List of comments as JSON string.
+        List of deployments as JSON string.
     """
     return await api_get.ainvoke(
         {
-            "service": "jsonplaceholder",
-            "endpoint": f"/posts/{post_id}/comments",
+            "service": "devops",
+            "endpoint": "/deployments",
         }
     )
 
 
 @tool
-async def get_comment_emails_on_post(post_id: int) -> str:
-    """Get just the emails of commenters on a post.
-
-    Demonstrates JSONPath extraction on nested endpoint.
+async def get_deployment(deployment_id: int) -> str:
+    """Get details of a specific deployment.
 
     Args:
-        post_id: The post's ID.
+        deployment_id: The deployment's ID.
 
     Returns:
-        List of commenter emails.
+        Deployment details as JSON string.
     """
     return await api_get.ainvoke(
         {
-            "service": "jsonplaceholder",
-            "endpoint": f"/posts/{post_id}/comments",
-            "extract": "$[*].email",
-        }
-    )
-
-
-# =============================================================================
-# TODO TOOLS
-# =============================================================================
-
-
-@tool
-async def get_todos_by_user(user_id: int) -> str:
-    """Get all TODO items for a user.
-
-    Args:
-        user_id: The user's ID.
-
-    Returns:
-        List of TODO items as JSON string.
-    """
-    return await api_get.ainvoke(
-        {
-            "service": "jsonplaceholder",
-            "endpoint": "/todos",
-            "params": {"userId": user_id},
+            "service": "devops",
+            "endpoint": f"/deployments/{deployment_id}",
         }
     )
 
 
 @tool
-async def get_completed_todos_by_user(user_id: int) -> str:
-    """Get completed TODO items for a user.
-
-    Demonstrates filtering with query params.
-
-    Args:
-        user_id: The user's ID.
+async def get_production_deployments() -> str:
+    """Get deployments to production environment.
 
     Returns:
-        List of completed TODOs as JSON string.
+        List of production deployments as JSON string.
     """
     return await api_get.ainvoke(
         {
-            "service": "jsonplaceholder",
-            "endpoint": "/todos",
-            "params": {"userId": user_id, "completed": "true"},
-        }
-    )
-
-
-@tool
-async def get_pending_todo_titles_by_user(user_id: int) -> str:
-    """Get titles of pending (incomplete) TODOs for a user.
-
-    Demonstrates combining query params with JSONPath extraction.
-
-    Args:
-        user_id: The user's ID.
-
-    Returns:
-        List of pending TODO titles.
-    """
-    return await api_get.ainvoke(
-        {
-            "service": "jsonplaceholder",
-            "endpoint": "/todos",
-            "params": {"userId": user_id, "completed": "false"},
-            "extract": "$[*].title",
+            "service": "devops",
+            "endpoint": "/deployments",
+            "params": {"environment": "production"},
         }
     )
 
@@ -319,21 +406,27 @@ async def get_pending_todo_titles_by_user(user_id: int) -> str:
 # =============================================================================
 
 TOOLS = [
-    # User tools
-    get_user,
-    list_users,
-    get_user_names,
-    get_user_emails,
-    # Post tools
-    get_posts_by_user,
-    get_post,
-    get_post_titles_by_user,
-    create_post,
-    # Comment tools
-    get_comments_on_post,
-    get_comment_emails_on_post,
-    # TODO tools
-    get_todos_by_user,
-    get_completed_todos_by_user,
-    get_pending_todo_titles_by_user,
+    # Pipeline tools
+    list_pipelines,
+    get_pipeline,
+    get_failed_pipelines,
+    get_pipeline_names_by_status,
+    # Job tools
+    get_jobs_for_pipeline,
+    get_failed_jobs,
+    get_job,
+    get_job_log,
+    # Service health tools
+    list_services,
+    get_service,
+    get_unhealthy_services,
+    get_service_names_and_status,
+    # Alert tools
+    list_alerts,
+    get_unacknowledged_alerts,
+    get_critical_alerts,
+    # Deployment tools
+    list_deployments,
+    get_deployment,
+    get_production_deployments,
 ]

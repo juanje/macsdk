@@ -1,7 +1,7 @@
 """Agent implementation for api-agent.
 
 This module demonstrates how to create an agent that uses
-MACSDK's API tools with the ApiServiceRegistry.
+MACSDK's API tools for DevOps monitoring scenarios.
 """
 
 from __future__ import annotations
@@ -22,17 +22,17 @@ if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
 
 
-CAPABILITIES = """Demonstrates MACSDK API tools with JSONPlaceholder.
-Uses api_get/api_post from macsdk.tools with registered services.
-Shows JSONPath extraction for specific field queries.
-Can retrieve users, posts, comments, and TODOs."""
+CAPABILITIES = """DevOps monitoring agent using MACSDK API tools.
+Monitors CI/CD pipelines, jobs, infrastructure services, and alerts.
+Can investigate failed pipelines, download job logs, and check service health.
+Uses api_get from macsdk.tools with JSONPath extraction."""
 
 
 def create_api_agent():
     """Create the api-agent agent.
 
     Returns:
-        Configured agent instance with API tools.
+        Configured agent instance with DevOps tools.
     """
     return create_agent(
         model=get_answer_model(),
@@ -69,12 +69,13 @@ async def run_api_agent(
 
 
 class ApiAgentAgent:
-    """Agent demonstrating MACSDK API tools.
+    """DevOps monitoring agent using MACSDK API tools.
 
-    This agent shows the recommended pattern for API integrations:
+    This agent demonstrates the recommended pattern for API integrations:
     1. Register services with ApiServiceRegistry
-    2. Create domain-specific tools using api_get/api_post
+    2. Create domain-specific tools using api_get
     3. Use JSONPath for extracting specific data
+    4. Use fetch_file for downloading logs
     """
 
     name: str = "api_agent"
@@ -108,14 +109,14 @@ class ApiAgentAgent:
             query: str,
             config: Annotated[RunnableConfig, InjectedToolArg],
         ) -> str:
-            """Query JSONPlaceholder API for users, posts, comments, or TODOs.
+            """Query DevOps infrastructure for pipelines, jobs, services, and alerts.
 
             Use this tool when the user wants to:
-            - Look up user information or emails
-            - Find posts by a user or post titles
-            - Read comments on posts
-            - Check TODO lists (all, completed, or pending)
-            - Create new posts (simulated)
+            - Check pipeline status (list, failed, running)
+            - Investigate failed jobs and download logs
+            - Monitor service health (healthy, degraded, warning)
+            - View alerts (unacknowledged, critical)
+            - Check deployment history
 
             Args:
                 query: The query to process.
