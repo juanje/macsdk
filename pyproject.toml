@@ -33,6 +33,7 @@ dependencies = [
     "jinja2>=3.0.0",
     "rich>=13.0.0",
     "pyyaml>=6.0.0",
+    "twine>=6.2.0",
 ]
 
 [project.optional-dependencies]
@@ -67,10 +68,8 @@ include = ["src/macsdk"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/macsdk"]
-
-# Include Jinja2 templates (including chatbot static files) in the wheel
-[tool.hatch.build.targets.wheel.force-include]
-"src/macsdk/cli/templates" = "macsdk/cli/templates"
+# Templates (.j2) and static files (.html) are included automatically
+# since they are inside src/macsdk/
 
 [tool.uv]
 package = true
