@@ -14,6 +14,7 @@ This creates:
 ```
 my-chatbot/
 ├── pyproject.toml
+├── Containerfile         # For container deployment
 ├── src/my_chatbot/
 │   ├── __init__.py
 │   ├── __main__.py

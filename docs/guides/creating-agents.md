@@ -13,6 +13,7 @@ macsdk new agent weather-agent --description "Provides weather information"
 ```
 weather-agent/
 ├── pyproject.toml
+├── Containerfile            # Container build instructions
 ├── src/weather_agent/
 │   ├── __init__.py          # Exports agent class
 │   ├── agent.py             # Main agent implementation
@@ -376,3 +377,33 @@ def create_complex_agent():
 ```
 
 See the [LangGraph documentation](https://langchain-ai.github.io/langgraph/) for more details.
+
+## Container Deployment
+
+Each generated agent includes a `Containerfile` for building container images.
+
+### Build the Container
+
+```bash
+cd my-agent
+podman build -t my-agent .
+# Or with Docker
+docker build -t my-agent -f Containerfile .
+```
+
+### Run the Container
+
+```bash
+# Interactive chat
+podman run --rm -it -e GOOGLE_API_KEY=$GOOGLE_API_KEY my-agent chat
+
+# Show help
+podman run --rm my-agent --help
+```
+
+### Container Features
+
+- **Multi-stage build**: Keeps final image small
+- **UBI base image**: Red Hat Universal Base Image for enterprise use
+- **Pre-built wheel**: Fast container startup
+- **Configurable**: Override CMD for different commands

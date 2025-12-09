@@ -116,6 +116,7 @@ def create_chatbot_project(
         ("chatbot/config.yml.example.j2", output_path / "config.yml.example"),
         ("chatbot/README.md.j2", output_path / "README.md"),
         ("shared/gitignore.j2", output_path / ".gitignore"),
+        ("shared/Containerfile.j2", output_path / "Containerfile"),
     ]
 
     for template_name, output_file in templates:
@@ -196,6 +197,7 @@ def create_agent_project(
         ("agent/config.yml.example.j2", output_path / "config.yml.example"),
         ("agent/README.md.j2", output_path / "README.md"),
         ("shared/gitignore.j2", output_path / ".gitignore"),
+        ("shared/Containerfile.j2", output_path / "Containerfile"),
     ]
 
     for template_name, output_file in templates:

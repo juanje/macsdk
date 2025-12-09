@@ -25,6 +25,7 @@ macsdk new chatbot docs-assistant \
 ```
 my-assistant/
 ├── pyproject.toml           # Dependencies and metadata
+├── Containerfile            # Container build instructions
 ├── src/my_assistant/
 │   ├── __init__.py          # Package marker
 │   ├── __main__.py          # Entry point
@@ -223,6 +224,52 @@ You have access to specialist agents:
 
 Always be concise and actionable in your responses.
 """
+```
+
+## Container Deployment
+
+Each generated chatbot includes a `Containerfile` for building container images.
+
+### Build the Container
+
+```bash
+cd my-chatbot
+podman build -t my-chatbot .
+# Or with Docker
+docker build -t my-chatbot -f Containerfile .
+```
+
+### Run the Container
+
+```bash
+# CLI chat
+podman run --rm -it -e GOOGLE_API_KEY=$GOOGLE_API_KEY my-chatbot chat
+
+# Web interface (expose port 8000)
+podman run --rm -p 8000:8000 -e GOOGLE_API_KEY=$GOOGLE_API_KEY my-chatbot web --host 0.0.0.0
+
+# Show help
+podman run --rm my-chatbot --help
+```
+
+### Container Features
+
+- **Multi-stage build**: Keeps final image small
+- **UBI base image**: Red Hat Universal Base Image for enterprise use
+- **Pre-built wheel**: Fast container startup
+- **Configurable**: Override CMD for different commands
+
+### Environment Variables in Containers
+
+Pass configuration via environment variables:
+
+```bash
+podman run --rm -it \
+  -e GOOGLE_API_KEY=$GOOGLE_API_KEY \
+  -e LLM_MODEL=gemini-2.0-pro \
+  -e SERVER_PORT=8080 \
+  -p 8080:8080 \
+  my-chatbot web --host 0.0.0.0 --port 8080
 ```
 
 ## Best Practices
