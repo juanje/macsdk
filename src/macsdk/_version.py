@@ -7,7 +7,7 @@ Note: This module is intentionally minimal to allow fast imports
 in the CLI without loading heavy dependencies.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "Juanje Ojeda"
 __email__ = "juanje@redhat.com"
 
