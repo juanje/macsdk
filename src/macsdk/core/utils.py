@@ -98,6 +98,8 @@ async def run_agent_with_tools(
             - 'agent_name': The name of the agent
             - 'tools_used': List of tools that were called
     """
+    from .callbacks import ToolProgressCallback
+
     log_progress(f"[{agent_name}] Processing query...\n", config)
 
     messages = [HumanMessage(content=query)]
@@ -108,15 +110,46 @@ async def run_agent_with_tools(
     else:
         messages[0].content = system_prompt + "\n\n" + query
 
-    result = await agent.ainvoke({"messages": messages}, config=config or {})
+    # Create callback for real-time tool progress
+    tool_callback = ToolProgressCallback(agent_name=agent_name, config=config)
+
+    # Merge callbacks with existing config
+    invoke_config: dict = dict(config) if config else {}
+    existing_callbacks = invoke_config.get("callbacks")
+    if existing_callbacks is None:
+        invoke_config["callbacks"] = [tool_callback]
+    elif isinstance(existing_callbacks, list):
+        invoke_config["callbacks"] = existing_callbacks + [tool_callback]
+    else:
+        invoke_config["callbacks"] = [tool_callback]
+
+    result = await agent.ainvoke({"messages": messages}, config=invoke_config)
+
+    # Extract tools used from messages (if available)
+    tools_used = []
+    if "messages" in result:
+        for msg in result["messages"]:
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    if isinstance(tc, dict) and tc.get("name"):
+                        tools_used.append(tc["name"])
 
     structured_response = result.get("structured_response")
 
     if structured_response:
+        # Use tools from structured response if available, otherwise from messages
+        final_tools = structured_response.tools_used or tools_used
+
+        # Log tools used for transparency
+        if final_tools:
+            unique_tools = list(dict.fromkeys(final_tools))
+            tools_str = ", ".join(unique_tools)
+            log_progress(f"[{agent_name}] Tools used: {tools_str}\n", config)
+
         response_dict = {
             "response": structured_response.response_text,
             "agent_name": agent_name,
-            "tools_used": structured_response.tools_used,
+            "tools_used": final_tools,
         }
 
         for field_name, field_value in structured_response.model_dump().items():
@@ -125,13 +158,13 @@ async def run_agent_with_tools(
 
         return response_dict
 
+    # Log tools used for transparency
+    if tools_used:
+        unique_tools = list(dict.fromkeys(tools_used))
+        tools_str = ", ".join(unique_tools)
+        log_progress(f"[{agent_name}] Tools used: {tools_str}\n", config)
+
     response_message = result["messages"][-1]
-    tools_used = []
-    for msg in result["messages"]:
-        if hasattr(msg, "tool_calls") and msg.tool_calls:
-            tools_used.extend(
-                [tc.get("name") for tc in msg.tool_calls if isinstance(tc, dict)]
-            )
 
     return {
         "response": response_message.content
