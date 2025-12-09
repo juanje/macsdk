@@ -236,6 +236,32 @@ def _add_agent_to_agents_file(
         console.print(f"[yellow]Agent {agent_package} already imported[/yellow]")
         return False
 
+    agent_name = agent_package.replace("-", "_")
+
+    # Ensure register_agent is imported
+    if "from macsdk.core import register_agent" not in content:
+        # Check if there's a commented import we can uncomment
+        if "# from macsdk.core import register_agent" in content:
+            content = content.replace(
+                "# from macsdk.core import register_agent",
+                "from macsdk.core import register_agent",
+            )
+        elif "from macsdk.core import get_registry" in content:
+            # Add register_agent to the existing import
+            content = content.replace(
+                "from macsdk.core import get_registry",
+                "from macsdk.core import get_registry, register_agent",
+            )
+        else:
+            # Add new import line
+            lines = content.split("\n")
+            import_idx = 0
+            for i, line in enumerate(lines):
+                if line.startswith("from ") or line.startswith("import "):
+                    import_idx = i + 1
+            lines.insert(import_idx, "from macsdk.core import register_agent")
+            content = "\n".join(lines)
+
     # Find import section marker or create one
     import_marker = "# --- BEGIN AGENT IMPORTS ---"
     register_marker = "# --- BEGIN AGENT REGISTRATION ---"
@@ -244,11 +270,10 @@ def _add_agent_to_agents_file(
         # Add after marker
         content = content.replace(
             import_marker,
-            f"{import_marker}\n    from {agent_package} import {agent_class}",
+            f"{import_marker}\nfrom {agent_package} import {agent_class}",
         )
     else:
-        # Add before register_all_agents function
-        # Simple approach - add import at top of file after existing imports
+        # Add import at top of file after existing imports
         lines = content.split("\n")
         import_idx = 0
         for i, line in enumerate(lines):
@@ -257,25 +282,47 @@ def _add_agent_to_agents_file(
         lines.insert(import_idx, f"from {agent_package} import {agent_class}")
         content = "\n".join(lines)
 
+    # Build registration code
+    reg_code = f'    if not registry.is_registered("{agent_name}"):\n        register_agent({agent_class}())\n'
+
     if register_marker in content:
         # Add after marker
-        agent_name = agent_package.replace("-", "_")
         content = content.replace(
             register_marker,
-            f'{register_marker}\n    if not registry.is_registered("{agent_name}"):\n        register_agent({agent_class}())',
+            f"{register_marker}\n{reg_code}",
         )
     else:
-        # Add before end of register_all_agents
-        # Look for the function and add at the end
-        agent_name = agent_package.replace("-", "_")
-        reg_code = f'''
-    if not registry.is_registered("{agent_name}"):
-        register_agent({agent_class}())'''
+        # Find register_all_agents function and add registration inside it
+        # Look for the placeholder comment or the _ = registry line
+        if "_ = registry  # Avoid unused variable warning" in content:
+            # Replace the placeholder with actual registration
+            content = content.replace(
+                "    _ = registry  # Avoid unused variable warning",
+                reg_code.rstrip(),
+            )
+        elif "def register_all_agents" in content:
+            # Find the end of register_all_agents by looking for the next function
+            lines = content.split("\n")
+            in_register_func = False
+            insert_idx = -1
 
-        # Find register_all_agents and add before the final empty lines
-        if "def register_all_agents" in content:
-            # Simple approach - add before final empty lines
-            content = content.rstrip() + reg_code + "\n"
+            for i, line in enumerate(lines):
+                if "def register_all_agents" in line:
+                    in_register_func = True
+                elif in_register_func:
+                    # Look for next function definition or end of indented block
+                    if line.startswith("def ") or line.startswith("class "):
+                        # Insert before this line
+                        insert_idx = i
+                        break
+                    # Track last non-empty line in function
+                    if line.strip() and not line.startswith("#"):
+                        insert_idx = i + 1
+
+            if insert_idx > 0:
+                # Insert the registration code
+                lines.insert(insert_idx, reg_code)
+                content = "\n".join(lines)
 
     agents_file.write_text(content)
     return True
