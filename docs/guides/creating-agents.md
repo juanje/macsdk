@@ -5,16 +5,16 @@ This guide covers how to create specialist agents for MACSDK chatbots.
 ## Creating an Agent
 
 ```bash
-macsdk new agent weather-agent --description "Provides weather information"
+macsdk new agent infra-agent --description "Monitors infrastructure services"
 ```
 
 ### Project Structure
 
 ```
-weather-agent/
+infra-agent/
 ├── pyproject.toml
 ├── Containerfile            # Container build instructions
-├── src/weather_agent/
+├── src/infra_agent/
 │   ├── __init__.py          # Exports agent class
 │   ├── agent.py             # Main agent implementation
 │   ├── models.py            # Response models
@@ -32,76 +32,77 @@ weather-agent/
 ### Show Available Commands
 
 ```bash
-uv run weather-agent
+uv run infra-agent
 ```
 
 ```
-╭────────────────────── weather-agent ──────────────────────╮
-│                                                           │
-│    chat      Start interactive chat                       │
-│    tools     List available tools                         │
-│    info      Show agent information                       │
-│                                                           │
-╰───────────────────────────────────────────────────────────╯
+╭────────────────────── infra-agent ──────────────────────╮
+│                                                          │
+│    chat      Start interactive chat                      │
+│    tools     List available tools                        │
+│    info      Show agent information                      │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
 ```
 
 ### Start Interactive Chat
 
 ```bash
-uv run weather-agent chat
+uv run infra-agent chat
 ```
 
 ### List Tools
 
 ```bash
-uv run weather-agent tools
+uv run infra-agent tools
 ```
 
 ```
 🔧 Available Tools
-┏━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Tool          ┃ Description                               ┃
-┡━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ get_weather   │ Get current weather for a city.           │
-│ get_forecast  │ Get weather forecast for a city.          │
-└───────────────┴───────────────────────────────────────────┘
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Tool               ┃ Description                                   ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ get_service_status │ Get the status of a service.                  │
+│ search_logs        │ Search application logs for matching entries. │
+└────────────────────┴───────────────────────────────────────────────┘
 ```
 
 ## Implementing Tools
 
-Edit `tools.py`:
+Edit `tools.py` to customize the generated example tools:
 
 ```python
 from langchain_core.tools import tool
 
 @tool
-async def get_weather(city: str) -> str:
-    """Get current weather for a city.
+async def get_service_status(service_name: str) -> str:
+    """Get the status of a service.
     
     Args:
-        city: Name of the city.
+        service_name: Name of the service to check.
         
     Returns:
-        Weather description.
+        Service status information.
     """
-    # Implement your logic here
-    return f"Weather in {city}: Sunny, 22°C"
+    # Replace with real monitoring API calls
+    return f"Service {service_name}: Running (healthy)"
 
 @tool
-async def get_forecast(city: str, days: int = 3) -> str:
-    """Get weather forecast for a city.
+async def search_logs(query: str, service: str = "all") -> str:
+    """Search application logs for matching entries.
     
     Args:
-        city: Name of the city.
-        days: Number of days to forecast.
+        query: Search query string.
+        service: Service name to filter logs (default: all).
         
     Returns:
-        Weather forecast.
+        Matching log entries.
     """
-    return f"Forecast for {city}: Sunny for the next {days} days"
+    # Replace with real log search implementation
+    return f"Found 3 log entries matching '{query}' in {service}"
 
 # Export tools for CLI inspection
-TOOLS = [get_weather, get_forecast]
+TOOLS = [get_service_status, search_logs]
 ```
 
 ## Using MACSDK API Tools
@@ -209,14 +210,14 @@ See `macsdk list-tools` for all available API tools.
 Edit `agent.py`:
 
 ```python
-CAPABILITIES = """The weather_agent provides weather information.
+CAPABILITIES = """The infra_agent monitors infrastructure services.
 
 Things this agent does:
-- Get current weather for any city
-- Get weather forecasts
-- Answer questions about weather conditions
+- Check service health and status
+- Search application logs
+- Monitor infrastructure components
 
-Use this agent when users ask about weather, temperature, or forecasts."""
+Use this agent when users ask about service status, logs, or infrastructure."""
 ```
 
 **Important**: Write detailed capabilities so the supervisor routes queries correctly.
@@ -226,16 +227,16 @@ Use this agent when users ask about weather, temperature, or forecasts."""
 Edit `prompts.py`:
 
 ```python
-SYSTEM_PROMPT = """You are a weather specialist.
+SYSTEM_PROMPT = """You are an infrastructure monitoring specialist.
 
-When asked about weather, use your tools to get accurate information.
-Always include the city name and temperature in your response.
-If the user doesn't specify a city, ask them which city they want.
+When asked about services or logs, use your tools to get accurate information.
+Always include the service name and status in your response.
+If the user doesn't specify a service, ask them which one they want.
 
 Guidelines:
 - Be concise but informative
-- Include temperature in both Celsius and Fahrenheit
-- Mention any weather warnings if applicable
+- Include timestamps when showing log entries
+- Highlight any errors or warnings
 """
 ```
 
@@ -247,12 +248,12 @@ Edit `models.py`:
 from macsdk.core import BaseAgentResponse
 from pydantic import Field
 
-class WeatherResponse(BaseAgentResponse):
-    """Weather agent response model."""
+class InfraResponse(BaseAgentResponse):
+    """Infrastructure agent response model."""
     
-    city: str = Field(default="", description="City name")
-    temperature: float | None = Field(default=None, description="Temperature in Celsius")
-    conditions: str = Field(default="", description="Weather conditions")
+    service: str = Field(default="", description="Service name")
+    status: str = Field(default="", description="Service status")
+    details: str = Field(default="", description="Additional details")
 ```
 
 ## The SpecialistAgent Protocol
@@ -265,8 +266,8 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, InjectedToolArg, tool
 from macsdk.core import run_agent_with_tools
 
-class WeatherAgent:
-    name: str = "weather_agent"
+class InfraAgent:
+    name: str = "infra_agent"
     capabilities: str = CAPABILITIES
     tools: list = TOOLS
 
@@ -277,26 +278,26 @@ class WeatherAgent:
         config: RunnableConfig | None = None,
     ) -> dict:
         """Execute the agent."""
-        return await run_weather_agent(query, context, config)
+        return await run_infra_agent(query, context, config)
 
     def as_tool(self) -> BaseTool:
         """Return this agent as a tool for the supervisor."""
         agent_instance = self
 
         @tool
-        async def invoke_weather_agent(
+        async def invoke_infra_agent(
             query: str,
             config: Annotated[RunnableConfig, InjectedToolArg],
         ) -> str:
-            """Get weather information.
+            """Monitor infrastructure services.
             
-            Use this when the user asks about weather, temperature,
-            or forecasts for any location.
+            Use this when the user asks about service status,
+            logs, or infrastructure health.
             """
             result = await agent_instance.run(query, config=config)
             return result["response"]
 
-        return invoke_weather_agent
+        return invoke_infra_agent
 ```
 
 ## Testing Your Agent
@@ -304,20 +305,20 @@ class WeatherAgent:
 ### Interactive Testing
 
 ```bash
-uv run weather-agent chat
+uv run infra-agent chat
 ```
 
 ```
-╭─────────────────── weather-agent Chat ───────────────────╮
-│ Type exit or press Ctrl+C to quit                        │
-╰──────────────────────────────────────────────────────────╯
+╭─────────────────── infra-agent Chat ────────────────────╮
+│ Type exit or press Ctrl+C to quit                       │
+╰─────────────────────────────────────────────────────────╯
 
->> What's the weather in Tokyo?
-[weather_agent] Processing query...
-[weather_agent] 🔧 Using tool: get_weather
+>> Is the database service running?
+[infra_agent] Processing query...
+[infra_agent] 🔧 Using tool: get_service_status
 
 ╭─────────────────────── Response ───────────────────────╮
-│ Weather in Tokyo: Sunny, 22°C                          │
+│ Service database: Running (healthy)                    │
 ╰────────────────────────────────────────────────────────╯
 ```
 
@@ -332,10 +333,10 @@ uv run pytest
 ```bash
 # From local path (inside chatbot directory)
 cd my-chatbot
-macsdk add-agent . --path ../weather-agent
+macsdk add-agent . --path ../infra-agent
 
 # Or publish to PyPI and install
-macsdk add-agent . --package weather-agent
+macsdk add-agent . --package infra-agent
 ```
 
 ## Best Practices

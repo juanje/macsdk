@@ -60,7 +60,7 @@ macsdk new agent NAME [OPTIONS]
 
 **Example:**
 ```bash
-macsdk new agent weather-agent --description "Provides weather information"
+macsdk new agent infra-agent --description "Monitors infrastructure services"
 ```
 
 ### `macsdk add-agent`
@@ -82,13 +82,13 @@ macsdk add-agent [CHATBOT_DIR] [OPTIONS]
 **Examples:**
 ```bash
 # From pip package
-macsdk add-agent . --package weather-agent
+macsdk add-agent . --package infra-agent
 
 # From git repository
 macsdk add-agent ./my-chatbot --git https://github.com/org/agent.git
 
 # From local path
-macsdk add-agent . --path ../my-agent
+macsdk add-agent . --path ../infra-agent
 ```
 
 ### `macsdk list-tools`

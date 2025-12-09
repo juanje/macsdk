@@ -37,7 +37,7 @@ class SpecialistAgent(Protocol):
 Unique identifier for the agent. Used by the registry and for logging.
 
 ```python
-name = "weather_agent"
+name = "infra_agent"
 ```
 
 ### `capabilities: str`
@@ -45,14 +45,14 @@ name = "weather_agent"
 Human-readable description of what the agent can do. The supervisor uses this to decide which agent to route queries to.
 
 ```python
-capabilities = """The weather_agent provides weather information.
+capabilities = """The infra_agent monitors infrastructure services.
 
 Things this agent does:
-- Get current weather for any city
-- Get weather forecasts
-- Answer questions about weather conditions
+- Check service health and status
+- Search application logs
+- Monitor infrastructure components
 
-Use this agent when users ask about weather, temperature, or forecasts."""
+Use this agent when users ask about service status, logs, or infrastructure."""
 ```
 
 **Tip**: Write detailed capabilities for better routing accuracy.

@@ -37,7 +37,7 @@ uv sync
 ### Create an Agent
 
 ```bash
-macsdk new agent weather-agent --description "Fetches weather data"
+macsdk new agent infra-agent --description "Monitors infrastructure services"
 ```
 
 ### Run Your Chatbot

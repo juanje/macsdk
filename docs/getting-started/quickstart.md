@@ -80,34 +80,48 @@ You now have a working chatbot! But it doesn't have any agents yet.
 In a new terminal:
 
 ```bash
-macsdk new agent weather-agent --description "Provides weather information"
-cd weather-agent
+macsdk new agent infra-agent --description "Monitors infrastructure services"
+cd infra-agent
 ```
 
-Edit `src/weather_agent/tools.py`:
+The generated agent includes example tools in `src/infra_agent/tools.py`:
 
 ```python
 from langchain_core.tools import tool
 
 @tool
-async def get_weather(city: str) -> str:
-    """Get current weather for a city.
+async def get_service_status(service_name: str) -> str:
+    """Get the status of a service.
     
     Args:
-        city: Name of the city.
+        service_name: Name of the service to check.
         
     Returns:
-        Weather information.
+        Service status information.
     """
-    # In a real agent, you'd call a weather API
-    return f"The weather in {city} is sunny, 22°C"
+    # Replace with real monitoring API calls
+    return f"Service {service_name}: Running (healthy)"
+
+@tool
+async def search_logs(query: str, service: str = "all") -> str:
+    """Search application logs for matching entries.
+    
+    Args:
+        query: Search query string.
+        service: Service name to filter logs (default: all).
+        
+    Returns:
+        Matching log entries.
+    """
+    # Replace with real log search implementation
+    return f"Found 3 log entries matching '{query}' in {service}"
 ```
 
 ## 7. Add Agent to Chatbot
 
 ```bash
 cd ../my-chatbot
-macsdk add-agent . --path ../weather-agent
+macsdk add-agent . --path ../infra-agent
 ```
 
 ## 8. Test It
@@ -117,12 +131,12 @@ uv run my-chatbot chat
 ```
 
 ```
->> What's the weather in Madrid?
-[weather_agent] Processing query...
-[weather_agent] 🔧 Using tool: get_weather
+>> Is the authentication service running?
+[infra_agent] Processing query...
+[infra_agent] 🔧 Using tool: get_service_status
 
 ╭─────────────────────── Response ───────────────────────╮
-│ The weather in Madrid is sunny, 22°C                   │
+│ Service auth-service: Running (healthy)                │
 ╰────────────────────────────────────────────────────────╯
 ```
 
