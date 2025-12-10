@@ -150,15 +150,14 @@ This project was developed with the assistance of artificial intelligence tools:
 - 💬 Iterative feedback and solution refinement
 - ✅ Final validation of concepts and approaches
 
-**AI (Cursor + Claude-4-Sonnet)**:
+**AI (Cursor + Claude-4.5-Opus)**:
 - 🔧 Initial code prototyping
 - 📝 Generation of examples and test cases
 - 🐛 Assistance in debugging and error resolution
 - 📚 Documentation and comments writing
 - 💡 Technical implementation suggestions
 
-**Collaboration philosophy**: AI tools served as a highly capable technical assistant, while all design decisions and project directions were defined and validated by the huma
-n.
+**Collaboration philosophy**: AI tools served as a highly capable technical assistant, while all design decisions and project directions were defined and validated by the human.
 
 ---
 - author: Juanje Ojeda
