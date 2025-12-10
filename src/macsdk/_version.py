@@ -1,13 +1,21 @@
 """Version and project information for MACSDK.
 
-This is the single source of truth for package metadata.
-All other modules should import from here.
+The version is read dynamically from package metadata (pyproject.toml).
+This ensures that `uv version --bump` commands automatically propagate
+to the runtime version without manual synchronization.
 
 Note: This module is intentionally minimal to allow fast imports
 in the CLI without loading heavy dependencies.
 """
 
-__version__ = "0.1.1"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("macsdk")
+except PackageNotFoundError:
+    # Package not installed (development mode without editable install)
+    __version__ = "0.0.0.dev0"
+
 __author__ = "Juanje Ojeda"
 __email__ = "juanje@redhat.com"
 
