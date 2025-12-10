@@ -1,8 +1,10 @@
 """REST API tools for MACSDK agents.
 
 Generic tools for calling REST APIs with automatic authentication,
-retry logic, error handling, SSL certificate support, and optional
-JSONPath extraction.
+retry logic, error handling, and SSL certificate support.
+
+Public tools (api_get, api_post, etc.) are designed for LLM use.
+For programmatic use with JSONPath extraction, use make_api_request().
 """
 
 from __future__ import annotations
@@ -32,6 +34,18 @@ def _extract_jsonpath(data: Any, path: str) -> Any:
     Returns:
         Extracted data, or original data if extraction fails.
     """
+    # Validate that path looks like a JSONPath expression
+    # JSONPath must start with $ or contain typical patterns
+    if not path or not isinstance(path, str):
+        return data
+
+    path = path.strip()
+
+    # Skip if it doesn't look like JSONPath (likely a mistake by LLM)
+    if not path.startswith("$") and not path.startswith("@"):
+        logger.debug(f"Skipping invalid JSONPath (must start with $ or @): {path}")
+        return data
+
     try:
         from jsonpath_ng import parse
 
@@ -45,7 +59,7 @@ def _extract_jsonpath(data: Any, path: str) -> Any:
         else:
             return matches
     except Exception as e:
-        logger.warning(f"JSONPath extraction failed: {e}")
+        logger.debug(f"JSONPath extraction failed for '{path}': {e}")
         return data
 
 
@@ -153,32 +167,75 @@ async def _make_request(
     }
 
 
+async def make_api_request(
+    method: str,
+    service: str,
+    endpoint: str,
+    params: dict | None = None,
+    body: dict | None = None,
+    headers: dict | None = None,
+    extract: str | None = None,
+) -> dict[str, Any]:
+    """Make an API request with optional JSONPath extraction.
+
+    This is the programmatic interface for developers who need JSONPath
+    extraction. For LLM-facing tools, use api_get, api_post, etc.
+
+    Args:
+        method: HTTP method (GET, POST, PUT, DELETE, PATCH).
+        service: Registered service name.
+        endpoint: API endpoint path (without query string).
+        params: Query parameters as dict.
+        body: Request body (for POST, PUT, PATCH).
+        headers: Additional headers.
+        extract: JSONPath expression to extract specific fields (e.g., "$[*].name").
+
+    Returns:
+        Dictionary with keys: success (bool), data (if success), error (if failed).
+
+    Example:
+        >>> result = await make_api_request(
+        ...     "GET", "devops", "/services",
+        ...     extract="$[*].name"
+        ... )
+        >>> if result["success"]:
+        ...     print(result["data"])  # ["web-frontend", "api-gateway", ...]
+    """
+    return await _make_request(
+        method,
+        service,
+        endpoint,
+        params=params,
+        body=body,
+        headers=headers,
+        extract=extract,
+    )
+
+
 @tool
 async def api_get(
     service: str,
     endpoint: str,
     params: dict | None = None,
-    extract: str | None = None,
     config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Make a GET request to a registered API service.
 
     Args:
-        service: Name of the registered API service (e.g., "github", "jira").
-        endpoint: API endpoint path (e.g., "/repos/owner/repo/issues").
-        params: Optional query parameters.
-        extract: Optional JSONPath to extract specific fields (e.g., "$.items[*].name").
+        service: Name of the registered API service (e.g., "github", "devops").
+        endpoint: API endpoint path WITHOUT query string (e.g., "/users", "/repos/1").
+            Do NOT include query parameters here - use params instead.
+        params: Query parameters as a dictionary (e.g., {"status": "failed"}).
+            All filters and query options go here, not in the endpoint.
 
     Returns:
-        JSON response or error message.
+        JSON response data or error message.
 
     Example:
         >>> api_get("github", "/repos/langchain-ai/langchain/issues",
-        ...         params={"state": "open"})
+        ...         params={"state": "open", "per_page": 5})
     """
-    result = await _make_request(
-        "GET", service, endpoint, params=params, extract=extract
-    )
+    result = await _make_request("GET", service, endpoint, params=params)
 
     if result["success"]:
         return json.dumps(result["data"], indent=2, default=str)
@@ -192,24 +249,20 @@ async def api_post(
     endpoint: str,
     body: dict,
     params: dict | None = None,
-    extract: str | None = None,
     config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Make a POST request to a registered API service.
 
     Args:
-        service: Name of the registered API service.
-        endpoint: API endpoint path.
-        body: Request body (will be sent as JSON).
-        params: Optional query parameters.
-        extract: Optional JSONPath to extract specific fields.
+        service: Name of the registered API service (e.g., "github", "devops").
+        endpoint: API endpoint path WITHOUT query string (e.g., "/users", "/items").
+        body: Request body as a dictionary (will be sent as JSON).
+        params: Query parameters as a dictionary. Do NOT put these in the endpoint.
 
     Returns:
-        JSON response or error message.
+        JSON response data or error message.
     """
-    result = await _make_request(
-        "POST", service, endpoint, params=params, body=body, extract=extract
-    )
+    result = await _make_request("POST", service, endpoint, params=params, body=body)
 
     if result["success"]:
         return json.dumps(result["data"], indent=2, default=str)
@@ -223,24 +276,20 @@ async def api_put(
     endpoint: str,
     body: dict,
     params: dict | None = None,
-    extract: str | None = None,
     config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
-    """Make a PUT request to a registered API service.
+    """Make a PUT request to replace a resource in a registered API service.
 
     Args:
-        service: Name of the registered API service.
-        endpoint: API endpoint path.
-        body: Request body (will be sent as JSON).
-        params: Optional query parameters.
-        extract: Optional JSONPath to extract specific fields.
+        service: Name of the registered API service (e.g., "github", "devops").
+        endpoint: API endpoint path WITHOUT query string (e.g., "/users/1").
+        body: Complete resource data as a dictionary (will be sent as JSON).
+        params: Query parameters as a dictionary. Do NOT put these in the endpoint.
 
     Returns:
-        JSON response or error message.
+        JSON response data or error message.
     """
-    result = await _make_request(
-        "PUT", service, endpoint, params=params, body=body, extract=extract
-    )
+    result = await _make_request("PUT", service, endpoint, params=params, body=body)
 
     if result["success"]:
         return json.dumps(result["data"], indent=2, default=str)
@@ -255,15 +304,15 @@ async def api_delete(
     params: dict | None = None,
     config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
-    """Make a DELETE request to a registered API service.
+    """Make a DELETE request to remove a resource from a registered API service.
 
     Args:
-        service: Name of the registered API service.
-        endpoint: API endpoint path.
-        params: Optional query parameters.
+        service: Name of the registered API service (e.g., "github", "devops").
+        endpoint: API endpoint path WITHOUT query string (e.g., "/users/1").
+        params: Query parameters as a dictionary. Do NOT put these in the endpoint.
 
     Returns:
-        JSON response or error message.
+        Success message or error message.
     """
     result = await _make_request("DELETE", service, endpoint, params=params)
 
@@ -281,24 +330,20 @@ async def api_patch(
     endpoint: str,
     body: dict,
     params: dict | None = None,
-    extract: str | None = None,
     config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
-    """Make a PATCH request to a registered API service.
+    """Make a PATCH request to partially update a resource in a registered API service.
 
     Args:
-        service: Name of the registered API service.
-        endpoint: API endpoint path.
-        body: Partial update body (will be sent as JSON).
-        params: Optional query parameters.
-        extract: Optional JSONPath to extract specific fields.
+        service: Name of the registered API service (e.g., "github", "devops").
+        endpoint: API endpoint path WITHOUT query string (e.g., "/users/1").
+        body: Partial update data as a dictionary (only fields to update).
+        params: Query parameters as a dictionary. Do NOT put these in the endpoint.
 
     Returns:
-        JSON response or error message.
+        JSON response data or error message.
     """
-    result = await _make_request(
-        "PATCH", service, endpoint, params=params, body=body, extract=extract
-    )
+    result = await _make_request("PATCH", service, endpoint, params=params, body=body)
 
     if result["success"]:
         return json.dumps(result["data"], indent=2, default=str)

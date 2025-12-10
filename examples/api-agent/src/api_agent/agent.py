@@ -2,6 +2,10 @@
 
 This module demonstrates how to create an agent that uses
 MACSDK's API tools for DevOps monitoring scenarios.
+
+It combines:
+- Generic SDK tools (api_get, fetch_file) for flexible API access
+- Custom tools for specialized operations with JSONPath extraction
 """
 
 from __future__ import annotations
@@ -13,19 +17,27 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, tool
 
 from macsdk.core import get_answer_model, run_agent_with_tools
+from macsdk.middleware import DatetimeContextMiddleware
 
 from .models import AgentResponse
 from .prompts import SYSTEM_PROMPT
-from .tools import TOOLS
+from .tools import get_tools
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
 
 
 CAPABILITIES = """DevOps monitoring agent using MACSDK API tools.
-Monitors CI/CD pipelines, jobs, infrastructure services, and alerts.
-Can investigate failed pipelines, download job logs, and check service health.
-Uses api_get from macsdk.tools with JSONPath extraction."""
+
+This agent can:
+- Monitor CI/CD pipelines and investigate failures
+- Check infrastructure service health
+- Review alerts (critical, warnings, unacknowledged)
+- Track deployments across environments
+- Download and analyze job logs
+
+Uses generic SDK tools (api_get, fetch_file) plus custom tools
+for specialized operations with JSONPath extraction."""
 
 
 def create_api_agent():
@@ -36,8 +48,8 @@ def create_api_agent():
     """
     return create_agent(
         model=get_answer_model(),
-        tools=TOOLS,
-        middleware=[],
+        tools=get_tools(),
+        middleware=[DatetimeContextMiddleware()],
         response_format=AgentResponse,
     )
 
@@ -73,14 +85,18 @@ class ApiAgentAgent:
 
     This agent demonstrates the recommended pattern for API integrations:
     1. Register services with ApiServiceRegistry
-    2. Create domain-specific tools using api_get
-    3. Use JSONPath for extracting specific data
-    4. Use fetch_file for downloading logs
+    2. Use generic SDK tools (api_get, fetch_file) for flexibility
+    3. Create custom tools with make_api_request for JSONPath extraction
+    4. Describe API schema in the prompt for the LLM
     """
 
     name: str = "api_agent"
     capabilities: str = CAPABILITIES
-    tools: list = TOOLS
+    tools: list = []  # Loaded in __init__
+
+    def __init__(self) -> None:
+        """Initialize the agent with tools."""
+        self.tools = get_tools()
 
     async def run(
         self,

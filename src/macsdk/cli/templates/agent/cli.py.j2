@@ -65,13 +65,13 @@ def _show_welcome() -> None:
 def tools() -> None:
     """List available tools and their descriptions."""
     # Lazy import to avoid loading heavy dependencies
-    from .tools import get_alerts, get_service_status, get_services
+    from .tools import get_tools
 
-    TOOLS = [get_services, get_service_status, get_alerts]
+    agent_tools = get_tools()
 
     console.print()
     table = Table(
-        title="[bold]🔧 Available Tools[/]",
+        title="[bold]🔧 Available Tools (Generic SDK)[/]",
         show_header=True,
         header_style="bold magenta",
         border_style="dim",
@@ -80,15 +80,15 @@ def tools() -> None:
     table.add_column("Tool", style="cyan", no_wrap=True)
     table.add_column("Description", style="white")
 
-    for tool in TOOLS:
-        name = tool.name
-        description = tool.description or "No description"
+    for t in agent_tools:
+        name = t.name
+        description = t.description or "No description"
         # Get first line of description
         first_line = description.split("\n")[0].strip()
         table.add_row(name, first_line)
 
     console.print(table)
-    console.print(f"\n[dim]Total: {len(TOOLS)} tools available[/]\n")
+    console.print(f"\n[dim]Total: {len(agent_tools)} generic tools[/]\n")
 
 
 @cli.command()
@@ -96,15 +96,15 @@ def info() -> None:
     """Show agent information and capabilities."""
     # Lazy import
     from .agent import CAPABILITIES
-    from .tools import get_alerts, get_service_status, get_services
+    from .tools import get_tools
 
-    TOOLS = [get_services, get_service_status, get_alerts]
+    agent_tools = get_tools()
 
     console.print()
     panel = Panel(
         f"[white]{CAPABILITIES}[/]",
         title="[bold cyan]{{ name }}[/]",
-        subtitle=f"[dim]{len(TOOLS)} tools available[/]",
+        subtitle=f"[dim]{len(agent_tools)} tools available[/]",
         border_style="cyan",
         padding=(1, 2),
     )
@@ -122,7 +122,7 @@ def chat() -> None:
     import asyncio
     from pathlib import Path
 
-    from macsdk.core import ConfigurationError, create_config
+    from macsdk.core import ConfigurationError, create_config, create_config_with_writer
 
     from .agent import run_{{ agent_slug }}
 
@@ -144,6 +144,12 @@ def chat() -> None:
         console.print(f"[red]✗ Configuration Error:[/] {e}")
         sys.exit(1)
 
+    # Create config with writer for real-time tool progress
+    def progress_writer(msg: str) -> None:
+        console.print(f"[dim]{msg.strip()}[/]")
+
+    run_config = create_config_with_writer(progress_writer)
+
     async def run() -> None:
         while True:
             try:
@@ -159,8 +165,7 @@ def chat() -> None:
                 continue
 
             try:
-                with console.status("[cyan]Processing...[/]", spinner="dots"):
-                    result = await run_{{ agent_slug }}(query)
+                result = await run_{{ agent_slug }}(query, config=run_config)
                 console.print()
                 console.print(
                     Panel(

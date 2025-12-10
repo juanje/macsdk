@@ -152,15 +152,22 @@ print('PROTOCOL_OK')
         agent_slug = "integration_agent"
 
         check_code = f"""
-from {agent_slug}.tools import get_services, get_service_status, get_alerts
+from {agent_slug}.tools import get_tools
 
-# Verify tools are defined and have required attributes
-tools = [get_services, get_service_status, get_alerts]
+# Verify get_tools returns tools with required attributes
+tools = get_tools()
+assert len(tools) >= 2, f"Expected at least 2 tools, got {{len(tools)}}"
+
 for tool in tools:
     assert tool is not None, f"Tool {{tool}} is None"
     assert hasattr(tool, 'ainvoke'), f"Tool {{tool.name}} missing ainvoke"
     assert hasattr(tool, 'description'), f"Tool {{tool.name}} missing description"
     assert tool.description, f"Tool {{tool.name}} has empty description"
+
+# Verify we have the expected generic tools
+tool_names = [t.name for t in tools]
+assert 'api_get' in tool_names, "api_get tool not found"
+assert 'fetch_file' in tool_names, "fetch_file tool not found"
 
 print('TOOLS_OK')
 """

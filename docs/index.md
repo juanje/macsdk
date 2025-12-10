@@ -19,6 +19,7 @@ MACSDK is a comprehensive SDK for building customizable multi-agent chatbots. It
 - [Quick Start](getting-started/quickstart.md)
 - [Creating Chatbots](guides/creating-chatbots.md)
 - [Creating Agents](guides/creating-agents.md)
+- [API Tools Reference](reference/tools.md)
 - [CLI Reference](reference/cli.md)
 - [Configuration Reference](reference/configuration.md)
 - [Protocol Reference](reference/protocol.md)
@@ -84,16 +85,28 @@ rag:
 
 ### API Tools
 
-Make REST API calls with automatic retries and JSONPath extraction:
+Make REST API calls with automatic retries:
 
 ```python
 from macsdk.tools import api_get
 
+# The LLM uses api_get directly with any endpoint
 result = await api_get.ainvoke({
-    "service": "my_api",
-    "endpoint": "/users",
-    "extract": "$[*].name",  # JSONPath
+    "service": "devops",
+    "endpoint": "/services",
+    "params": {"status": "healthy"},
 })
+```
+
+For programmatic use with JSONPath extraction, use `make_api_request`:
+
+```python
+from macsdk.tools import make_api_request
+
+result = await make_api_request(
+    "GET", "devops", "/services",
+    extract="$[*].name",  # JSONPath
+)
 ```
 
 ### Beautiful CLI

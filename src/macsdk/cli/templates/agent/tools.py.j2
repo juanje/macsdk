@@ -1,20 +1,20 @@
 """Tools for the agent.
 
-Define the tools (functions) that this agent can use.
-Each tool should be decorated with @tool and have a clear docstring.
+This agent uses MACSDK's generic tools directly:
+- api_get: For REST API calls
+- fetch_file: For downloading files (logs, configs, etc.)
 
-This agent uses MACSDK's API tools to interact with a mock DevOps API.
-The API is hosted at my-json-server.typicode.com for demonstration.
-
-Replace the API service registration with your own API to customize.
+The API schema is described in the system prompt, letting the LLM
+decide which endpoints to call based on user queries.
 """
 
 from __future__ import annotations
 
-from langchain_core.tools import tool
+# Import generic tools from MACSDK
+from macsdk.tools import api_get, fetch_file
 
 # =============================================================================
-# SERVICE REGISTRATION (lazy initialization)
+# SERVICE REGISTRATION
 # =============================================================================
 
 _api_registered = False
@@ -27,7 +27,7 @@ def _ensure_api_registered() -> None:
         from macsdk.core.api_registry import register_api_service
 
         # Register DevOps Mock API as a service
-        # This is a demo API - replace with your own API endpoint
+        # Replace with your own API endpoint for production use
         register_api_service(
             name="devops",
             base_url="https://my-json-server.typicode.com/juanje/devops-mock-api",
@@ -37,106 +37,38 @@ def _ensure_api_registered() -> None:
         _api_registered = True
 
 
-# =============================================================================
-# SERVICE HEALTH TOOLS
-# =============================================================================
-
-
-@tool
-async def get_services() -> str:
-    """List all infrastructure services and their health status.
-
-    Returns services with status (healthy, degraded, warning, critical).
+def get_tools() -> list:
+    """Get the tools for this agent, ensuring API is registered.
 
     Returns:
-        List of services as JSON string.
+        List of generic tools from MACSDK.
     """
-    from macsdk.tools import api_get
-
     _ensure_api_registered()
-    return await api_get.ainvoke(
-        {
-            "service": "devops",
-            "endpoint": "/services",
-        }
-    )
+    return [api_get, fetch_file]
 
 
-@tool
-async def get_service_status(service_id: int) -> str:
-    """Get the status of a specific service.
-
-    Args:
-        service_id: The service's ID (1-5).
-
-    Returns:
-        Service details including name, status, and uptime.
-    """
-    from macsdk.tools import api_get
-
-    _ensure_api_registered()
-    return await api_get.ainvoke(
-        {
-            "service": "devops",
-            "endpoint": f"/services/{service_id}",
-        }
-    )
-
-
-# =============================================================================
-# ALERT TOOLS
-# =============================================================================
-
-
-@tool
-async def get_alerts() -> str:
-    """List all active alerts.
-
-    Returns alerts with severity (info, warning, critical) and acknowledgment status.
-    Use this to identify issues that need attention.
-
-    Returns:
-        List of alerts as JSON string.
-    """
-    from macsdk.tools import api_get
-
-    _ensure_api_registered()
-    return await api_get.ainvoke(
-        {
-            "service": "devops",
-            "endpoint": "/alerts",
-        }
-    )
+# Tools exposed for CLI inspection
+TOOLS = [api_get, fetch_file]
 
 
 # =============================================================================
 # CUSTOMIZATION
 # =============================================================================
-
-# To use your own API, modify the _ensure_api_registered function above:
 #
-# def _ensure_api_registered() -> None:
-#     global _api_registered
-#     if not _api_registered:
-#         from macsdk.core.api_registry import register_api_service
-#         register_api_service(
-#             name="myapi",
-#             base_url="https://api.example.com",
-#             token=os.environ.get("API_TOKEN"),  # Optional authentication
-#             timeout=30,
-#         )
-#         _api_registered = True
+# To use your own API:
 #
-# Then create tools that call your endpoints:
+# 1. Modify _ensure_api_registered() to register your API:
 #
-# @tool
-# async def get_items() -> str:
-#     """Get all items from the API."""
-#     from macsdk.tools import api_get
-#     _ensure_api_registered()
-#     return await api_get.ainvoke({
-#         "service": "myapi",
-#         "endpoint": "/items",
-#     })
+#    register_api_service(
+#        name="myapi",
+#        base_url="https://api.example.com",
+#        token=os.environ.get("API_TOKEN"),  # Optional auth
+#        timeout=30,
+#    )
 #
-# See examples/api-agent/ for a complete example with more tools.
+# 2. Update the system prompt (prompts.py) to describe your API endpoints
+#
+# 3. The LLM will use api_get with your endpoints automatically!
+#
+# For creating custom tools instead of using generic ones,
+# see examples/api-agent/ for a complete example.

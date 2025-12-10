@@ -2,6 +2,9 @@
 
 This module defines the specialist agent that implements
 the MACSDK SpecialistAgent protocol.
+
+This agent uses generic SDK tools (api_get, fetch_file) with
+the API schema described in the system prompt.
 """
 
 from __future__ import annotations
@@ -17,22 +20,22 @@ from macsdk.middleware import DatetimeContextMiddleware
 
 from .models import AgentResponse
 from .prompts import SYSTEM_PROMPT
-from .tools import get_alerts, get_service_status, get_services
+from .tools import get_tools
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
 
 
-CAPABILITIES = """{{ description }}"""
+CAPABILITIES = """DevOps monitoring assistant using generic SDK tools.
 
-# Active tools for this agent
-# These tools use a demo DevOps API - customize in tools.py for your use case
-TOOLS = [
-    get_services,        # List all services and their status
-    get_service_status,  # Get status of a specific service
-    get_alerts,          # List active alerts
-    # Add your custom tools here
-]
+This agent can:
+- Check infrastructure service health and status
+- Monitor CI/CD pipelines and their jobs
+- Review alerts (critical, warnings, unacknowledged)
+- Track deployments across environments
+- Fetch and analyze log files
+
+Uses api_get and fetch_file tools with API schema in the prompt."""
 
 
 def create_{{ agent_slug }}():
@@ -41,9 +44,12 @@ def create_{{ agent_slug }}():
     Returns:
         Configured agent instance.
     """
+    # Get tools with lazy API registration
+    tools = get_tools()
+
     return create_agent(
         model=get_answer_model(),
-        tools=TOOLS,
+        tools=tools,
         middleware=[DatetimeContextMiddleware()],
         response_format=AgentResponse,
     )
@@ -88,7 +94,11 @@ class {{ agent_class }}:
 
     name: str = "{{ agent_slug }}"
     capabilities: str = CAPABILITIES
-    tools: list = TOOLS
+    tools: list = []  # Loaded lazily
+
+    def __init__(self) -> None:
+        """Initialize the agent with tools."""
+        self.tools = get_tools()
 
     async def run(
         self,
@@ -124,7 +134,13 @@ class {{ agent_class }}:
             query: str,
             config: Annotated[RunnableConfig, InjectedToolArg],
         ) -> str:
-            """Invoke the {{ name }} agent.
+            """Invoke the {{ name }} agent for DevOps monitoring.
+
+            Use this for:
+            - Service health checks
+            - Pipeline and deployment status
+            - Alert monitoring
+            - Log analysis
 
             Args:
                 query: The query to process.
@@ -137,4 +153,3 @@ class {{ agent_class }}:
             return result["response"]
 
         return invoke_{{ agent_slug }}
-

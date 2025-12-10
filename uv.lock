@@ -1524,9 +1524,11 @@ name = "macsdk"
 version = "0.1.1"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "click" },
     { name = "fastapi" },
     { name = "jinja2" },
+    { name = "jsonpath-ng" },
     { name = "langchain" },
     { name = "langchain-core" },
     { name = "langchain-google-genai" },
@@ -1542,19 +1544,13 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
-    { name = "aiohttp" },
     { name = "beautifulsoup4" },
     { name = "certifi" },
     { name = "chromadb" },
-    { name = "jsonpath-ng" },
     { name = "langchain-chroma" },
     { name = "langchain-community" },
     { name = "tiktoken" },
     { name = "tqdm" },
-]
-api = [
-    { name = "aiohttp" },
-    { name = "jsonpath-ng" },
 ]
 rag = [
     { name = "beautifulsoup4" },
@@ -1578,21 +1574,21 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiohttp", marker = "extra == 'api'", specifier = ">=3.9.0" },
+    { name = "aiohttp", specifier = ">=3.9.0" },
     { name = "beautifulsoup4", marker = "extra == 'rag'", specifier = ">=4.12.0" },
     { name = "certifi", marker = "extra == 'rag'", specifier = ">=2023.0.0" },
     { name = "chromadb", marker = "extra == 'rag'", specifier = ">=0.4.0" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "jinja2", specifier = ">=3.0.0" },
-    { name = "jsonpath-ng", marker = "extra == 'api'", specifier = ">=1.6.0" },
+    { name = "jsonpath-ng", specifier = ">=1.6.0" },
     { name = "langchain", specifier = ">=1.0.0" },
     { name = "langchain-chroma", marker = "extra == 'rag'", specifier = ">=0.1.0" },
     { name = "langchain-community", marker = "extra == 'rag'", specifier = ">=0.2.0" },
     { name = "langchain-core", specifier = ">=1.0.0" },
     { name = "langchain-google-genai", specifier = ">=2.0.0" },
     { name = "langgraph", specifier = ">=1.0.0" },
-    { name = "macsdk", extras = ["rag", "api"], marker = "extra == 'all'", editable = "." },
+    { name = "macsdk", extras = ["rag"], marker = "extra == 'all'", editable = "." },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
@@ -1603,7 +1599,7 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.32.0" },
     { name = "websockets", specifier = ">=13.0" },
 ]
-provides-extras = ["rag", "api", "all"]
+provides-extras = ["rag", "all"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -13,27 +13,57 @@ Uses the [DevOps Mock API](https://github.com/juanje/devops-mock-api) hosted on
 - 🚨 **Alert management**: Track warnings and critical issues
 - 📦 **Deployment tracking**: View deployment history
 
+## Two Approaches to API Tools
+
+This example demonstrates both approaches:
+
+### Approach 1: Generic Tools (Recommended)
+
+Use `api_get` and `fetch_file` directly. The API schema is in the prompt,
+and the LLM decides which endpoints to call:
+
+```python
+from macsdk.tools import api_get, fetch_file
+
+# The LLM calls these with appropriate parameters
+tools = [api_get, fetch_file]
+```
+
+### Approach 2: Custom Tools (For specialized cases)
+
+Use `make_api_request` with JSONPath extraction for complex operations:
+
+```python
+from macsdk.tools import make_api_request
+
+@tool
+async def get_failed_pipeline_names() -> str:
+    """Get just the names of failed pipelines."""
+    result = await make_api_request(
+        "GET", "devops", "/pipelines",
+        params={"status": "failed"},
+        extract="$[*].name",  # JSONPath extraction
+    )
+    return ", ".join(result["data"]) if result["success"] else "Error"
+```
+
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      api-agent                              │
 ├─────────────────────────────────────────────────────────────┤
-│  Domain Tools (get_pipeline, get_failed_jobs, etc.)         │
-│           │                                                  │
-│           ▼                                                  │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │         MACSDK API Tools (api_get, fetch_file)      │    │
-│  │  • Automatic retries with exponential backoff        │    │
-│  │  • JSONPath extraction for specific fields           │    │
-│  │  • Log file download for investigation               │    │
-│  └─────────────────────────────────────────────────────┘    │
-│           │                                                  │
-│           ▼                                                  │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │         DevOps Mock API                              │    │
-│  │  /pipelines  /jobs  /services  /alerts  /deployments │    │
-│  └─────────────────────────────────────────────────────┘    │
+│  Generic Tools        │    Custom Tools                     │
+│  (api_get, fetch_file)│    (with make_api_request)          │
+│  LLM decides endpoint │    JSONPath, business logic         │
+│           │           │             │                       │
+│           └───────────┴─────────────┘                       │
+│                       │                                     │
+│                       ▼                                     │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │         DevOps Mock API                              │   │
+│  │  /pipelines  /jobs  /services  /alerts  /deployments │   │
+│  └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -91,13 +121,13 @@ uv run api-agent info
 ```
 >> What jobs are in pipeline 1?
 >> Show me the failed jobs
->> Get the log for the failed deploy job
+>> Investigate failed job 5
 ```
 
 ### Service Health
 
 ```
->> List all services
+>> Give me a service health summary
 >> Are there any unhealthy services?
 >> What's the status of the api-gateway?
 ```
@@ -119,20 +149,13 @@ uv run api-agent info
 
 ## Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `list_pipelines` | Get all pipelines |
-| `get_pipeline` | Get pipeline details |
-| `get_failed_pipelines` | Find failed pipelines |
-| `get_jobs_for_pipeline` | Get jobs in a pipeline |
-| `get_failed_jobs` | Find all failed jobs |
-| `get_job` | Get job with error details |
-| `get_job_log` | Download job log file |
-| `list_services` | Get all services |
-| `get_unhealthy_services` | Find degraded services |
-| `list_alerts` | Get all alerts |
-| `get_critical_alerts` | High-priority alerts |
-| `list_deployments` | Deployment history |
+| Tool | Type | Description |
+|------|------|-------------|
+| `api_get` | Generic | Make GET requests to any endpoint |
+| `fetch_file` | Generic | Download files (logs, configs) |
+| `get_service_health_summary` | Custom | Quick health overview with emojis |
+| `get_failed_pipeline_names` | Custom | Just names of failed pipelines |
+| `investigate_failed_job` | Custom | Full investigation with log excerpt |
 
 ## Using with Chatbots
 

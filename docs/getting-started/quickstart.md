@@ -92,17 +92,17 @@ uv run infra-agent tools
 ```
 
 ```
-🔧 Available Tools
-┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Tool               ┃ Description                                          ┃
-┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ get_services       │ List all infrastructure services and their status.   │
-│ get_service_status │ Get the status of a specific service.                │
-│ get_alerts         │ List all active alerts.                              │
-└────────────────────┴──────────────────────────────────────────────────────┘
+🔧 Available Tools (Generic SDK)
+┏━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Tool       ┃ Description                                      ┃
+┡━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ api_get    │ Make a GET request to a registered API service.  │
+│ fetch_file │ Fetch a file from a URL with optional filtering. │
+└────────────┴──────────────────────────────────────────────────┘
 ```
 
-These tools use MACSDK's `api_get` to call a real API. Edit `tools.py` to connect to your own APIs.
+These are **generic SDK tools** that work with any API. The API schema is in the prompt,
+so the LLM decides which endpoints to call. Edit `prompts.py` to describe your API.
 
 ## 7. Add Agent to Chatbot
 

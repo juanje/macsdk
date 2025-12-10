@@ -138,11 +138,12 @@ class TestNewAgentCommand:
                 ["new", "agent", TEST_AGENT_NAME, "--description", TEST_DESCRIPTION],
             )
             assert result.exit_code == 0
-            # Check description is in the prompts file
+            # Check prompts file has system prompt defined
             prompts_content = (
                 Path(TEST_AGENT_NAME) / "src" / TEST_AGENT_SLUG / "prompts.py"
             ).read_text()
-            assert TEST_DESCRIPTION.lower() in prompts_content.lower()
+            assert "SYSTEM_PROMPT" in prompts_content
+            assert "api_get" in prompts_content.lower()
 
     def test_creates_agent_with_output_dir(self) -> None:
         """Creates agent in specified output directory."""

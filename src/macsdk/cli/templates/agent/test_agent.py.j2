@@ -1,13 +1,13 @@
 """Tests for {{ name }}.
 
 These tests verify that the agent implements the
-SpecialistAgent protocol correctly and that tools are defined.
+SpecialistAgent protocol correctly and that tools are configured.
 """
 
 import pytest
 
 from {{ agent_slug }} import CAPABILITIES, {{ agent_class }}
-from {{ agent_slug }}.tools import get_alerts, get_service_status, get_services
+from {{ agent_slug }}.tools import get_tools, TOOLS
 
 
 class Test{{ agent_class }}:
@@ -37,27 +37,37 @@ class Test{{ agent_class }}:
         assert hasattr(agent, "as_tool")
         assert callable(agent.as_tool)
 
+    def test_agent_has_tools(self) -> None:
+        """Agent exposes its tools."""
+        agent = {{ agent_class }}()
+        assert hasattr(agent, "tools")
+        assert len(agent.tools) >= 2
+
 
 class TestTools:
     """Tests for agent tools."""
 
-    def test_get_services_is_callable(self) -> None:
-        """get_services tool is defined and callable."""
-        assert get_services is not None
-        assert hasattr(get_services, "ainvoke")
+    def test_get_tools_returns_tools(self) -> None:
+        """get_tools function returns a list of tools."""
+        tools = get_tools()
+        assert isinstance(tools, list)
+        assert len(tools) >= 2
 
-    def test_get_service_status_is_callable(self) -> None:
-        """get_service_status tool is defined and callable."""
-        assert get_service_status is not None
-        assert hasattr(get_service_status, "ainvoke")
-
-    def test_get_alerts_is_callable(self) -> None:
-        """get_alerts tool is defined and callable."""
-        assert get_alerts is not None
-        assert hasattr(get_alerts, "ainvoke")
+    def test_tools_have_ainvoke(self) -> None:
+        """All tools are async callable."""
+        tools = get_tools()
+        for tool in tools:
+            assert hasattr(tool, "ainvoke"), f"Tool {tool.name} missing ainvoke"
 
     def test_tools_have_descriptions(self) -> None:
         """All tools have descriptions for the LLM."""
-        tools = [get_services, get_service_status, get_alerts]
+        tools = get_tools()
         for tool in tools:
             assert tool.description, f"Tool {tool.name} has no description"
+
+    def test_expected_tools_present(self) -> None:
+        """Expected generic SDK tools are present."""
+        tools = get_tools()
+        tool_names = [t.name for t in tools]
+        assert "api_get" in tool_names, "api_get tool not found"
+        assert "fetch_file" in tool_names, "fetch_file tool not found"

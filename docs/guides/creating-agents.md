@@ -18,8 +18,8 @@ infra-agent/
 │   ├── __init__.py          # Exports agent class
 │   ├── agent.py             # Main agent implementation
 │   ├── models.py            # Response models
-│   ├── prompts.py           # System prompts
-│   ├── tools.py             # Agent tools
+│   ├── prompts.py           # System prompts with API schema
+│   ├── tools.py             # Tool configuration
 │   └── cli.py               # Testing CLI (Rich-powered)
 ├── config.yml.example
 ├── .env.example
@@ -58,187 +58,123 @@ uv run infra-agent tools
 ```
 
 ```
-🔧 Available Tools
-┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Tool               ┃ Description                                          ┃
-┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ get_services       │ List all infrastructure services and their status.   │
-│ get_service_status │ Get the status of a specific service.                │
-│ get_alerts         │ List all active alerts.                              │
-└────────────────────┴──────────────────────────────────────────────────────┘
+🔧 Available Tools (Generic SDK)
+┏━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Tool       ┃ Description                                      ┃
+┡━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ api_get    │ Make a GET request to a registered API service.  │
+│ fetch_file │ Fetch a file from a URL with optional filtering. │
+└────────────┴──────────────────────────────────────────────────┘
 ```
 
-## Implementing Tools
+## Using API Tools
 
-Generated agents use MACSDK's `api_get` tool to call a demo DevOps API.
-The generated `tools.py` shows how to register an API service and create tools:
+MACSDK uses a minimalist approach: **few generic tools** instead of many specific tools. The LLM decides which endpoints to call based on the API description in the prompt.
+
+### The recommended pattern
+
+**1. Register the service** (in `tools.py`):
 
 ```python
-from langchain_core.tools import tool
 from macsdk.core.api_registry import register_api_service
-from macsdk.tools import api_get
+from macsdk.tools import api_get, fetch_file
 
-# Register your API service
 register_api_service(
     name="devops",
-    base_url="https://my-json-server.typicode.com/juanje/devops-mock-api",
-    timeout=10,
-)
-
-@tool
-async def get_services() -> str:
-    """List all services and their status."""
-    return await api_get.ainvoke({
-        "service": "devops",
-        "endpoint": "/services",
-    })
-
-@tool
-async def get_service_status(service_id: int) -> str:
-    """Get status of a specific service."""
-    return await api_get.ainvoke({
-        "service": "devops",
-        "endpoint": f"/services/{service_id}",
-    })
-
-@tool
-async def get_alerts() -> str:
-    """List all active alerts."""
-    return await api_get.ainvoke({
-        "service": "devops",
-        "endpoint": "/alerts",
-    })
-```
-
-## Customizing for Your API
-
-Replace the demo API with your own:
-
-```python
-from langchain_core.tools import tool
-from macsdk.core.api_registry import register_api_service
-from macsdk.tools import api_get
-
-# Register your API service
-register_api_service(
-    name="myapi",
     base_url="https://api.example.com",
-    token=os.environ.get("API_TOKEN"),  # Optional authentication
-    timeout=10,
 )
 
-@tool
-async def get_users() -> str:
-    """Get all users from the API."""
-    return await api_get.ainvoke({
-        "service": "myapi",
-        "endpoint": "/users",
-    })
-
-@tool
-async def get_user_names() -> str:
-    """Get just the names using JSONPath extraction."""
-    return await api_get.ainvoke({
-        "service": "myapi",
-        "endpoint": "/users",
-        "extract": "$[*].name",  # JSONPath expression
-    })
+def get_tools():
+    return [api_get, fetch_file]  # Only 2 generic tools
 ```
 
-### API with Authentication
+**2. Describe the API in the prompt** (in `prompts.py`):
 
 ```python
-# Service with Bearer token
-register_api_service(
-    name="github",
-    base_url="https://api.github.com",
-    token=os.environ["GITHUB_TOKEN"],  # Adds Authorization: Bearer header
-    rate_limit=5000,
-)
+SYSTEM_PROMPT = """You are a DevOps assistant.
+
+## API Service: "devops"
+
+Available endpoints:
+- GET /services - List all services
+- GET /services/{id} - Service details
+- GET /alerts - List alerts
+- GET /alerts with params {"severity": "critical"} - Filter by severity
+
+Always use service="devops" when calling api_get.
+"""
+```
+
+**3. The LLM does the rest**: When the user asks "Are there any critical alerts?", the LLM automatically chooses the right endpoint.
+
+### Why this approach?
+
+| Traditional | MACSDK |
+|-------------|--------|
+| 20 tools for 20 endpoints | 2 generic tools |
+| Lots of repetitive code | Simple code |
+| Hard to maintain | Adding endpoints = updating prompt |
+| LLM chooses between many options | LLM reads API description |
+
+### Custom tools (when you need them)
+
+Only create specific tools when you need:
+- **JSONPath extraction**: Extract specific fields to reduce tokens
+- **Business logic**: Combine calls or transform data
+
+```python
+from macsdk.tools import make_api_request
 
 @tool
-async def get_repo_info(owner: str, repo: str) -> str:
-    """Get information about a GitHub repository."""
-    return await api_get.ainvoke({
-        "service": "github",
-        "endpoint": f"/repos/{owner}/{repo}",
-        "extract": "$.full_name",
-    })
+async def get_service_health_summary() -> str:
+    """Quick summary of service health status."""
+    result = await make_api_request(
+        "GET", "devops", "/services",
+        extract="$[*].name",  # JSONPath to extract only names
+    )
+    # ... formatting logic ...
 ```
 
-### API with Custom SSL Certificate
-
-For internal APIs with self-signed or custom certificates:
-
-```python
-# Service with custom SSL certificate
-register_api_service(
-    name="internal_api",
-    base_url="https://api.internal.company.com",
-    token=os.environ["INTERNAL_TOKEN"],
-    ssl_cert="/path/to/company-ca.pem",
-)
-```
-
-### Test Server (No SSL Verification)
-
-For development/test servers only:
-
-```python
-# ⚠️ INSECURE - Only for development!
-register_api_service(
-    name="test_api",
-    base_url="https://localhost:8443",
-    ssl_verify=False,
-)
-```
-
-### Service Options Reference
-
-| Option | Description |
-|--------|-------------|
-| `token` | Bearer token for authentication |
-| `headers` | Custom HTTP headers dict |
-| `timeout` | Request timeout in seconds (default: 30) |
-| `max_retries` | Retry attempts (default: 3) |
-| `rate_limit` | Requests per hour limit |
-| `ssl_cert` | Path to SSL certificate file |
-| `ssl_verify` | Verify SSL (default: True) |
-
-See `macsdk list-tools` for all available API tools.
+📖 **See [API Tools Reference](../reference/tools.md)** for complete documentation
 
 ## Defining Capabilities
 
 Edit `agent.py`:
 
 ```python
-CAPABILITIES = """The infra_agent monitors infrastructure services.
+CAPABILITIES = """DevOps monitoring assistant.
 
-Things this agent does:
-- Check service health and status
-- Search application logs
-- Monitor infrastructure components
+This agent can:
+- Check infrastructure service health
+- Monitor CI/CD pipelines and jobs
+- Review alerts (critical, warnings)
+- Track deployments
 
-Use this agent when users ask about service status, logs, or infrastructure."""
+Use this agent when users ask about infrastructure, pipelines, or alerts."""
 ```
 
 **Important**: Write detailed capabilities so the supervisor routes queries correctly.
 
 ## Customizing the Prompt
 
-Edit `prompts.py`:
+Edit `prompts.py` to describe your API:
 
 ```python
-SYSTEM_PROMPT = """You are an infrastructure monitoring specialist.
+SYSTEM_PROMPT = """You are a DevOps monitoring assistant.
 
-When asked about services or logs, use your tools to get accurate information.
-Always include the service name and status in your response.
-If the user doesn't specify a service, ask them which one they want.
+## API Service: "myapi"
 
-Guidelines:
-- Be concise but informative
-- Include timestamps when showing log entries
-- Highlight any errors or warnings
+Available endpoints:
+- GET /services - List all services
+- GET /services/{id} - Get specific service
+- GET /pipelines - List pipelines
+- GET /pipelines with params {"status": "failed"} - Filter by status
+- GET /alerts - List alerts
+
+## Guidelines
+1. Always use service="myapi" when calling api_get
+2. For alerts, prioritize critical ones
+3. Be concise in responses
 """
 ```
 
@@ -255,7 +191,6 @@ class InfraResponse(BaseAgentResponse):
     
     service: str = Field(default="", description="Service name")
     status: str = Field(default="", description="Service status")
-    details: str = Field(default="", description="Additional details")
 ```
 
 ## The SpecialistAgent Protocol
@@ -271,7 +206,10 @@ from macsdk.core import run_agent_with_tools
 class InfraAgent:
     name: str = "infra_agent"
     capabilities: str = CAPABILITIES
-    tools: list = TOOLS
+    tools: list = []
+
+    def __init__(self):
+        self.tools = get_tools()
 
     async def run(
         self,
@@ -291,11 +229,7 @@ class InfraAgent:
             query: str,
             config: Annotated[RunnableConfig, InjectedToolArg],
         ) -> str:
-            """Monitor infrastructure services.
-            
-            Use this when the user asks about service status,
-            logs, or infrastructure health.
-            """
+            """Monitor infrastructure services."""
             result = await agent_instance.run(query, config=config)
             return result["response"]
 
@@ -315,12 +249,13 @@ uv run infra-agent chat
 │ Type exit or press Ctrl+C to quit                       │
 ╰─────────────────────────────────────────────────────────╯
 
->> Is the database service running?
+>> Is the authentication service running?
 [infra_agent] Processing query...
-[infra_agent] 🔧 Using tool: get_service_status
+[infra_agent] 🔧 Using tool: api_get
+[infra_agent] Tools used: api_get
 
 ╭─────────────────────── Response ───────────────────────╮
-│ Service database: Running (healthy)                    │
+│ Service auth-service: Running (healthy)                │
 ╰────────────────────────────────────────────────────────╯
 ```
 
@@ -343,12 +278,12 @@ macsdk add-agent . --package infra-agent
 
 ## Best Practices
 
-1. **Clear capabilities**: Write detailed CAPABILITIES so the supervisor routes correctly
-2. **Helpful tool docstrings**: The LLM uses docstrings to decide when to use tools
-3. **Handle errors gracefully**: Return helpful error messages
-4. **Test thoroughly**: Write tests for all tools
-5. **Use streaming**: Call `log_progress` for long operations to show progress
-6. **Export TOOLS**: Always export a `TOOLS` list for CLI inspection
+1. **Use generic tools**: Start with `api_get` + `fetch_file`, add custom tools only when needed
+2. **Describe API in prompt**: Let the LLM decide which endpoints to call
+3. **Clear capabilities**: Write detailed CAPABILITIES for correct routing
+4. **Helpful tool docstrings**: The LLM uses docstrings to decide when to use tools
+5. **Handle errors gracefully**: Return helpful error messages
+6. **Use streaming**: Call `log_progress` for long operations
 
 ## Advanced: Using Subgraphs
 
@@ -360,17 +295,13 @@ from langgraph.graph import StateGraph, END
 class AgentState(TypedDict):
     messages: list
     current_step: str
-    intermediate_results: dict
 
 def create_complex_agent():
     graph = StateGraph(AgentState)
-    
-    # Add nodes for each processing step
     graph.add_node("analyze", analyze_node)
     graph.add_node("gather_data", gather_data_node)
     graph.add_node("synthesize", synthesize_node)
     
-    # Add edges (workflow)
     graph.add_edge("analyze", "gather_data")
     graph.add_edge("gather_data", "synthesize")
     graph.add_edge("synthesize", END)
@@ -378,8 +309,6 @@ def create_complex_agent():
     graph.set_entry_point("analyze")
     return graph.compile()
 ```
-
-See the [LangGraph documentation](https://langchain-ai.github.io/langgraph/) for more details.
 
 ## Container Deployment
 
@@ -390,23 +319,10 @@ Each generated agent includes a `Containerfile` for building container images.
 ```bash
 cd my-agent
 podman build -t my-agent .
-# Or with Docker
-docker build -t my-agent -f Containerfile .
 ```
 
 ### Run the Container
 
 ```bash
-# Interactive chat
 podman run --rm -it -e GOOGLE_API_KEY=$GOOGLE_API_KEY my-agent chat
-
-# Show help
-podman run --rm my-agent --help
 ```
-
-### Container Features
-
-- **Multi-stage build**: Keeps final image small
-- **UBI base image**: Red Hat Universal Base Image for enterprise use
-- **Pre-built wheel**: Fast container startup
-- **Configurable**: Override CMD for different commands
