@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MACSDK Chatbot</title>
+    <title>{{ display_name }}</title>
+    <meta name="description" content="{{ description }}">
     <style>
         :root {
             --bg-primary: #0f0f0f;
@@ -293,8 +294,8 @@
     <header class="header">
         <div class="header-icon">🤖</div>
         <div>
-            <div class="header-title" id="chatTitle">MACSDK Chatbot</div>
-            <div class="header-subtitle">Multi-Agent Chatbot SDK</div>
+            <div class="header-title" id="chatTitle">{{ display_name }}</div>
+            <div class="header-subtitle">{{ description }}</div>
         </div>
         <div class="status-indicator">
             <div class="status-dot" id="statusDot"></div>
@@ -304,8 +305,8 @@
 
     <div class="chat-container" id="chatContainer">
         <div class="welcome">
-            <h2>Welcome!</h2>
-            <p>Type a message below to start chatting with the assistant.</p>
+            <h2>Welcome to {{ display_name }}!</h2>
+            <p>Type a message below to start chatting.</p>
         </div>
     </div>
 

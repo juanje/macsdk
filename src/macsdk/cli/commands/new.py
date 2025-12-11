@@ -123,11 +123,23 @@ def create_chatbot_project(
         content = render_template(template_name, context)
         output_file.write_text(content)
 
-    # Copy static files for web interface
+    # Create static files for web interface
     static_src = TEMPLATES_DIR / "chatbot" / "static"
     static_dst = output_path / "static"
     if static_src.exists():
-        shutil.copytree(static_src, static_dst)
+        static_dst.mkdir(parents=True, exist_ok=True)
+        # Render index.html template with project context
+        index_template = static_src / "index.html.j2"
+        if index_template.exists():
+            content = render_template("chatbot/static/index.html.j2", context)
+            (static_dst / "index.html").write_text(content)
+        # Copy any other static files (CSS, JS, images) directly
+        for item in static_src.iterdir():
+            if item.suffix != ".j2":
+                if item.is_file():
+                    shutil.copy2(item, static_dst / item.name)
+                elif item.is_dir():
+                    shutil.copytree(item, static_dst / item.name)
 
     # Output success message
     console.print(f"\n[green]✓[/green] Created chatbot project: [bold]{name}[/bold]")
