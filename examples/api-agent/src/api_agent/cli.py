@@ -14,6 +14,7 @@ from rich.table import Table
 from rich.text import Text
 
 console = Console()
+error_console = Console(stderr=True)
 
 
 @click.group(invoke_without_command=True)
@@ -133,7 +134,7 @@ def chat() -> None:
         _config = create_config(search_path=Path.cwd())
         _config.validate_api_key()
     except ConfigurationError as e:
-        console.print(f"[red]✗ Configuration Error:[/] {e}")
+        error_console.print(f"[red]✗ Configuration Error:[/] {e}")
         sys.exit(1)
 
     async def run() -> None:
@@ -164,10 +165,10 @@ def chat() -> None:
                 )
                 console.print()
             except ConfigurationError as e:
-                console.print(f"\n[red]✗ Configuration Error:[/] {e}")
+                error_console.print(f"\n[red]✗ Configuration Error:[/] {e}")
                 sys.exit(1)
             except Exception as e:
-                console.print(f"\n[red]✗ Error:[/] {e}")
+                error_console.print(f"\n[red]✗ Error:[/] {e}")
 
     asyncio.run(run())
 

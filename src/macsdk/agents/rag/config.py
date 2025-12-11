@@ -56,6 +56,10 @@ class RAGSourceConfig(BaseModel):
         default=None,
         description="Local path to SSL certificate file",
     )
+    verify_ssl: bool = Field(
+        default=True,
+        description="Whether to verify SSL certificates (disable for self-signed)",
+    )
 
 
 class RAGConfig(BaseModel):

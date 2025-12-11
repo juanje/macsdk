@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import ssl
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -86,17 +87,22 @@ def _is_url(path: str) -> bool:
     return parsed.scheme in ("http", "https")
 
 
-def _load_markdown_from_url(url: str, cert_path: Path | None = None) -> str:
+def _load_markdown_from_url(
+    url: str,
+    cert_path: Path | None = None,
+    verify_ssl: bool = True,
+) -> str:
     """Download markdown content from a URL.
 
     Args:
         url: URL to the markdown file.
         cert_path: Optional path to SSL certificate.
+        verify_ssl: Whether to verify SSL certificates.
 
     Returns:
         Markdown content as string.
     """
-    verify: bool | str = True
+    verify: bool | str = verify_ssl
     if cert_path:
         verify = str(cert_path)
 
@@ -128,7 +134,9 @@ def _load_markdown_documents(
         if _is_url(path_or_url):
             # Remote markdown file
             cert_path = get_cert_for_source(source)
-            content = _load_markdown_from_url(path_or_url, cert_path)
+            content = _load_markdown_from_url(
+                path_or_url, cert_path, verify_ssl=source.verify_ssl
+            )
 
             doc = Document(
                 page_content=content,
@@ -321,19 +329,50 @@ def _load_html_documents(
         # Get certificate if needed
         cert_path = get_cert_for_source(source)
         old_cert_env = None
+        old_ssl_context = None
+
+        # Log SSL settings
+        if not source.verify_ssl:
+            logger.warning(f"SSL verification disabled for {url}")
+        elif cert_path:
+            logger.info(f"Using certificate: {cert_path}")
 
         # Set certificate via environment variable if needed
         if cert_path:
             old_cert_env = os.environ.get("REQUESTS_CA_BUNDLE")
             os.environ["REQUESTS_CA_BUNDLE"] = str(cert_path)
-            logger.info(f"Using certificate: {cert_path}")
+
+        # Disable SSL verification if requested
+        # RecursiveUrlLoader may use requests or urllib internally
+        old_requests_get = None
+        if not source.verify_ssl:
+            # Suppress InsecureRequestWarning when SSL is disabled
+            import urllib3
+
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+            # Create an unverified SSL context for urllib
+            old_ssl_context = ssl._create_default_https_context
+            ssl._create_default_https_context = ssl._create_unverified_context  # type: ignore[assignment]
+
+            # Also patch requests to disable SSL verification
+            old_requests_get = requests.get
+
+            def patched_get(*args: object, **kwargs: object) -> requests.Response:
+                kwargs["verify"] = False
+                return old_requests_get(*args, **kwargs)  # type: ignore[arg-type]
+
+            requests.get = patched_get  # type: ignore[assignment]
 
         try:
-            loader = RecursiveUrlLoader(
-                url=url,
-                max_depth=config.max_depth,
-                extractor=simple_extractor,
-            )
+            # Build loader kwargs
+            loader_kwargs: dict[str, object] = {
+                "url": url,
+                "max_depth": config.max_depth,
+                "extractor": simple_extractor,
+            }
+
+            loader = RecursiveUrlLoader(**loader_kwargs)  # type: ignore[arg-type]
             docs = loader.load()
 
             # Add metadata to documents
@@ -355,6 +394,13 @@ def _load_html_documents(
                     os.environ["REQUESTS_CA_BUNDLE"] = old_cert_env
                 else:
                     os.environ.pop("REQUESTS_CA_BUNDLE", None)
+
+            # Restore SSL context and requests.get
+            if not source.verify_ssl:
+                if old_ssl_context is not None:
+                    ssl._create_default_https_context = old_ssl_context
+                if old_requests_get is not None:
+                    requests.get = old_requests_get
 
     except Exception as e:
         logger.error(f"[PARALLEL] Failed to load {url}: {e}")

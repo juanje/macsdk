@@ -15,6 +15,7 @@ from rich.table import Table
 from rich.text import Text
 
 console = Console()
+error_console = Console(stderr=True)
 
 
 @click.group(invoke_without_command=True)
@@ -241,7 +242,7 @@ def index(force: bool) -> None:
             console.print("[red]✗ Indexing failed. Check the errors above.[/]\n")
 
     except Exception as e:
-        console.print(f"\n[red]✗ Error during indexing:[/] {e}", err=True)
+        error_console.print(f"\n[red]✗ Error during indexing:[/] {e}")
         sys.exit(1)
 
 
@@ -265,7 +266,7 @@ def chat() -> None:
             title="DevOps Assistant",
         )
     except ConfigurationError as e:
-        console.print(f"[red]✗ Configuration Error:[/] {e}")
+        error_console.print(f"[red]✗ Configuration Error:[/] {e}")
         sys.exit(1)
 
 
@@ -313,7 +314,7 @@ def web(host: str, port: int) -> None:
             port=port,
         )
     except ConfigurationError as e:
-        console.print(f"[red]✗ Configuration Error:[/] {e}")
+        error_console.print(f"[red]✗ Configuration Error:[/] {e}")
         sys.exit(1)
 
 
