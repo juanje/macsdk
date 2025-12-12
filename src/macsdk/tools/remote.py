@@ -13,7 +13,7 @@ from typing import Annotated
 
 import aiohttp
 from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import InjectedToolArg, tool
+from langchain_core.tools import InjectedToolArg, ToolException, tool
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ async def fetch_file(
     tail_lines: int | None = None,
     head_lines: int | None = None,
     timeout: int = 30,
+    ssl_verify: bool = True,
     config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Fetch a file from a URL with optional filtering.
@@ -35,22 +36,32 @@ async def fetch_file(
         tail_lines: Return only the last N lines.
         head_lines: Return only the first N lines.
         timeout: Request timeout in seconds.
+        ssl_verify: Whether to verify SSL certificates (default True).
+                   Set to False for internal servers with self-signed certs.
 
     Returns:
-        File content (filtered if specified) or error message.
+        File content (filtered if specified).
+
+    Raises:
+        ToolException: If the file cannot be fetched (network error, HTTP error, etc.)
 
     Example:
         >>> fetch_file("https://example.com/app.log", tail_lines=100)
         >>> fetch_file("https://example.com/config.yml", grep_pattern="database")
+        >>> fetch_file("https://internal.server/log", ssl_verify=False)
     """
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 url,
                 timeout=aiohttp.ClientTimeout(total=timeout),
+                ssl=ssl_verify,
             ) as response:
                 if response.status != 200:
-                    return f"Error: HTTP {response.status}"
+                    raise ToolException(
+                        f"HTTP {response.status} fetching {url}. "
+                        "This is a tool error, not content from the file."
+                    )
 
                 content = await response.text()
 
@@ -62,7 +73,7 @@ async def fetch_file(
                 pattern = re.compile(grep_pattern)
                 lines = [line for line in lines if pattern.search(line)]
             except re.error as e:
-                return f"Invalid grep pattern: {e}"
+                raise ToolException(f"Invalid grep pattern '{grep_pattern}': {e}")
 
         if tail_lines:
             lines = lines[-tail_lines:]
@@ -71,10 +82,20 @@ async def fetch_file(
 
         return "\n".join(lines)
 
+    except aiohttp.ClientSSLError as e:
+        raise ToolException(
+            f"SSL certificate error for {url}. "
+            f"Try with ssl_verify=False for internal servers. Error: {e}"
+        )
     except aiohttp.ClientError as e:
-        return f"Network error: {e}"
+        raise ToolException(
+            f"Network error fetching {url}: {e}. "
+            "This is a connection problem, not an error from the remote file."
+        )
+    except ToolException:
+        raise  # Re-raise ToolExceptions as-is
     except Exception as e:
-        return f"Error fetching file: {e}"
+        raise ToolException(f"Unexpected error fetching {url}: {e}")
 
 
 @tool
@@ -82,6 +103,7 @@ async def fetch_and_save(
     url: str,
     save_path: str,
     timeout: int = 60,
+    ssl_verify: bool = True,
     config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Fetch a file from URL and save it locally.
@@ -90,9 +112,13 @@ async def fetch_and_save(
         url: URL to fetch the file from.
         save_path: Local path to save the file.
         timeout: Request timeout in seconds.
+        ssl_verify: Whether to verify SSL certificates (default True).
 
     Returns:
-        Success message with file path or error message.
+        Success message with file path and size.
+
+    Raises:
+        ToolException: If the file cannot be fetched or saved.
 
     Example:
         >>> fetch_and_save(
@@ -105,9 +131,10 @@ async def fetch_and_save(
             async with session.get(
                 url,
                 timeout=aiohttp.ClientTimeout(total=timeout),
+                ssl=ssl_verify,
             ) as response:
                 if response.status != 200:
-                    return f"Error: HTTP {response.status}"
+                    raise ToolException(f"HTTP {response.status} fetching {url}")
 
                 content = await response.read()
 
@@ -121,10 +148,16 @@ async def fetch_and_save(
 
         return f"Successfully saved to {save_path} ({len(content)} bytes)"
 
+    except aiohttp.ClientSSLError as e:
+        raise ToolException(
+            f"SSL certificate error for {url}. Try with ssl_verify=False. Error: {e}"
+        )
     except aiohttp.ClientError as e:
-        return f"Network error: {e}"
+        raise ToolException(f"Network error fetching {url}: {e}")
+    except ToolException:
+        raise
     except Exception as e:
-        return f"Error saving file: {e}"
+        raise ToolException(f"Error saving file: {e}")
 
 
 @tool
@@ -132,6 +165,7 @@ async def fetch_json(
     url: str,
     extract: str | None = None,
     timeout: int = 30,
+    ssl_verify: bool = True,
     config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Fetch JSON from a URL with optional JSONPath extraction.
@@ -140,9 +174,13 @@ async def fetch_json(
         url: URL to fetch JSON from.
         extract: Optional JSONPath expression (e.g., "$.data.items[*].name").
         timeout: Request timeout in seconds.
+        ssl_verify: Whether to verify SSL certificates (default True).
 
     Returns:
-        JSON content (extracted if specified) or error message.
+        JSON content (extracted if specified).
+
+    Raises:
+        ToolException: If the JSON cannot be fetched or parsed.
 
     Example:
         >>> fetch_json("https://api.example.com/data")
@@ -154,9 +192,10 @@ async def fetch_json(
                 url,
                 timeout=aiohttp.ClientTimeout(total=timeout),
                 headers={"Accept": "application/json"},
+                ssl=ssl_verify,
             ) as response:
                 if response.status != 200:
-                    return f"Error: HTTP {response.status}"
+                    raise ToolException(f"HTTP {response.status} fetching {url}")
 
                 import json
 
@@ -170,7 +209,9 @@ async def fetch_json(
                     matches = [match.value for match in expr.find(data)]
 
                     if len(matches) == 0:
-                        return "No matches found for JSONPath expression"
+                        raise ToolException(
+                            f"No matches found for JSONPath expression '{extract}'"
+                        )
                     elif len(matches) == 1:
                         data = matches[0]
                     else:
@@ -178,7 +219,13 @@ async def fetch_json(
 
                 return json.dumps(data, indent=2, default=str)
 
+    except aiohttp.ClientSSLError as e:
+        raise ToolException(
+            f"SSL certificate error for {url}. Try with ssl_verify=False. Error: {e}"
+        )
     except aiohttp.ClientError as e:
-        return f"Network error: {e}"
+        raise ToolException(f"Network error fetching {url}: {e}")
+    except ToolException:
+        raise
     except Exception as e:
-        return f"Error fetching JSON: {e}"
+        raise ToolException(f"Error fetching JSON from {url}: {e}")

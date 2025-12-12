@@ -17,7 +17,7 @@ from typing import Annotated, Any
 
 import aiohttp
 from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import InjectedToolArg, tool
+from langchain_core.tools import InjectedToolArg, ToolException, tool
 
 from ..core.api_registry import get_api_service
 
@@ -229,7 +229,10 @@ async def api_get(
             All filters and query options go here, not in the endpoint.
 
     Returns:
-        JSON response data or error message.
+        JSON response data.
+
+    Raises:
+        ToolException: If the API request fails.
 
     Example:
         >>> api_get("github", "/repos/langchain-ai/langchain/issues",
@@ -240,7 +243,10 @@ async def api_get(
     if result["success"]:
         return json.dumps(result["data"], indent=2, default=str)
     else:
-        return f"API Error: {result['error']}"
+        raise ToolException(
+            f"API request to '{service}' failed: {result['error']}. "
+            "This is a tool/connection error, not data from the API."
+        )
 
 
 @tool
@@ -260,14 +266,17 @@ async def api_post(
         params: Query parameters as a dictionary. Do NOT put these in the endpoint.
 
     Returns:
-        JSON response data or error message.
+        JSON response data.
+
+    Raises:
+        ToolException: If the API request fails.
     """
     result = await _make_request("POST", service, endpoint, params=params, body=body)
 
     if result["success"]:
         return json.dumps(result["data"], indent=2, default=str)
     else:
-        return f"API Error: {result['error']}"
+        raise ToolException(f"API POST to '{service}' failed: {result['error']}")
 
 
 @tool
@@ -287,14 +296,17 @@ async def api_put(
         params: Query parameters as a dictionary. Do NOT put these in the endpoint.
 
     Returns:
-        JSON response data or error message.
+        JSON response data.
+
+    Raises:
+        ToolException: If the API request fails.
     """
     result = await _make_request("PUT", service, endpoint, params=params, body=body)
 
     if result["success"]:
         return json.dumps(result["data"], indent=2, default=str)
     else:
-        return f"API Error: {result['error']}"
+        raise ToolException(f"API PUT to '{service}' failed: {result['error']}")
 
 
 @tool
@@ -312,7 +324,10 @@ async def api_delete(
         params: Query parameters as a dictionary. Do NOT put these in the endpoint.
 
     Returns:
-        Success message or error message.
+        Success message or response data.
+
+    Raises:
+        ToolException: If the API request fails.
     """
     result = await _make_request("DELETE", service, endpoint, params=params)
 
@@ -321,7 +336,7 @@ async def api_delete(
             return json.dumps(result["data"], indent=2, default=str)
         return "Successfully deleted"
     else:
-        return f"API Error: {result['error']}"
+        raise ToolException(f"API DELETE to '{service}' failed: {result['error']}")
 
 
 @tool
@@ -341,11 +356,14 @@ async def api_patch(
         params: Query parameters as a dictionary. Do NOT put these in the endpoint.
 
     Returns:
-        JSON response data or error message.
+        JSON response data.
+
+    Raises:
+        ToolException: If the API request fails.
     """
     result = await _make_request("PATCH", service, endpoint, params=params, body=body)
 
     if result["success"]:
         return json.dumps(result["data"], indent=2, default=str)
     else:
-        return f"API Error: {result['error']}"
+        raise ToolException(f"API PATCH to '{service}' failed: {result['error']}")
