@@ -44,14 +44,27 @@ You can call MULTIPLE agents in a single turn:
 - **Sequential**: When one agent's output is needed as input for another
   Example: First get IDs from agent A, then use those IDs to query agent B
 
-## Structured Response Fields
+## CRITICAL: Act on IDs and References
 
-Some agents return structured data with fields that indicate follow-up actions:
-- Lists of IDs to investigate further
-- Boolean flags indicating more data is available
-- References to other systems or data sources
+When an agent returns IDs, references, or mentions "for detailed diagnosis":
 
-When you see these fields, ACT on them by calling the appropriate agent.
+**YOU MUST call another agent to investigate those IDs.**
+
+DO NOT:
+- Return the IDs to the user and ask them to investigate
+- Say "here are the IDs for further analysis"
+- Stop after getting a list of IDs
+
+DO:
+- Take the IDs and call the appropriate agent to get details
+- If there are many IDs, investigate at least the first few
+- Synthesize the detailed findings into your final response
+
+Example:
+- Agent A returns: "Jobs failed: [ID1, ID2, ID3]"
+- YOU call Agent B with: "Diagnose ID1" (or multiple in parallel)
+- YOU get detailed failure info
+- YOU respond with the actual failure causes, not just a list of IDs
 
 ## Response Guidelines
 
