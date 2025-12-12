@@ -175,7 +175,8 @@ async def supervisor_agent_node(
         supervisor = create_supervisor_agent()
 
         # Get current stream writer and pass it through config for tools
-        config: dict = {"recursion_limit": 25}
+        # Higher recursion limit to allow supervisor to iterate through multiple agents
+        config: dict = {"recursion_limit": 50}
         try:
             writer = get_stream_writer()
             if writer is not None:
@@ -209,11 +210,40 @@ async def supervisor_agent_node(
         )
 
     except Exception as e:
-        log_progress(f"Error in supervisor: {e}\n")
-        error_response = (
-            "I encountered an error processing your request. "
-            "Please try rephrasing your question."
-        )
+        import traceback
+
+        error_type = type(e).__name__
+        error_msg = str(e)
+
+        # Log the full error for debugging
+        log_progress(f"\n⚠️ Error in supervisor ({error_type}): {error_msg}\n")
+
+        # Log traceback for developers
+        tb = traceback.format_exc()
+        logger = __import__("logging").getLogger(__name__)
+        logger.error(f"Supervisor error: {error_type}: {error_msg}\n{tb}")
+
+        # Provide more specific error messages when possible
+        if "recursion" in error_msg.lower() or "maximum" in error_msg.lower():
+            error_response = (
+                "The request required too many steps to complete. "
+                "Try asking a more specific question."
+            )
+        elif "timeout" in error_msg.lower() or "deadline" in error_msg.lower():
+            error_response = (
+                "The request took too long to process. "
+                "Try asking about fewer items at once."
+            )
+        elif "rate" in error_msg.lower() or "quota" in error_msg.lower():
+            error_response = (
+                "API rate limit reached. Please wait a moment and try again."
+            )
+        else:
+            error_response = (
+                f"I encountered an error: {error_type}. "
+                "Please try rephrasing your question or check the logs for details."
+            )
+
         state.update(
             {
                 "chatbot_response": error_response,
