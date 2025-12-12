@@ -154,6 +154,10 @@ class MACSDKConfig(BaseSettings):
     summarization_trigger_tokens: int = 100000  # Token threshold to trigger
     summarization_keep_messages: int = 6  # Messages to keep unsummarized
 
+    # Agent Execution Configuration
+    recursion_limit: int = 50  # Max iterations for agent tool calls
+    # Use higher values (100+) for complex workflows with many steps
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

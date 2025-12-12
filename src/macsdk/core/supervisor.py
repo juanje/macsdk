@@ -175,18 +175,20 @@ async def supervisor_agent_node(
         supervisor = create_supervisor_agent()
 
         # Get current stream writer and pass it through config for tools
-        # Higher recursion limit to allow supervisor to iterate through multiple agents
-        config: dict = {"recursion_limit": 50}
+        # Use configurable recursion limit for complex multi-agent workflows
+        from .config import config as sdk_config
+
+        run_config: dict = {"recursion_limit": sdk_config.recursion_limit}
         try:
             writer = get_stream_writer()
             if writer is not None:
-                config["configurable"] = {STREAM_WRITER_KEY: writer}
+                run_config["configurable"] = {STREAM_WRITER_KEY: writer}
         except (RuntimeError, Exception):
             pass
 
         result = await supervisor.ainvoke(
             {"messages": input_messages},
-            config=config,
+            config=run_config,
         )
 
         # Extract the response

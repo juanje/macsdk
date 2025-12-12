@@ -42,6 +42,12 @@ summarization_trigger_tokens: 100000
 summarization_keep_messages: 6
 
 # =============================================================================
+# Agent Execution Configuration
+# =============================================================================
+recursion_limit: 50  # Max iterations for agent tool calls (default: 50)
+# Use higher values (100+) for complex workflows with many steps
+
+# =============================================================================
 # Web Server Configuration
 # =============================================================================
 server_host: 0.0.0.0
@@ -214,6 +220,12 @@ All configuration options can be set via environment variables:
 | `SERVER_PORT` | Web server port | `8000` |
 | `MESSAGE_MAX_LENGTH` | Max message length | `5000` |
 | `WARMUP_TIMEOUT` | Startup timeout | `15.0` |
+
+### Agent Execution
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RECURSION_LIMIT` | Max agent iterations | `50` |
 
 ### Other
 
