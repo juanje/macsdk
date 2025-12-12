@@ -137,10 +137,11 @@ async def run_agent_with_tools(
     structured_response = result.get("structured_response")
 
     if structured_response:
-        # Use tools from structured response if available, otherwise from messages
-        final_tools = structured_response.tools_used or tools_used
+        # Prefer tools from messages (actual tool calls) over structured response
+        # because the LLM can confuse service names with tool names
+        final_tools = tools_used or structured_response.tools_used or []
 
-        # Log tools used for transparency
+        # Log tools used for transparency (only if not already logged in real-time)
         if final_tools:
             unique_tools = list(dict.fromkeys(final_tools))
             tools_str = ", ".join(unique_tools)
