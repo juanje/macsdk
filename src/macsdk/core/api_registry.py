@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, ConfigDict, SecretStr
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,8 @@ _api_services: dict[str, "APIServiceConfig"] = {}
 class APIServiceConfig(BaseModel):
     """Configuration for a single API service."""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     name: str
     base_url: str
     token: SecretStr | None = None
@@ -31,11 +33,6 @@ class APIServiceConfig(BaseModel):
     rate_limit: int | None = None  # requests per hour
     ssl_cert: str | None = None  # Path to SSL certificate file
     ssl_verify: bool = True  # Set to False to disable SSL verification (insecure!)
-
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
 
 
 def register_api_service(
