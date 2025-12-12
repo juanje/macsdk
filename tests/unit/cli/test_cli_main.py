@@ -46,3 +46,37 @@ class TestMainCLI:
         result = runner.invoke(cli, ["list-tools", "--help"])
         assert result.exit_code == 0
         assert "tools" in result.output.lower()
+
+
+class TestDeriveClassName:
+    """Tests for _derive_class_name helper."""
+
+    def test_package_ending_with_agent(self) -> None:
+        """Package names ending with 'agent' should not duplicate Agent suffix."""
+        from macsdk.cli.commands.add import _derive_class_name
+
+        assert _derive_class_name("gitlab-agent") == "GitlabAgent"
+        assert _derive_class_name("tf-agent") == "TfAgent"
+        assert _derive_class_name("my-custom-agent") == "MyCustomAgent"
+
+    def test_package_not_ending_with_agent(self) -> None:
+        """Package names not ending with 'agent' should get Agent suffix."""
+        from macsdk.cli.commands.add import _derive_class_name
+
+        assert _derive_class_name("weather") == "WeatherAgent"
+        assert _derive_class_name("infra-monitor") == "InfraMonitorAgent"
+        assert _derive_class_name("api") == "ApiAgent"
+
+    def test_single_word_agent(self) -> None:
+        """Single word 'agent' should work."""
+        from macsdk.cli.commands.add import _derive_class_name
+
+        assert _derive_class_name("agent") == "Agent"
+
+    def test_case_insensitive_agent_detection(self) -> None:
+        """Agent suffix detection should be case-insensitive."""
+        from macsdk.cli.commands.add import _derive_class_name
+
+        # The input is typically lowercase from package names
+        assert _derive_class_name("gitlab-agent") == "GitlabAgent"
+        assert _derive_class_name("gitlab-AGENT") == "GitlabAgent"
