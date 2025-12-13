@@ -34,6 +34,7 @@ def should_exit(state: ChatbotState) -> Literal["exit", "continue"]:
 
 def create_chatbot_graph(
     register_agents_func: Callable[[], None] | None = None,
+    debug: bool | None = None,
 ) -> "CompiledGraph":
     """Create chatbot graph for CLI with interactive loop.
 
@@ -43,6 +44,7 @@ def create_chatbot_graph(
     Args:
         register_agents_func: Optional function to register agents.
             This function will be called before processing each query.
+        debug: Whether to enable debug mode (shows prompts). If None, uses config.
 
     Returns:
         Compiled graph for CLI usage.
@@ -51,7 +53,7 @@ def create_chatbot_graph(
 
     # Create supervisor node with agent registration
     async def supervisor_node(state: ChatbotState) -> ChatbotState:
-        return await supervisor_agent_node(state, register_agents_func)
+        return await supervisor_agent_node(state, register_agents_func, debug=debug)
 
     # Add the supervisor node
     graph_builder.add_node("supervisor", supervisor_node)
@@ -65,6 +67,7 @@ def create_chatbot_graph(
 
 def create_web_chatbot_graph(
     register_agents_func: Callable[[], None] | None = None,
+    debug: bool | None = None,
 ) -> "CompiledGraph":
     """Create chatbot graph for web interface (single query mode).
 
@@ -72,9 +75,10 @@ def create_web_chatbot_graph(
 
     Args:
         register_agents_func: Optional function to register agents.
+        debug: Whether to enable debug mode (shows prompts). If None, uses config.
 
     Returns:
         Compiled graph for web usage.
     """
     # Web graph is identical to CLI graph in current implementation
-    return create_chatbot_graph(register_agents_func)
+    return create_chatbot_graph(register_agents_func, debug=debug)

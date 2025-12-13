@@ -13,6 +13,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.config import get_stream_writer
 
 from ..middleware import DatetimeContextMiddleware, SummarizationMiddleware
+from ..middleware.debug_prompts import PromptDebugMiddleware
 from ..prompts import SUPERVISOR_PROMPT
 from .config import config
 from .llm import get_answer_model
@@ -41,7 +42,10 @@ def _build_supervisor_prompt() -> str:
     return SUPERVISOR_PROMPT.format(agent_capabilities=capabilities_text)
 
 
-def create_supervisor_agent(include_datetime: bool | None = None):  # type: ignore[no-untyped-def]
+def create_supervisor_agent(
+    include_datetime: bool | None = None,
+    debug: bool | None = None,
+):  # type: ignore[no-untyped-def]
     """Create the intelligent supervisor agent.
 
     The supervisor uses specialist agents as tools to handle
@@ -50,6 +54,8 @@ def create_supervisor_agent(include_datetime: bool | None = None):  # type: igno
     Args:
         include_datetime: Whether to include datetime context middleware.
             If None, uses the config value (default: True).
+        debug: Whether to enable debug middleware that shows prompts.
+            If None, uses the config value (default: False).
 
     Returns:
         The configured supervisor agent.
@@ -62,6 +68,11 @@ def create_supervisor_agent(include_datetime: bool | None = None):  # type: igno
 
     # Build middleware list
     middleware: list[Any] = []
+
+    # Add debug middleware if enabled (via parameter or config)
+    debug_enabled = debug if debug is not None else config.debug
+    if debug_enabled:
+        middleware.append(PromptDebugMiddleware(enabled=True, show_response=True))
 
     # Add datetime middleware if enabled
     datetime_enabled = (
@@ -137,6 +148,7 @@ def _build_conversation_context(messages: list, max_messages: int = 10) -> list:
 async def supervisor_agent_node(
     state: "ChatbotState",
     register_agents_func: Callable[[], None] | None = None,
+    debug: bool | None = None,
 ) -> "ChatbotState":
     """Execute the supervisor agent node.
 
@@ -149,6 +161,7 @@ async def supervisor_agent_node(
     Args:
         state: The current chatbot state.
         register_agents_func: Optional function to register agents before processing.
+        debug: Whether to enable debug mode (shows prompts). If None, uses config.
 
     Returns:
         Updated state with the supervisor's response.
@@ -171,8 +184,8 @@ async def supervisor_agent_node(
         input_messages.append(HumanMessage(content=user_query))
 
     try:
-        # Create and run the supervisor
-        supervisor = create_supervisor_agent()
+        # Create and run the supervisor (with optional debug)
+        supervisor = create_supervisor_agent(debug=debug)
 
         # Get current stream writer and pass it through config for tools
         # Use configurable recursion limit for complex multi-agent workflows

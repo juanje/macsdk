@@ -158,6 +158,9 @@ class MACSDKConfig(BaseSettings):
     recursion_limit: int = 50  # Max iterations for agent tool calls
     # Use higher values (100+) for complex workflows with many steps
 
+    # Debug Configuration
+    debug: bool = False  # Enable debug mode (shows prompts sent to LLM)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

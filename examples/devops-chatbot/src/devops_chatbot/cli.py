@@ -247,7 +247,8 @@ def index(force: bool) -> None:
 
 
 @cli.command()
-def chat() -> None:
+@click.option("--debug", "-d", is_flag=True, help="Enable debug mode (show prompts)")
+def chat(debug: bool) -> None:
     """Start interactive chat with the chatbot."""
     # Lazy import heavy dependencies
     from macsdk.core import ConfigurationError, create_chatbot_graph, create_config
@@ -260,7 +261,13 @@ def chat() -> None:
         _config = create_config(search_path=Path.cwd())
         _config.validate_api_key()
 
-        graph = create_chatbot_graph(agents.register_all_agents)
+        # Debug can be enabled via flag or config.yml
+        debug_enabled = debug or _config.debug
+
+        if debug_enabled:
+            console.print("[yellow]🔍 Debug mode enabled[/]\n")
+
+        graph = create_chatbot_graph(agents.register_all_agents, debug=debug_enabled)
         run_cli_chatbot(
             graph=graph,
             title="DevOps Assistant",
@@ -273,7 +280,8 @@ def chat() -> None:
 @cli.command()
 @click.option("--host", "-h", default="0.0.0.0", help="Host to bind to")
 @click.option("--port", "-p", default=8000, help="Port to bind to")
-def web(host: str, port: int) -> None:
+@click.option("--debug", "-d", is_flag=True, help="Enable debug mode (show prompts)")
+def web(host: str, port: int, debug: bool) -> None:
     """Start the web interface.
 
     Launches a FastAPI server with WebSocket support for real-time chat.
@@ -289,15 +297,19 @@ def web(host: str, port: int) -> None:
         _config = create_config(search_path=Path.cwd())
         _config.validate_api_key()
 
+        # Debug can be enabled via flag or config.yml
+        debug_enabled = debug or _config.debug
+
         # Look for static files in project root
         static_dir = Path.cwd() / "static"
         if not static_dir.exists():
             static_dir = None
 
         console.print()
+        debug_msg = " [yellow](debug mode)[/]" if debug_enabled else ""
         console.print(
             Panel(
-                f"[dim]Starting server at[/] [cyan]http://{host}:{port}[/]\n"
+                f"[dim]Starting server at[/] [cyan]http://{host}:{port}[/]{debug_msg}\n"
                 "[dim]Press[/] [white]Ctrl+C[/] [dim]to stop[/]",
                 title="[bold cyan]🌐 Web Interface[/]",
                 border_style="cyan",
@@ -305,7 +317,7 @@ def web(host: str, port: int) -> None:
         )
         console.print()
 
-        graph = create_chatbot_graph(agents.register_all_agents)
+        graph = create_chatbot_graph(agents.register_all_agents, debug=debug_enabled)
         run_web_server(
             graph=graph,
             title="DevOps Assistant",
