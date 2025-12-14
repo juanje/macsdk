@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from macsdk.middleware import DatetimeContextMiddleware, format_datetime_context
+from macsdk.middleware.datetime_context import _calculate_date_references
 
 # Type alias for agent state in tests
 AgentStateDict = dict[str, Any]
@@ -164,3 +165,120 @@ class TestDatetimeContextMiddleware:
         result = middleware.before_model(cast(Any, state), runtime)
 
         assert result is None
+
+
+class TestCalculateDateReferences:
+    """Tests for _calculate_date_references function."""
+
+    def test_returns_dict_with_expected_keys(self) -> None:
+        """Test that function returns dict with all expected keys."""
+        test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = _calculate_date_references(test_dt)
+
+        expected_keys = [
+            "yesterday",
+            "last_24h",
+            "last_7_days",
+            "last_30_days",
+            "start_of_week",
+            "start_of_month",
+            "start_of_prev_month",
+        ]
+        for key in expected_keys:
+            assert key in result, f"Missing key: {key}"
+
+    def test_all_values_are_iso8601_strings(self) -> None:
+        """Test that all returned values are ISO 8601 formatted strings."""
+        test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = _calculate_date_references(test_dt)
+
+        for key, value in result.items():
+            assert isinstance(value, str), f"{key} is not a string"
+            assert value.endswith("Z"), f"{key} doesn't end with Z"
+            assert "T" in value, f"{key} doesn't contain T separator"
+
+    def test_yesterday_calculation(self) -> None:
+        """Test yesterday is calculated correctly."""
+        # Saturday June 15, 2024
+        test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = _calculate_date_references(test_dt)
+
+        assert result["yesterday"] == "2024-06-14T00:00:00Z"
+
+    def test_last_24h_calculation(self) -> None:
+        """Test last 24 hours is calculated correctly."""
+        test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = _calculate_date_references(test_dt)
+
+        assert result["last_24h"] == "2024-06-14T10:30:00Z"
+
+    def test_last_7_days_calculation(self) -> None:
+        """Test last 7 days is calculated correctly."""
+        test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = _calculate_date_references(test_dt)
+
+        assert result["last_7_days"] == "2024-06-08T00:00:00Z"
+
+    def test_last_30_days_calculation(self) -> None:
+        """Test last 30 days is calculated correctly."""
+        test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = _calculate_date_references(test_dt)
+
+        assert result["last_30_days"] == "2024-05-16T00:00:00Z"
+
+    def test_start_of_week_monday(self) -> None:
+        """Test start of week is Monday at 00:00:00."""
+        # Saturday June 15, 2024 -> Monday June 10, 2024
+        test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = _calculate_date_references(test_dt)
+
+        assert result["start_of_week"] == "2024-06-10T00:00:00Z"
+
+    def test_start_of_week_on_monday(self) -> None:
+        """Test start of week when current day is Monday."""
+        # Monday June 10, 2024 should return same day
+        test_dt = datetime(2024, 6, 10, 14, 0, 0, tzinfo=timezone.utc)
+        result = _calculate_date_references(test_dt)
+
+        assert result["start_of_week"] == "2024-06-10T00:00:00Z"
+
+    def test_start_of_month_calculation(self) -> None:
+        """Test start of current month is calculated correctly."""
+        test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = _calculate_date_references(test_dt)
+
+        assert result["start_of_month"] == "2024-06-01T00:00:00Z"
+
+    def test_start_of_prev_month_calculation(self) -> None:
+        """Test start of previous month is calculated correctly."""
+        test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = _calculate_date_references(test_dt)
+
+        assert result["start_of_prev_month"] == "2024-05-01T00:00:00Z"
+
+    def test_start_of_prev_month_january(self) -> None:
+        """Test start of previous month when current month is January."""
+        # January 15, 2024 -> December 1, 2023
+        test_dt = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = _calculate_date_references(test_dt)
+
+        assert result["start_of_prev_month"] == "2023-12-01T00:00:00Z"
+
+    def test_format_datetime_context_includes_references(self) -> None:
+        """Test that format_datetime_context includes date references."""
+        test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = format_datetime_context(test_dt)
+
+        # Check pre-calculated dates table is included
+        assert "Pre-calculated dates" in result
+        assert "Last 7 days" in result
+        assert "Last 30 days" in result
+        assert "Start of this week" in result
+        assert "Start of this month" in result
+        assert "Start of last month" in result
+
+        # Check specific dates are in output
+        assert "2024-06-08T00:00:00Z" in result  # 7 days ago
+        assert "2024-06-10T00:00:00Z" in result  # Monday
+        assert "2024-06-01T00:00:00Z" in result  # Start of June
+        assert "2024-05-01T00:00:00Z" in result  # Start of May
