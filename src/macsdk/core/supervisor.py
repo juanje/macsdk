@@ -45,7 +45,7 @@ def _build_supervisor_prompt() -> str:
 def create_supervisor_agent(
     include_datetime: bool | None = None,
     debug: bool | None = None,
-):  # type: ignore[no-untyped-def]
+) -> Any:
     """Create the intelligent supervisor agent.
 
     The supervisor uses specialist agents as tools to handle

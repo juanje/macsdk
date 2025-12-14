@@ -117,7 +117,8 @@ def info() -> None:
 
 
 @cli.command()
-def chat() -> None:
+@click.option("--debug", "-d", is_flag=True, help="Enable debug mode (show prompts)")
+def chat(debug: bool) -> None:
     """Start interactive chat with the agent."""
     # Lazy import heavy dependencies
     import asyncio
@@ -127,16 +128,6 @@ def chat() -> None:
 
     from .agent import run_{{ agent_slug }}
 
-    console.print()
-    console.print(
-        Panel(
-            "[dim]Type [white]exit[/] or press [white]Ctrl+C[/] to quit[/]",
-            title="[bold cyan]{{ name }} Chat[/]",
-            border_style="cyan",
-        )
-    )
-    console.print()
-
     # Load config from current directory (standalone mode)
     try:
         _config = create_config(search_path=Path.cwd())
@@ -144,6 +135,23 @@ def chat() -> None:
     except ConfigurationError as e:
         error_console.print(f"[red]✗ Configuration Error:[/] {e}")
         sys.exit(1)
+
+    # Debug can be enabled via flag or config.yml
+    debug_enabled = debug or _config.debug
+
+    console.print()
+    debug_msg = " [yellow](debug mode)[/]" if debug_enabled else ""
+    console.print(
+        Panel(
+            f"[dim]Type [white]exit[/] or press [white]Ctrl+C[/] to quit[/]{debug_msg}",
+            title="[bold cyan]{{ name }} Chat[/]",
+            border_style="cyan",
+        )
+    )
+    console.print()
+
+    if debug_enabled:
+        console.print("[yellow]🔍 Debug mode enabled[/]\n")
 
     # Create config with writer for real-time tool progress
     def progress_writer(msg: str) -> None:
@@ -166,7 +174,9 @@ def chat() -> None:
                 continue
 
             try:
-                result = await run_{{ agent_slug }}(query, config=run_config)
+                result = await run_{{ agent_slug }}(
+                    query, run_config=run_config, debug=debug_enabled
+                )
                 console.print()
                 console.print(
                     Panel(

@@ -10,14 +10,14 @@ It combines:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 from langchain.agents import create_agent
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, tool
 
-from macsdk.core import get_answer_model, run_agent_with_tools
-from macsdk.middleware import DatetimeContextMiddleware
+from macsdk.core import config, get_answer_model, run_agent_with_tools
+from macsdk.middleware import DatetimeContextMiddleware, PromptDebugMiddleware
 
 from .models import AgentResponse
 from .prompts import SYSTEM_PROMPT
@@ -40,16 +40,31 @@ Uses generic SDK tools (api_get, fetch_file) plus custom tools
 for specialized operations with JSONPath extraction."""
 
 
-def create_api_agent():
+def create_api_agent(debug: bool | None = None) -> Any:
     """Create the api-agent agent.
+
+    Args:
+        debug: Whether to enable debug mode (shows prompts).
+            If None, uses the config value (default: False).
 
     Returns:
         Configured agent instance with DevOps tools.
     """
+    # Build middleware list
+    middleware: list[Any] = []
+
+    # Add debug middleware if enabled (via parameter or config)
+    debug_enabled = debug if debug is not None else config.debug
+    if debug_enabled:
+        middleware.append(PromptDebugMiddleware(enabled=True, show_response=True))
+
+    # Add datetime context middleware
+    middleware.append(DatetimeContextMiddleware())
+
     return create_agent(
         model=get_answer_model(),
         tools=get_tools(),
-        middleware=[DatetimeContextMiddleware()],
+        middleware=middleware,
         response_format=AgentResponse,
     )
 
@@ -57,26 +72,29 @@ def create_api_agent():
 async def run_api_agent(
     query: str,
     context: dict | None = None,
-    config: RunnableConfig | None = None,
+    run_config: RunnableConfig | None = None,
+    debug: bool | None = None,
 ) -> dict:
     """Run the api-agent agent.
 
     Args:
         query: User query to process.
         context: Optional context from previous interactions.
-        config: Optional runnable configuration.
+        run_config: Optional runnable configuration.
+        debug: Whether to enable debug mode (shows prompts).
+            If None, uses the config value (default: False).
 
     Returns:
         Agent response dictionary.
     """
-    agent = create_api_agent()
+    agent = create_api_agent(debug=debug)
     return await run_agent_with_tools(
         agent=agent,
         query=query,
         system_prompt=SYSTEM_PROMPT,
         agent_name="api_agent",
         context=context,
-        config=config,
+        config=run_config,
     )
 
 
@@ -102,19 +120,21 @@ class ApiAgentAgent:
         self,
         query: str,
         context: dict | None = None,
-        config: RunnableConfig | None = None,
+        run_config: RunnableConfig | None = None,
+        debug: bool | None = None,
     ) -> dict:
         """Execute the agent.
 
         Args:
             query: User query to process.
             context: Optional context from previous interactions.
-            config: Optional runnable configuration.
+            run_config: Optional runnable configuration.
+            debug: Whether to enable debug mode (shows prompts).
 
         Returns:
             Agent response dictionary.
         """
-        return await run_api_agent(query, context, config)
+        return await run_api_agent(query, context, run_config, debug)
 
     def as_tool(self) -> "BaseTool":
         """Return this agent as a LangChain tool."""
@@ -141,7 +161,7 @@ class ApiAgentAgent:
             Returns:
                 The agent's response text.
             """
-            result = await agent_instance.run(query, config=config)
-            return result["response"]
+            result = await agent_instance.run(query, run_config=config)
+            return str(result["response"])
 
         return invoke_api_agent

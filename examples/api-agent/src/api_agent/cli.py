@@ -109,25 +109,16 @@ def info() -> None:
 
 
 @cli.command()
-def chat() -> None:
+@click.option("--debug", "-d", is_flag=True, help="Enable debug mode (show prompts)")
+def chat(debug: bool) -> None:
     """Start interactive chat with the agent."""
     # Lazy import heavy dependencies
     import asyncio
     from pathlib import Path
 
-    from macsdk.core import ConfigurationError, create_config
+    from macsdk.core import ConfigurationError, create_config, create_config_with_writer
 
     from .agent import run_api_agent
-
-    console.print()
-    console.print(
-        Panel(
-            "[dim]Type [white]exit[/] or press [white]Ctrl+C[/] to quit[/]",
-            title="[bold cyan]api-agent Chat[/]",
-            border_style="cyan",
-        )
-    )
-    console.print()
 
     # Load config from current directory (standalone mode)
     try:
@@ -136,6 +127,29 @@ def chat() -> None:
     except ConfigurationError as e:
         error_console.print(f"[red]✗ Configuration Error:[/] {e}")
         sys.exit(1)
+
+    # Debug can be enabled via flag or config.yml
+    debug_enabled = debug or _config.debug
+
+    console.print()
+    debug_msg = " [yellow](debug mode)[/]" if debug_enabled else ""
+    console.print(
+        Panel(
+            f"[dim]Type [white]exit[/] or press [white]Ctrl+C[/] to quit[/]{debug_msg}",
+            title="[bold cyan]api-agent Chat[/]",
+            border_style="cyan",
+        )
+    )
+    console.print()
+
+    if debug_enabled:
+        console.print("[yellow]🔍 Debug mode enabled[/]\n")
+
+    # Create config with writer for real-time tool progress
+    def progress_writer(msg: str) -> None:
+        console.print(f"[dim]{msg.strip()}[/]")
+
+    run_config = create_config_with_writer(progress_writer)
 
     async def run() -> None:
         while True:
@@ -152,8 +166,9 @@ def chat() -> None:
                 continue
 
             try:
-                with console.status("[cyan]Processing...[/]", spinner="dots"):
-                    result = await run_api_agent(query)
+                result = await run_api_agent(
+                    query, run_config=run_config, debug=debug_enabled
+                )
                 console.print()
                 console.print(
                     Panel(

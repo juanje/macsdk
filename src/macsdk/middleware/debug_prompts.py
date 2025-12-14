@@ -7,7 +7,7 @@ to the LLM, useful for debugging and understanding agent behavior.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from langchain.agents.middleware import AgentMiddleware
 
@@ -119,31 +119,37 @@ class PromptDebugMiddleware(AgentMiddleware):  # type: ignore[type-arg]
 
                 # Handle both string and SystemMessage
                 if hasattr(system_msg, "content"):
-                    content = system_msg.content
+                    raw_content = system_msg.content
+                    content_str: str = ""
+
                     # Handle content blocks
                     if hasattr(system_msg, "content_blocks"):
                         try:
                             blocks = list(system_msg.content_blocks)
-                            text_parts = []
+                            text_parts: list[str] = []
                             for block in blocks:
                                 if hasattr(block, "text"):
-                                    text_parts.append(block.text)
+                                    text_parts.append(str(getattr(block, "text", "")))
                                 elif isinstance(block, dict):
-                                    text_parts.append(block.get("text", ""))
+                                    text_parts.append(str(block.get("text", "")))
                             if text_parts:
-                                content = "\n".join(text_parts)
+                                content_str = "\n".join(text_parts)
                         except Exception:
                             pass
 
-                    if isinstance(content, list):
-                        text_parts = []
-                        for block in content:
-                            if isinstance(block, dict):
-                                text_parts.append(block.get("text", str(block)))
-                            else:
-                                text_parts.append(str(block))
-                        content = "\n".join(text_parts)
-                    self._output(self._truncate(str(content)))
+                    if not content_str:
+                        if isinstance(raw_content, list):
+                            list_parts: list[str] = []
+                            for item in raw_content:  # type: ignore[union-attr]
+                                if isinstance(item, dict):
+                                    list_parts.append(str(item.get("text", str(item))))
+                                else:
+                                    list_parts.append(str(item))
+                            content_str = "\n".join(list_parts)
+                        else:
+                            content_str = str(raw_content)
+
+                    self._output(self._truncate(content_str))
                 else:
                     self._output(self._truncate(str(system_msg)))
                 self._output("-" * 40)
@@ -231,7 +237,7 @@ class PromptDebugMiddleware(AgentMiddleware):  # type: ignore[type-arg]
     async def awrap_model_call(
         self,
         request: "ModelRequest",
-        handler: Callable[["ModelRequest"], "ModelResponse"],
+        handler: Callable[["ModelRequest"], Awaitable["ModelResponse"]],
     ) -> "ModelResponse":
         """Wrap model calls to log prompts (async version).
 
@@ -243,10 +249,11 @@ class PromptDebugMiddleware(AgentMiddleware):  # type: ignore[type-arg]
             The model response.
         """
         if not self.enabled:
-            return await handler(request)  # type: ignore[misc]
+            result: "ModelResponse" = await handler(request)
+            return result
 
         self._log_request(request)
-        response = await handler(request)  # type: ignore[misc]
+        response: "ModelResponse" = await handler(request)
 
         if self.show_response:
             self._log_response(response)
