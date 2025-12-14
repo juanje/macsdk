@@ -22,6 +22,7 @@ MACSDK is a comprehensive SDK for building customizable multi-agent chatbots. It
 - [API Tools Reference](reference/tools.md)
 - [CLI Reference](reference/cli.md)
 - [Configuration Reference](reference/configuration.md)
+- [Middleware Reference](reference/middleware.md)
 - [Protocol Reference](reference/protocol.md)
 
 ## Architecture Overview

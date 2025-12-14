@@ -34,12 +34,15 @@ classifier_reasoning_effort: low
 # =============================================================================
 # Middleware Configuration
 # =============================================================================
-include_datetime: true  # Inject current datetime into prompts
+include_datetime: true  # Inject datetime context with pre-calculated dates
+debug: false            # Show prompts sent to LLM (for debugging)
 
 # Context summarization (for long conversations)
 summarization_enabled: false
 summarization_trigger_tokens: 100000
 summarization_keep_messages: 6
+
+# See Middleware Reference for details: reference/middleware.md
 
 # =============================================================================
 # Agent Execution Configuration
