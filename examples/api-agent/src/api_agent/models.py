@@ -7,53 +7,49 @@ BaseAgentResponse already includes:
 - response_text: str - Human-readable response
 - tools_used: list[str] - Tools that were called
 
-Add your own fields for domain-specific data.
+This example shows fields relevant for DevOps monitoring.
 """
 
-# Uncomment these imports when adding custom fields:
-# from typing import Optional
-# from pydantic import Field
+from pydantic import Field
 
 from macsdk.core import BaseAgentResponse
 
 
 class AgentResponse(BaseAgentResponse):
-    """Response model for api-agent.
+    """Response model for DevOps monitoring agent.
 
-    Add fields relevant to your agent's domain.
-    These help the supervisor understand the structured data.
-
-    Example fields (customize for your use case):
-
-        # For an API agent:
-        api_status: Optional[str] = Field(
-            None, description="Status from the API call"
-        )
-        data_count: Optional[int] = Field(
-            None, description="Number of items retrieved"
-        )
-
-        # For a job/task agent:
-        job_id: Optional[str] = Field(
-            None, description="Job or task identifier"
-        )
-        status: Optional[str] = Field(
-            None, description="Job status (pending, running, completed, failed)"
-        )
-        error_summary: Optional[str] = Field(
-            None, description="Summary of any errors encountered"
-        )
-
-        # For a search/RAG agent:
-        sources: list[str] = Field(
-            default_factory=list, description="Sources used for the response"
-        )
-        confidence: Optional[float] = Field(
-            None, description="Confidence score (0.0 to 1.0)"
-        )
+    These fields capture structured data from API queries about
+    services, pipelines, alerts, and deployments.
     """
 
-    # Add your custom fields here:
-    # status: Optional[str] = Field(None, description="Operation status")
-    # data: Optional[dict] = Field(None, description="Retrieved data")
-    pass
+    # Service health summary
+    services_healthy: int = Field(default=0, description="Number of healthy services")
+    services_degraded: int = Field(default=0, description="Number of degraded services")
+    services_warning: int = Field(
+        default=0, description="Number of services with warnings"
+    )
+
+    # Pipeline status
+    pipeline_id: str | None = Field(
+        default=None, description="Pipeline ID if querying specific pipeline"
+    )
+    pipeline_status: str | None = Field(
+        default=None, description="Pipeline status (passed/failed/running/pending)"
+    )
+    failed_jobs: list[str] = Field(
+        default_factory=list, description="Names of failed jobs"
+    )
+
+    # Alerts summary
+    critical_alerts: int = Field(default=0, description="Number of critical alerts")
+    unacknowledged_alerts: int = Field(
+        default=0, description="Number of unacknowledged alerts"
+    )
+
+    # Error information (for failed jobs/pipelines)
+    error_summary: str | None = Field(
+        default=None, description="Summary of errors found"
+    )
+    log_urls: list[str] = Field(
+        default_factory=list, description="URLs to relevant logs"
+    )
