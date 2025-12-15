@@ -12,6 +12,8 @@ from pathlib import Path
 
 from rich.console import Console
 
+from ..utils import derive_class_name
+
 console = Console()
 
 
@@ -60,7 +62,7 @@ def add_agent_to_chatbot(
 
     if package:
         agent_package = package.replace("-", "_")
-        agent_class = _derive_class_name(package)
+        agent_class = derive_class_name(package)
         dependency = package
     elif git:
         # Extract package name from git URL
@@ -70,7 +72,7 @@ def add_agent_to_chatbot(
             raise SystemExit(1)
         agent_name = match.group(1)
         agent_package = agent_name.replace("-", "_")
-        agent_class = _derive_class_name(agent_name)
+        agent_class = derive_class_name(agent_name)
         dependency = agent_name
         uv_source = f'{agent_name} = {{ git = "{git}" }}'
     elif path:
@@ -80,7 +82,7 @@ def add_agent_to_chatbot(
             raise SystemExit(1)
         agent_name = agent_path.name
         agent_package = agent_name.replace("-", "_")
-        agent_class = _derive_class_name(agent_name)
+        agent_class = derive_class_name(agent_name)
         dependency = agent_name
         # Add source with relative path for local development
         relative_path = _get_relative_path(chatbot_path, agent_path)
@@ -131,33 +133,6 @@ def add_agent_to_chatbot(
 # =============================================================================
 # INTERNAL HELPERS
 # =============================================================================
-
-
-def _derive_class_name(package_name: str) -> str:
-    """Derive class name from package name.
-
-    Handles cases where the package name already ends with 'agent':
-    - gitlab-agent -> GitlabAgent (not GitlabAgentAgent)
-    - tf-agent -> TfAgent (not TfAgentAgent)
-    - weather -> WeatherAgent
-    - infra-monitor -> InfraMonitorAgent
-
-    Args:
-        package_name: Package name with dashes (e.g., "gitlab-agent").
-
-    Returns:
-        PascalCase class name ending with "Agent".
-    """
-    # Split by dashes and convert to title case
-    parts = package_name.split("-")
-
-    # Check if the last part is "agent" (case-insensitive)
-    if parts[-1].lower() == "agent":
-        # Don't add another "Agent" suffix
-        return "".join(word.title() for word in parts)
-    else:
-        # Add "Agent" suffix
-        return "".join(word.title() for word in parts) + "Agent"
 
 
 def _find_agents_file(chatbot_path: Path) -> Path | None:

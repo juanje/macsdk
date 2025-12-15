@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from api_agent import ApiAgentAgent
+from api_agent import ApiAgent
 
 from macsdk.agents import RAGAgent
 from macsdk.core import get_registry, register_agent
@@ -30,7 +30,7 @@ def register_all_agents() -> None:
 
     # API Agent for REST API interactions (JSONPlaceholder)
     if not registry.is_registered("api_agent"):
-        register_agent(ApiAgentAgent())
+        register_agent(ApiAgent())
 
 
 def get_registered_agents() -> list[dict[str, Any]]:

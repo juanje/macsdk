@@ -6,27 +6,15 @@ using Jinja2 templates for clean separation of concerns.
 
 from __future__ import annotations
 
-import re
 import shutil
 from pathlib import Path
 
 from rich.console import Console
 
 from ..templates import TEMPLATES_DIR, render_template
+from ..utils import derive_class_name, slugify
 
 console = Console()
-
-
-def slugify(name: str) -> str:
-    """Convert name to valid Python package name."""
-    # Replace hyphens and spaces with underscores
-    slug = re.sub(r"[-\s]+", "_", name.lower())
-    # Remove invalid characters
-    slug = re.sub(r"[^a-z0-9_]", "", slug)
-    # Ensure it starts with a letter
-    if slug and not slug[0].isalpha():
-        slug = "pkg_" + slug
-    return slug
 
 
 def _generate_uv_sources(macsdk_source: dict[str, str] | None) -> str:
@@ -177,7 +165,7 @@ def create_agent_project(
         raise SystemExit(1)
 
     # Prepare template context
-    agent_class = "".join(word.title() for word in agent_slug.split("_")) + "Agent"
+    agent_class = derive_class_name(name)
     context = {
         "name": name,
         "agent_slug": agent_slug,

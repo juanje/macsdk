@@ -15,6 +15,7 @@ import pytest
 from click.testing import CliRunner
 
 from macsdk.cli.main import cli
+from macsdk.cli.utils import derive_class_name
 
 if TYPE_CHECKING:
     pass
@@ -329,7 +330,7 @@ def chatbot_with_agent(
 
     if agent_slug not in agents_content:
         # Add import and registration with all required functions
-        agent_class = agent_slug.title().replace("_", "") + "Agent"
+        agent_class = derive_class_name(TEST_AGENT_NAME)
         new_content = f'''"""Agent registration for {chatbot_slug}."""
 
 from __future__ import annotations

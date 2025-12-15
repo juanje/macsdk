@@ -98,7 +98,7 @@ async def run_api_agent(
     )
 
 
-class ApiAgentAgent:
+class ApiAgent:
     """DevOps monitoring agent using MACSDK API tools.
 
     This agent demonstrates the recommended pattern for API integrations:

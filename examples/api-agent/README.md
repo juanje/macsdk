@@ -162,10 +162,10 @@ uv run api-agent info
 Register the agent in your chatbot:
 
 ```python
-from api_agent import ApiAgentAgent
+from api_agent import ApiAgent
 from macsdk.core import register_agent
 
-register_agent(ApiAgentAgent())
+register_agent(ApiAgent())
 ```
 
 ## Development

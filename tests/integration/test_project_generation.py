@@ -100,7 +100,7 @@ class TestAgentGeneration:
     def test_agent_implements_protocol(self, generated_agent: Path) -> None:
         """Generated agent implements SpecialistAgent protocol."""
         agent_slug = "integration_agent"
-        agent_class = "IntegrationAgentAgent"
+        agent_class = "IntegrationAgent"
 
         check_code = f"""
 from {agent_slug} import {agent_class}

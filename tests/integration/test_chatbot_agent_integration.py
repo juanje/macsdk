@@ -26,7 +26,7 @@ class TestAgentRegistration:
     ) -> None:
         """Agent can be imported from within the chatbot project."""
         check_code = """
-from integration_agent import IntegrationAgentAgent
+from integration_agent import IntegrationAgent
 print('IMPORT_OK')
 """
         result = run_uv_command(
@@ -43,13 +43,13 @@ print('IMPORT_OK')
         """Agent can be registered in the chatbot registry."""
         check_code = """
 from macsdk.core import get_registry, register_agent
-from integration_agent import IntegrationAgentAgent
+from integration_agent import IntegrationAgent
 
 # Clear and register
 registry = get_registry()
 registry.clear()
 
-agent = IntegrationAgentAgent()
+agent = IntegrationAgent()
 register_agent(agent)
 
 # Verify registration
@@ -72,13 +72,13 @@ print('REGISTRATION_OK')
         """Registered agent capabilities are included in supervisor prompt."""
         check_code = """
 from macsdk.core import get_registry, register_agent, get_all_capabilities
-from integration_agent import IntegrationAgentAgent
+from integration_agent import IntegrationAgent
 
 # Clear and register
 registry = get_registry()
 registry.clear()
 
-agent = IntegrationAgentAgent()
+agent = IntegrationAgent()
 register_agent(agent)
 
 # Get capabilities
@@ -104,13 +104,13 @@ print('CAPABILITIES_OK')
         """Registered agent generates a valid LangChain tool."""
         check_code = """
 from macsdk.core import get_registry, register_agent, get_all_agent_tools
-from integration_agent import IntegrationAgentAgent
+from integration_agent import IntegrationAgent
 
 # Clear and register
 registry = get_registry()
 registry.clear()
 
-agent = IntegrationAgentAgent()
+agent = IntegrationAgent()
 register_agent(agent)
 
 # Get tools

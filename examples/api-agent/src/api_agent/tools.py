@@ -164,6 +164,7 @@ async def investigate_failed_job(job_id: int) -> str:
 # TOOLS LIST
 # =============================================================================
 
+
 def get_tools() -> list:
     """Get all tools for this agent.
 
