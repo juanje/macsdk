@@ -2,7 +2,18 @@
 
 This guide covers how to create specialist agents for MACSDK chatbots.
 
-## Creating an Agent
+## Project Approaches
+
+MACSDK supports two approaches for organizing agents:
+
+| Approach | Use Case | Command |
+|----------|----------|---------|
+| **Multi-repo** | Reusable agents, separate versioning | `macsdk new agent` |
+| **Mono-repo** | Project-specific agents, simpler setup | `macsdk add-agent --new` |
+
+## Creating a Standalone Agent (Multi-repo)
+
+Best for agents you want to reuse across multiple chatbots:
 
 ```bash
 macsdk new agent infra-agent --description "Monitors infrastructure services"
@@ -267,6 +278,8 @@ uv run pytest
 
 ## Adding to a Chatbot
 
+### Remote Agents (Multi-repo)
+
 ```bash
 # From local path (inside chatbot directory)
 cd my-chatbot
@@ -275,6 +288,43 @@ macsdk add-agent . --path ../infra-agent
 # Or publish to PyPI and install
 macsdk add-agent . --package infra-agent
 ```
+
+### Local Agents (Mono-repo)
+
+Create an agent inside your chatbot project:
+
+```bash
+cd my-chatbot
+macsdk add-agent . --new weather --description "Weather information service"
+```
+
+This creates:
+```
+my-chatbot/
+└── src/my_chatbot/
+    └── local_agents/
+        └── weather/
+            ├── __init__.py
+            ├── agent.py
+            ├── tools.py
+            ├── prompts.py
+            └── models.py
+```
+
+The agent is automatically registered in `agents.py` with relative imports:
+
+```python
+from .local_agents.weather import WeatherAgent
+
+def register_all_agents():
+    if not registry.is_registered("weather"):
+        register_agent(WeatherAgent())
+```
+
+**When to use local agents:**
+- Agent is specific to one chatbot
+- Simpler dependency management
+- Faster iteration during development
 
 ## Best Practices
 

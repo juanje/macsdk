@@ -177,3 +177,109 @@ print('TOOLS_OK')
         )
 
         assert "TOOLS_OK" in result.stdout
+
+
+class TestMonoRepoWorkflow:
+    """Tests for mono-repo workflow (local agents inside chatbot)."""
+
+    # The fixture creates "mono-chatbot" which becomes "mono_chatbot" slug
+    CHATBOT_SLUG = "mono_chatbot"
+
+    def test_local_agent_structure_created(
+        self, chatbot_with_local_agent: Path
+    ) -> None:
+        """Local agent creates correct directory structure."""
+        chatbot_slug = self.CHATBOT_SLUG
+
+        local_agents_dir = (
+            chatbot_with_local_agent / "src" / chatbot_slug / "local_agents"
+        )
+        assert local_agents_dir.exists()
+        assert (local_agents_dir / "__init__.py").exists()
+
+        agent_dir = local_agents_dir / "weather"
+        assert agent_dir.exists()
+        assert (agent_dir / "__init__.py").exists()
+        assert (agent_dir / "agent.py").exists()
+        assert (agent_dir / "tools.py").exists()
+        assert (agent_dir / "prompts.py").exists()
+
+    def test_local_agent_can_import(self, chatbot_with_local_agent: Path) -> None:
+        """Local agent can be imported using relative imports."""
+        chatbot_slug = self.CHATBOT_SLUG
+
+        check_code = f"""
+from {chatbot_slug}.local_agents.weather import WeatherAgent
+agent = WeatherAgent()
+assert agent.name == "weather"
+print('IMPORT_OK')
+"""
+        result = run_uv_command(
+            ["run", "python", "-c", check_code],
+            cwd=chatbot_with_local_agent,
+        )
+
+        assert "IMPORT_OK" in result.stdout
+
+    def test_agents_py_updated_with_relative_import(
+        self, chatbot_with_local_agent: Path
+    ) -> None:
+        """agents.py uses relative imports for local agents."""
+        chatbot_slug = self.CHATBOT_SLUG
+
+        agents_file = chatbot_with_local_agent / "src" / chatbot_slug / "agents.py"
+        content = agents_file.read_text()
+
+        assert "from .local_agents.weather import WeatherAgent" in content
+        assert 'registry.is_registered("weather")' in content
+
+    def test_local_agent_registered(self, chatbot_with_local_agent: Path) -> None:
+        """Local agent is properly registered via register_all_agents."""
+        chatbot_slug = self.CHATBOT_SLUG
+
+        check_code = f"""
+from {chatbot_slug}.agents import register_all_agents
+from macsdk.core import get_registry
+
+register_all_agents()
+registry = get_registry()
+
+assert registry.is_registered("weather"), "weather agent not registered"
+print('REGISTERED_OK')
+"""
+        result = run_uv_command(
+            ["run", "python", "-c", check_code],
+            cwd=chatbot_with_local_agent,
+        )
+
+        assert "REGISTERED_OK" in result.stdout
+
+    def test_local_agent_implements_protocol(
+        self, chatbot_with_local_agent: Path
+    ) -> None:
+        """Local agent implements SpecialistAgent protocol."""
+        chatbot_slug = self.CHATBOT_SLUG
+
+        check_code = f"""
+from {chatbot_slug}.local_agents.weather import WeatherAgent
+from macsdk.core import SpecialistAgent
+
+agent = WeatherAgent()
+
+# Check protocol attributes
+assert hasattr(agent, 'name'), "Missing 'name' attribute"
+assert hasattr(agent, 'capabilities'), "Missing 'capabilities' attribute"
+assert hasattr(agent, 'run'), "Missing 'run' method"
+assert hasattr(agent, 'as_tool'), "Missing 'as_tool' method"
+
+# Check it's a valid protocol implementation
+assert isinstance(agent, SpecialistAgent), "Does not implement SpecialistAgent"
+
+print('PROTOCOL_OK')
+"""
+        result = run_uv_command(
+            ["run", "python", "-c", check_code],
+            cwd=chatbot_with_local_agent,
+        )
+
+        assert "PROTOCOL_OK" in result.stdout

@@ -4,7 +4,6 @@ These tests verify that the agent implements the
 SpecialistAgent protocol correctly and that tools work.
 """
 
-import pytest
 from api_agent import CAPABILITIES, ApiAgent
 from api_agent.tools import get_tools
 
