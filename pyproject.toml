@@ -74,12 +74,16 @@ packages = ["src/macsdk"]
 package = true
 
 [tool.uv.workspace]
-members = ["examples/*"]
+members = [
+    "examples/multirepo/api-agent",
+    "examples/multirepo/devops-chatbot",
+    "examples/monorepo/devops-chatbot",
+]
 
 [tool.uv.sources]
 # Workspace members reference macsdk from the root
 macsdk = { workspace = true }
-# Examples can reference each other
+# Multirepo examples can reference the api-agent
 api-agent = { workspace = true }
 
 

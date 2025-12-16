@@ -65,7 +65,8 @@ macsdk new agent infra-agent --description "Monitors infrastructure services"
 
 ### `macsdk add-agent`
 
-Add an agent to a chatbot project.
+Add an agent to a chatbot project. Supports both remote agents (external packages)
+and local agents (mono-repo).
 
 ```bash
 macsdk add-agent [CHATBOT_DIR] [OPTIONS]
@@ -74,22 +75,28 @@ macsdk add-agent [CHATBOT_DIR] [OPTIONS]
 **Arguments:**
 - `CHATBOT_DIR`: Path to the chatbot project directory (default: `.`)
 
-**Options (exactly one required):**
+**Remote Agent Options (multi-repo):**
 - `--package, -p TEXT`: Install from pip package
 - `--git, -g TEXT`: Install from git repository
 - `--path, -P TEXT`: Install from local path
 
+**Local Agent Options (mono-repo):**
+- `--new, -n TEXT`: Create a new agent inside the chatbot project
+- `--description, -d TEXT`: Description for the new local agent
+
 **Examples:**
 ```bash
-# From pip package
+# Remote agents (multi-repo approach)
 macsdk add-agent . --package infra-agent
-
-# From git repository
 macsdk add-agent ./my-chatbot --git https://github.com/org/agent.git
-
-# From local path
 macsdk add-agent . --path ../infra-agent
+
+# Local agents (mono-repo approach)
+macsdk add-agent . --new weather --description "Weather information service"
 ```
+
+The local agent approach creates the agent inside the chatbot's source directory
+under `src/{chatbot}/local_agents/{agent}/` and uses relative imports.
 
 ### `macsdk list-tools`
 
@@ -206,7 +213,9 @@ The CLI respects these environment variables:
 
 ## Examples
 
-### Complete Workflow
+### Multi-Repo Workflow
+
+Each agent is a separate project with its own repository:
 
 ```bash
 # 1. Create a chatbot with RAG
@@ -226,7 +235,7 @@ uv sync
 # 4. Index documentation
 uv run devops-assistant index
 
-# 5. Create a custom agent
+# 5. Create a custom agent (separate project)
 cd ..
 macsdk new agent monitoring-agent --description "Monitors infrastructure"
 cd monitoring-agent
@@ -239,6 +248,34 @@ macsdk add-agent . --path ../monitoring-agent
 # 7. Run the chatbot
 uv run devops-assistant chat
 # Or: uv run devops-assistant web
+```
+
+### Mono-Repo Workflow
+
+Agents live inside the chatbot project:
+
+```bash
+# 1. Create a chatbot
+macsdk new chatbot devops-assistant
+cd devops-assistant
+
+# 2. Configure
+cp .env.example .env
+# Edit .env with your GOOGLE_API_KEY
+
+# 3. Install dependencies
+uv sync
+
+# 4. Create local agents (inside the chatbot)
+macsdk add-agent . --new weather --description "Weather information"
+macsdk add-agent . --new monitoring --description "Infrastructure monitoring"
+
+# 5. Implement your agents
+# Edit: src/devops_assistant/local_agents/weather/tools.py
+# Edit: src/devops_assistant/local_agents/monitoring/tools.py
+
+# 6. Run the chatbot
+uv run devops-assistant chat
 ```
 
 ### Quick Test

@@ -10,6 +10,7 @@ resolution-markers = [
 members = [
     "api-agent",
     "devops-chatbot",
+    "devops-chatbot-mono",
     "macsdk",
 ]
 
@@ -154,7 +155,7 @@ wheels = [
 [[package]]
 name = "api-agent"
 version = "0.1.0"
-source = { editable = "examples/api-agent" }
+source = { editable = "examples/multirepo/api-agent" }
 dependencies = [
     { name = "aiohttp" },
     { name = "jsonpath-ng" },
@@ -614,7 +615,7 @@ wheels = [
 [[package]]
 name = "devops-chatbot"
 version = "0.1.0"
-source = { editable = "examples/devops-chatbot" }
+source = { editable = "examples/multirepo/devops-chatbot" }
 dependencies = [
     { name = "api-agent" },
     { name = "macsdk", extra = ["rag"] },
@@ -629,9 +630,34 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "api-agent", editable = "examples/api-agent" },
+    { name = "api-agent", editable = "examples/multirepo/api-agent" },
     { name = "macsdk", extras = ["rag"], editable = "." },
 ]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-asyncio", specifier = ">=0.24" },
+    { name = "ruff", specifier = ">=0.8" },
+]
+
+[[package]]
+name = "devops-chatbot-mono"
+version = "0.1.0"
+source = { editable = "examples/monorepo/devops-chatbot" }
+dependencies = [
+    { name = "macsdk", extra = ["rag"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "macsdk", extras = ["rag"], editable = "." }]
 
 [package.metadata.requires-dev]
 dev = [

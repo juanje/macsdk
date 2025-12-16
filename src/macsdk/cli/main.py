@@ -116,14 +116,18 @@ def new(
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
     default=".",
 )
-@click.option("--package", "-p", help="Agent pip package name")
-@click.option("--git", "-g", help="Agent git repository URL")
-@click.option("--path", "-P", help="Agent local directory path")
+@click.option("--package", "-p", help="Agent pip package name (remote)")
+@click.option("--git", "-g", help="Agent git repository URL (remote)")
+@click.option("--path", "-P", help="Agent local directory path (remote)")
+@click.option("--new", "-n", "new_agent", help="Create new local agent with this name")
+@click.option("--description", "-d", help="Description for new local agent")
 def add_agent(
     chatbot_dir: str,
     package: str | None,
     git: str | None,
     path: str | None,
+    new_agent: str | None,
+    description: str | None,
 ) -> None:
     """Add an agent to a chatbot project.
 
@@ -131,15 +135,32 @@ def add_agent(
     Use "." for the current directory.
 
     \b
+    Remote Agents (external packages):
+      --package: Install from pip
+      --git:     Install from git repository
+      --path:    Link to local directory
+
+    \b
+    Local Agents (mono-repo):
+      --new:     Create a new agent inside the chatbot project
+
+    \b
     Examples:
+      # Remote agents
       macsdk add-agent . --package weather-agent
       macsdk add-agent ./my-chatbot --git https://github.com/user/agent
       macsdk add-agent . --path ../my-local-agent
+      \b
+      # Local agents (mono-repo)
+      macsdk add-agent . --new weather --description "Weather forecasts"
     """
     # Lazy import
-    from .commands.add import add_agent_to_chatbot
+    from .commands.add import add_agent_to_chatbot, add_local_agent_to_chatbot
 
-    add_agent_to_chatbot(chatbot_dir, package, git, path)
+    if new_agent:
+        add_local_agent_to_chatbot(chatbot_dir, new_agent, description)
+    else:
+        add_agent_to_chatbot(chatbot_dir, package, git, path)
 
 
 @cli.command(name="list-tools")

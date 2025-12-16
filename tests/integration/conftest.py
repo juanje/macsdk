@@ -370,3 +370,70 @@ def get_registered_agents() -> list[dict[str, Any]]:
         agents_py.write_text(new_content)
 
     yield chatbot_dir
+
+
+@pytest.fixture(scope="session")
+def chatbot_with_local_agent(
+    integration_test_dir: Path,
+) -> Generator[Path, None, None]:
+    """Create a chatbot with a local agent (mono-repo approach).
+
+    This fixture:
+    1. Creates a new chatbot using 'macsdk new chatbot'
+    2. Adds a local agent using 'macsdk add-agent --new'
+    3. Runs 'uv sync' to install dependencies
+    4. Yields the project path for tests
+
+    Yields:
+        Path to the chatbot project with local agent.
+    """
+    chatbot_name = "mono-chatbot"
+    chatbot_dir = integration_test_dir / chatbot_name
+
+    # Skip if already generated
+    if not chatbot_dir.exists():
+        runner = CliRunner()
+
+        # Create chatbot
+        result = runner.invoke(
+            cli,
+            [
+                "new",
+                "chatbot",
+                chatbot_name,
+                "--output-dir",
+                str(integration_test_dir),
+                "--display-name",
+                "Mono Repo Test Bot",
+            ],
+        )
+
+        if result.exit_code != 0:
+            pytest.fail(f"Failed to create chatbot: {result.output}")
+
+        # Add local macsdk dependency for testing
+        add_local_macsdk_dependency(chatbot_dir)
+
+        # Install dependencies first
+        try:
+            run_uv_command(["sync", "--group", "dev"], cwd=chatbot_dir)
+        except subprocess.CalledProcessError as e:
+            pytest.fail(f"Failed to sync chatbot dependencies: {e.stderr}")
+
+        # Add local agent using add-agent command
+        result = runner.invoke(
+            cli,
+            [
+                "add-agent",
+                str(chatbot_dir),
+                "--new",
+                "weather",
+                "--description",
+                "Weather information service",
+            ],
+        )
+
+        if result.exit_code != 0:
+            pytest.fail(f"Failed to add local agent: {result.output}")
+
+    yield chatbot_dir

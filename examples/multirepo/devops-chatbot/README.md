@@ -1,8 +1,11 @@
-# DevOps Assistant
+# DevOps Assistant (Multi-repo)
 
 A multi-agent DevOps chatbot with RAG for documentation and API tools.
 
-This example demonstrates a typical MACSDK chatbot setup with:
+> **This is the multi-repo version** where the API agent is a separate project.
+> See [`../monorepo/`](../monorepo/) for the mono-repo approach.
+
+This example demonstrates a MACSDK chatbot with external agents:
 - **RAG Agent**: Query indexed documentation using semantic search
 - **API Agent**: Interact with REST APIs (JSONPlaceholder as example)
 

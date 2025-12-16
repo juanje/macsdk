@@ -1,0 +1,27 @@
+[project]
+name = "devops-chatbot-mono"
+version = "0.1.0"
+description = "A DevOps chatbot with RAG and internal API agent (mono-repo example)"
+requires-python = ">=3.12"
+
+dependencies = [
+    "macsdk[rag]",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+]
+
+[project.scripts]
+devops-chatbot = "devops_chatbot.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/devops_chatbot"]
+
