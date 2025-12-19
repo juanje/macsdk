@@ -20,6 +20,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, ToolException, tool
 
 from ..core.api_registry import get_api_service
+from ..core.cert_manager import get_certificate_path
 
 logger = logging.getLogger(__name__)
 
@@ -110,9 +111,17 @@ async def _make_request(
         # Disable SSL verification (insecure, for test servers)
         ssl_context = False
     elif service_config.ssl_cert:
-        # Use custom SSL certificate
-        ssl_context = ssl.create_default_context()
-        ssl_context.load_verify_locations(service_config.ssl_cert)
+        # Use custom SSL certificate (local path or URL)
+        try:
+            cert_path = await get_certificate_path(service_config.ssl_cert)
+            ssl_context = ssl.create_default_context()
+            ssl_context.load_verify_locations(cert_path)
+        except Exception as e:
+            logger.error(f"Failed to load SSL certificate: {e}")
+            return {
+                "success": False,
+                "error": f"SSL certificate error: {e}",
+            }
 
     # Retry logic with exponential backoff
     last_error = None

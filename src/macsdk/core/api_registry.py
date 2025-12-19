@@ -56,7 +56,9 @@ def register_api_service(
         timeout: Request timeout in seconds.
         max_retries: Maximum number of retry attempts.
         rate_limit: Optional rate limit (requests per hour).
-        ssl_cert: Optional path to SSL certificate file for HTTPS verification.
+        ssl_cert: Optional path or URL to SSL certificate file for HTTPS verification.
+                  If URL (http/https), certificate will be downloaded and cached
+                  locally.
         ssl_verify: Whether to verify SSL certificates (default: True).
                     Set to False for test servers (insecure!).
 
@@ -68,12 +70,19 @@ def register_api_service(
         ...     token=os.environ["GITHUB_TOKEN"],
         ...     rate_limit=5000,
         ... )
-        >>> # With custom SSL certificate
+        >>> # With local SSL certificate file
         >>> register_api_service(
         ...     "internal_api",
         ...     "https://api.internal.company.com",
         ...     token=os.environ["INTERNAL_TOKEN"],
         ...     ssl_cert="/path/to/company-ca.pem",
+        ... )
+        >>> # With remote SSL certificate (will be downloaded and cached)
+        >>> register_api_service(
+        ...     "corporate_api",
+        ...     "https://api.internal.company.com",
+        ...     token=os.environ["INTERNAL_TOKEN"],
+        ...     ssl_cert="https://certs.company.com/corporate-ca.pem",
         ... )
         >>> # Test server without SSL verification (insecure!)
         >>> register_api_service(
@@ -156,7 +165,11 @@ def load_api_services_from_config(config: dict[str, Any]) -> None:
           internal:
             base_url: "https://api.internal.company.com"
             token: ${INTERNAL_TOKEN}
-            ssl_cert: "/path/to/company-ca.pem"
+            ssl_cert: "/path/to/company-ca.pem"  # Local path
+          corporate:
+            base_url: "https://api.corporate.company.com"
+            token: ${CORPORATE_TOKEN}
+            ssl_cert: "https://certs.company.com/ca.pem"  # Remote URL (downloaded)
           test_server:
             base_url: "https://test.local:8443"
             ssl_verify: false  # Disable SSL verification (insecure!)

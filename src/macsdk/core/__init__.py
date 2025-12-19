@@ -25,6 +25,20 @@ Example:
     >>> graph = create_chatbot_graph()
 """
 
+from .api_registry import (
+    APIServiceConfig,
+    clear_api_services,
+    get_api_service,
+    list_api_services,
+    load_api_services_from_config,
+    register_api_service,
+)
+from .cert_manager import (
+    clear_certificate_cache,
+    download_certificate,
+    get_certificate_path,
+    set_cache_directory,
+)
 from .config import (
     CONFIG_FILE_ENV_VAR,
     DEFAULT_CONFIG_FILE,
@@ -90,4 +104,16 @@ __all__ = [
     "run_agent_with_tools",
     "create_config_with_writer",
     "STREAM_WRITER_KEY",
+    # API Registry
+    "APIServiceConfig",
+    "register_api_service",
+    "get_api_service",
+    "list_api_services",
+    "clear_api_services",
+    "load_api_services_from_config",
+    # Certificate Manager
+    "download_certificate",
+    "get_certificate_path",
+    "clear_certificate_cache",
+    "set_cache_directory",
 ]

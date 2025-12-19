@@ -146,13 +146,19 @@ api_services:
     timeout: 30
     max_retries: 3
 
-  # Internal API with custom SSL certificate
+  # Internal API with local SSL certificate
   internal_api:
     base_url: "https://api.internal.company.com"
     token: ${INTERNAL_TOKEN}
-    ssl_cert: "/path/to/company-ca.pem"
+    ssl_cert: "/path/to/company-ca.pem"  # Local file path
     headers:
       X-Custom-Header: "value"
+
+  # Corporate API with remote SSL certificate (auto-downloaded and cached)
+  corporate_api:
+    base_url: "https://api.corporate.company.com"
+    token: ${CORPORATE_TOKEN}
+    ssl_cert: "https://certs.company.com/ca-bundle.pem"  # Remote URL
 
   # Test server (disable SSL verification)
   test_server:
@@ -170,7 +176,7 @@ api_services:
 | `timeout` | int | `30` | Request timeout in seconds |
 | `max_retries` | int | `3` | Number of retry attempts |
 | `rate_limit` | int | - | Requests per hour limit |
-| `ssl_cert` | string | - | Path to SSL certificate file |
+| `ssl_cert` | string | - | Path or URL to SSL certificate file (URLs are cached locally) |
 | `ssl_verify` | bool | `true` | Verify SSL certificates |
 
 ### Using API Services in Code
@@ -193,6 +199,49 @@ result = await api_get.ainvoke({
     "extract": "$.name",  # JSONPath
 })
 ```
+
+### Remote SSL Certificates
+
+MACSDK supports downloading SSL certificates from remote URLs, which is useful in corporate environments where certificates are distributed via a certificate server:
+
+**Benefits:**
+- ✅ No need to distribute certificates in repositories
+- ✅ Always get the latest version of the certificate
+- ✅ Certificates are cached locally (in `~/.cache/macsdk/certs/`)
+- ✅ Automatic re-download on cache miss
+
+**Example:**
+
+```yaml
+api_services:
+  corporate_api:
+    base_url: "https://api.corporate.company.com"
+    token: ${CORPORATE_TOKEN}
+    ssl_cert: "https://certs.company.com/ca-bundle.pem"
+```
+
+Or programmatically:
+
+```python
+register_api_service(
+    name="corporate_api",
+    base_url="https://api.corporate.company.com",
+    token=os.environ["CORPORATE_TOKEN"],
+    ssl_cert="https://certs.company.com/ca-bundle.pem",
+)
+```
+
+**How it works:**
+1. The first API call detects that `ssl_cert` is a URL
+2. Downloads the certificate using the system's default SSL certificates
+3. Validates it's a valid PEM certificate
+4. Caches it locally at `~/.cache/macsdk/certs/`
+5. Uses the cached version for subsequent calls
+
+**Requirements:**
+- The certificate server must use standard SSL (no custom CA needed to access it)
+- The certificate file must be in PEM format
+- The URL must be accessible from where your agent runs
 
 ## Environment Variables
 
