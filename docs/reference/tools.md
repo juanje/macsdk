@@ -258,11 +258,18 @@ register_api_service(
     headers={"X-API-Key": os.environ["API_KEY"]},
 )
 
-# With custom SSL certificate
+# With local SSL certificate file
 register_api_service(
     name="internal",
     base_url="https://internal.company.com",
     ssl_cert="/path/to/ca-cert.pem",
+)
+
+# With remote SSL certificate (downloaded and cached automatically)
+register_api_service(
+    name="corporate",
+    base_url="https://api.corporate.com",
+    ssl_cert="https://certs.corporate.com/ca-bundle.pem",
 )
 ```
 
@@ -276,7 +283,7 @@ register_api_service(
 | `headers` | Additional HTTP headers |
 | `timeout` | Timeout in seconds (default: 30) |
 | `max_retries` | Retry attempts (default: 3) |
-| `ssl_cert` | Path to SSL certificate |
+| `ssl_cert` | Path or URL to SSL certificate (URLs are auto-cached) |
 | `ssl_verify` | Verify SSL (default: True) |
 
 ## Summary
