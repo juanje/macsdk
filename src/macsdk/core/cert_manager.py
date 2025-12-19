@@ -123,14 +123,16 @@ async def download_certificate(url: str, force_refresh: bool = False) -> Path:
     async with _download_locks[url]:
         # Check again if cached after acquiring lock
         # (another task may have downloaded it)
-        if cache_path.exists() and not force_refresh:
+        # Use to_thread to avoid blocking event loop
+        cache_exists = await asyncio.to_thread(cache_path.exists)
+        if cache_exists and not force_refresh:
             logger.debug(f"Using cached certificate from {cache_path}")
             return cache_path
 
         logger.info(f"Downloading certificate from {url}")
 
-        # Ensure cache directory exists
-        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        # Ensure cache directory exists (non-blocking)
+        await asyncio.to_thread(_CACHE_DIR.mkdir, parents=True, exist_ok=True)
 
         # Download certificate using system SSL context
         async with httpx.AsyncClient() as client:
@@ -184,9 +186,10 @@ async def get_certificate_path(cert_spec: str, force_refresh: bool = False) -> s
         cache_path = await download_certificate(cert_spec, force_refresh=force_refresh)
         return str(cache_path)
     else:
-        # Local path - verify it exists
+        # Local path - verify it exists (non-blocking)
         cert_path = Path(cert_spec)
-        if not cert_path.exists():
+        path_exists = await asyncio.to_thread(cert_path.exists)
+        if not path_exists:
             raise FileNotFoundError(f"Certificate file not found: {cert_spec}")
         return cert_spec
 
