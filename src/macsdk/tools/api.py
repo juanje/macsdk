@@ -15,7 +15,7 @@ import logging
 import ssl
 from typing import Annotated, Any
 
-import aiohttp
+import httpx
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, ToolException, tool
 
@@ -105,19 +105,24 @@ async def _make_request(
     if body:
         request_headers.setdefault("Content-Type", "application/json")
 
-    # Configure SSL context
-    ssl_context: ssl.SSLContext | bool = True
+    # Configure SSL verification
+    verify: bool | str | ssl.SSLContext = True
     if not service_config.ssl_verify:
         # Disable SSL verification (insecure, for test servers)
-        ssl_context = False
+        verify = False
     elif service_config.ssl_cert:
         # Use custom SSL certificate (local path or URL)
         try:
             cert_path = await get_certificate_path(service_config.ssl_cert)
-            ssl_context = ssl.create_default_context()
-            ssl_context.load_verify_locations(cert_path)
-        except Exception as e:
+            verify = cert_path
+        except (ValueError, FileNotFoundError) as e:
             logger.error(f"Failed to load SSL certificate: {e}")
+            return {
+                "success": False,
+                "error": f"SSL certificate error: {e}",
+            }
+        except Exception as e:
+            logger.error(f"Unexpected error loading SSL certificate: {e}")
             return {
                 "success": False,
                 "error": f"SSL certificate error: {e}",
@@ -127,40 +132,41 @@ async def _make_request(
     last_error = None
     for attempt in range(service_config.max_retries):
         try:
-            connector = aiohttp.TCPConnector(ssl=ssl_context)
-            async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.request(
+            async with httpx.AsyncClient(
+                verify=verify, timeout=service_config.timeout
+            ) as client:
+                response = await client.request(
                     method=method,
                     url=url,
                     params=params,
                     json=body if body else None,
                     headers=request_headers,
-                    timeout=aiohttp.ClientTimeout(total=service_config.timeout),
-                ) as response:
-                    # Try to parse JSON response
-                    try:
-                        data = await response.json()
-                    except (json.JSONDecodeError, aiohttp.ContentTypeError):
-                        data = await response.text()
+                )
 
-                    if response.status >= 400:
-                        return {
-                            "success": False,
-                            "status_code": response.status,
-                            "error": f"HTTP {response.status}: {data}",
-                        }
+                # Try to parse JSON response
+                try:
+                    data = response.json()
+                except (json.JSONDecodeError, ValueError):
+                    data = response.text
 
-                    # Apply JSONPath extraction if specified
-                    if extract and isinstance(data, (dict, list)):
-                        data = _extract_jsonpath(data, extract)
-
+                if response.status_code >= 400:
                     return {
-                        "success": True,
-                        "status_code": response.status,
-                        "data": data,
+                        "success": False,
+                        "status_code": response.status_code,
+                        "error": f"HTTP {response.status_code}: {data}",
                     }
 
-        except aiohttp.ClientError as e:
+                # Apply JSONPath extraction if specified
+                if extract and isinstance(data, (dict, list)):
+                    data = _extract_jsonpath(data, extract)
+
+                return {
+                    "success": True,
+                    "status_code": response.status_code,
+                    "data": data,
+                }
+
+        except httpx.HTTPError as e:
             last_error = str(e)
             if attempt < service_config.max_retries - 1:
                 await asyncio.sleep(2**attempt)  # Exponential backoff

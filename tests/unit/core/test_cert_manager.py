@@ -114,20 +114,18 @@ class TestDownloadCertificate:
         set_cache_directory(tmp_path)
         url = "https://certs.example.com/ca.pem"
 
-        # Mock aiohttp response
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value=VALID_CERT)
+        # Mock httpx response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = VALID_CERT
         mock_response.raise_for_status = MagicMock()
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock()
 
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
 
-        with patch("aiohttp.ClientSession", return_value=mock_session):
+        with patch("httpx.AsyncClient", return_value=mock_client):
             cert_path = await download_certificate(url)
 
         # Verify
@@ -147,20 +145,18 @@ class TestDownloadCertificate:
         set_cache_directory(tmp_path)
         url = "https://certs.example.com/not-a-cert.txt"
 
-        # Mock aiohttp response with invalid content
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value=INVALID_CERT)
+        # Mock httpx response with invalid content
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = INVALID_CERT
         mock_response.raise_for_status = MagicMock()
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock()
 
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
 
-        with patch("aiohttp.ClientSession", return_value=mock_session):
+        with patch("httpx.AsyncClient", return_value=mock_client):
             with pytest.raises(ValueError, match="does not appear to be a valid"):
                 await download_certificate(url)
 
@@ -176,9 +172,9 @@ class TestDownloadCertificate:
         cache_path.write_text(VALID_CERT)
 
         # Should not make HTTP request
-        with patch("aiohttp.ClientSession") as mock_session:
+        with patch("httpx.AsyncClient") as mock_client:
             result_path = await download_certificate(url)
-            mock_session.assert_not_called()
+            mock_client.assert_not_called()
 
         assert result_path == cache_path
 
@@ -194,19 +190,17 @@ class TestDownloadCertificate:
         cache_path.write_text("OLD CERTIFICATE")
 
         # Mock new certificate download
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value=VALID_CERT)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = VALID_CERT
         mock_response.raise_for_status = MagicMock()
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock()
 
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
 
-        with patch("aiohttp.ClientSession", return_value=mock_session):
+        with patch("httpx.AsyncClient", return_value=mock_client):
             result_path = await download_certificate(url, force_refresh=True)
 
         # Verify new content was downloaded
@@ -223,19 +217,17 @@ class TestGetCertificatePath:
         url = "https://certs.example.com/ca.pem"
 
         # Mock download
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value=VALID_CERT)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = VALID_CERT
         mock_response.raise_for_status = MagicMock()
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock()
 
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
 
-        with patch("aiohttp.ClientSession", return_value=mock_session):
+        with patch("httpx.AsyncClient", return_value=mock_client):
             cert_path = await get_certificate_path(url)
 
         assert Path(cert_path).exists()

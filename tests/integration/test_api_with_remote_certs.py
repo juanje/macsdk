@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ssl
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -60,37 +59,25 @@ class TestAPIWithRemoteCertificate:
             ssl_cert=cert_url,
         )
 
-        # Mock certificate download
-        mock_cert_response = AsyncMock()
-        mock_cert_response.status = 200
-        mock_cert_response.text = AsyncMock(return_value=VALID_CERT)
+        # Mock httpx responses (both for cert download and API calls)
+        mock_cert_response = MagicMock()
+        mock_cert_response.status_code = 200
+        mock_cert_response.text = VALID_CERT
         mock_cert_response.raise_for_status = MagicMock()
-        mock_cert_response.__aenter__ = AsyncMock(return_value=mock_cert_response)
-        mock_cert_response.__aexit__ = AsyncMock()
 
-        # Mock API response
-        mock_api_response = AsyncMock()
-        mock_api_response.status = 200
-        mock_api_response.json = AsyncMock(return_value={"status": "success"})
-        mock_api_response.__aenter__ = AsyncMock(return_value=mock_api_response)
-        mock_api_response.__aexit__ = AsyncMock()
+        mock_api_response = MagicMock()
+        mock_api_response.status_code = 200
+        mock_api_response.json = MagicMock(return_value={"status": "success"})
+        mock_api_response.text = '{"status": "success"}'
 
-        mock_session = AsyncMock()
+        # Mock httpx client to return cert response first, then API response
+        mock_http_client = AsyncMock()
+        mock_http_client.get = AsyncMock(return_value=mock_cert_response)
+        mock_http_client.request = AsyncMock(return_value=mock_api_response)
+        mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+        mock_http_client.__aexit__ = AsyncMock()
 
-        # First call is for certificate, second is for API
-        mock_session.get = MagicMock(return_value=mock_cert_response)
-        mock_session.request = MagicMock(return_value=mock_api_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
-
-        # Mock SSL context creation
-        mock_ssl_context = MagicMock(spec=ssl.SSLContext)
-        mock_ssl_context.load_verify_locations = MagicMock()
-
-        with (
-            patch("aiohttp.ClientSession", return_value=mock_session),
-            patch("ssl.create_default_context", return_value=mock_ssl_context),
-        ):
+        with patch("httpx.AsyncClient", return_value=mock_http_client):
             result = await make_api_request("GET", "test_api", "/status")
 
         # Verify success
@@ -112,26 +99,18 @@ class TestAPIWithRemoteCertificate:
             ssl_cert=str(cert_file),
         )
 
-        # Mock API response
-        mock_api_response = AsyncMock()
-        mock_api_response.status = 200
-        mock_api_response.json = AsyncMock(return_value={"status": "success"})
-        mock_api_response.__aenter__ = AsyncMock(return_value=mock_api_response)
-        mock_api_response.__aexit__ = AsyncMock()
+        # Mock httpx API response
+        mock_api_response = MagicMock()
+        mock_api_response.status_code = 200
+        mock_api_response.json = MagicMock(return_value={"status": "success"})
+        mock_api_response.text = '{"status": "success"}'
 
-        mock_session = AsyncMock()
-        mock_session.request = MagicMock(return_value=mock_api_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_http_client = AsyncMock()
+        mock_http_client.request = AsyncMock(return_value=mock_api_response)
+        mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+        mock_http_client.__aexit__ = AsyncMock()
 
-        # Mock SSL context creation
-        mock_ssl_context = MagicMock(spec=ssl.SSLContext)
-        mock_ssl_context.load_verify_locations = MagicMock()
-
-        with (
-            patch("aiohttp.ClientSession", return_value=mock_session),
-            patch("ssl.create_default_context", return_value=mock_ssl_context),
-        ):
+        with patch("httpx.AsyncClient", return_value=mock_http_client):
             result = await make_api_request("GET", "test_api", "/status")
 
         # Verify success
@@ -150,19 +129,17 @@ class TestAPIWithRemoteCertificate:
         )
 
         # Mock certificate download with invalid content
-        mock_cert_response = AsyncMock()
-        mock_cert_response.status = 200
-        mock_cert_response.text = AsyncMock(return_value="INVALID CERTIFICATE")
+        mock_cert_response = MagicMock()
+        mock_cert_response.status_code = 200
+        mock_cert_response.text = "INVALID CERTIFICATE"
         mock_cert_response.raise_for_status = MagicMock()
-        mock_cert_response.__aenter__ = AsyncMock(return_value=mock_cert_response)
-        mock_cert_response.__aexit__ = AsyncMock()
 
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_cert_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_http_client = AsyncMock()
+        mock_http_client.get = AsyncMock(return_value=mock_cert_response)
+        mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+        mock_http_client.__aexit__ = AsyncMock()
 
-        with patch("aiohttp.ClientSession", return_value=mock_session):
+        with patch("httpx.AsyncClient", return_value=mock_http_client):
             result = await make_api_request("GET", "test_api", "/status")
 
         # Verify error
@@ -180,35 +157,24 @@ class TestAPIWithRemoteCertificate:
             ssl_cert=cert_url,
         )
 
-        # Mock certificate download
-        mock_cert_response = AsyncMock()
-        mock_cert_response.status = 200
-        mock_cert_response.text = AsyncMock(return_value=VALID_CERT)
+        # Mock httpx responses
+        mock_cert_response = MagicMock()
+        mock_cert_response.status_code = 200
+        mock_cert_response.text = VALID_CERT
         mock_cert_response.raise_for_status = MagicMock()
-        mock_cert_response.__aenter__ = AsyncMock(return_value=mock_cert_response)
-        mock_cert_response.__aexit__ = AsyncMock()
 
-        # Mock API response
-        mock_api_response = AsyncMock()
-        mock_api_response.status = 200
-        mock_api_response.json = AsyncMock(return_value={"status": "success"})
-        mock_api_response.__aenter__ = AsyncMock(return_value=mock_api_response)
-        mock_api_response.__aexit__ = AsyncMock()
+        mock_api_response = MagicMock()
+        mock_api_response.status_code = 200
+        mock_api_response.json = MagicMock(return_value={"status": "success"})
+        mock_api_response.text = '{"status": "success"}'
 
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_cert_response)
-        mock_session.request = MagicMock(return_value=mock_api_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_http_client = AsyncMock()
+        mock_http_client.get = AsyncMock(return_value=mock_cert_response)
+        mock_http_client.request = AsyncMock(return_value=mock_api_response)
+        mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+        mock_http_client.__aexit__ = AsyncMock()
 
-        # Mock SSL context creation
-        mock_ssl_context = MagicMock(spec=ssl.SSLContext)
-        mock_ssl_context.load_verify_locations = MagicMock()
-
-        with (
-            patch("aiohttp.ClientSession", return_value=mock_session),
-            patch("ssl.create_default_context", return_value=mock_ssl_context),
-        ):
+        with patch("httpx.AsyncClient", return_value=mock_http_client):
             # First API call - downloads certificate
             result1 = await make_api_request("GET", "test_api", "/status")
             assert result1["success"] is True
@@ -244,34 +210,24 @@ class TestAPIConfigWithRemoteCerts:
         # Load config
         load_api_services_from_config(config)
 
-        # Mock certificate and API response
-        mock_cert_response = AsyncMock()
-        mock_cert_response.status = 200
-        mock_cert_response.text = AsyncMock(return_value=VALID_CERT)
+        # Mock httpx responses
+        mock_cert_response = MagicMock()
+        mock_cert_response.status_code = 200
+        mock_cert_response.text = VALID_CERT
         mock_cert_response.raise_for_status = MagicMock()
-        mock_cert_response.__aenter__ = AsyncMock(return_value=mock_cert_response)
-        mock_cert_response.__aexit__ = AsyncMock()
 
-        mock_api_response = AsyncMock()
-        mock_api_response.status = 200
-        mock_api_response.json = AsyncMock(return_value={"data": "test"})
-        mock_api_response.__aenter__ = AsyncMock(return_value=mock_api_response)
-        mock_api_response.__aexit__ = AsyncMock()
+        mock_api_response = MagicMock()
+        mock_api_response.status_code = 200
+        mock_api_response.json = MagicMock(return_value={"data": "test"})
+        mock_api_response.text = '{"data": "test"}'
 
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_cert_response)
-        mock_session.request = MagicMock(return_value=mock_api_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_http_client = AsyncMock()
+        mock_http_client.get = AsyncMock(return_value=mock_cert_response)
+        mock_http_client.request = AsyncMock(return_value=mock_api_response)
+        mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+        mock_http_client.__aexit__ = AsyncMock()
 
-        # Mock SSL context creation
-        mock_ssl_context = MagicMock(spec=ssl.SSLContext)
-        mock_ssl_context.load_verify_locations = MagicMock()
-
-        with (
-            patch("aiohttp.ClientSession", return_value=mock_session),
-            patch("ssl.create_default_context", return_value=mock_ssl_context),
-        ):
+        with patch("httpx.AsyncClient", return_value=mock_http_client):
             result = await make_api_request("GET", "corporate_api", "/test")
 
         assert result["success"] is True
@@ -299,26 +255,18 @@ class TestAPIConfigWithRemoteCerts:
         # Load config
         load_api_services_from_config(config)
 
-        # Mock API response
-        mock_api_response = AsyncMock()
-        mock_api_response.status = 200
-        mock_api_response.json = AsyncMock(return_value={"data": "test"})
-        mock_api_response.__aenter__ = AsyncMock(return_value=mock_api_response)
-        mock_api_response.__aexit__ = AsyncMock()
+        # Mock httpx API response
+        mock_api_response = MagicMock()
+        mock_api_response.status_code = 200
+        mock_api_response.json = MagicMock(return_value={"data": "test"})
+        mock_api_response.text = '{"data": "test"}'
 
-        mock_session = AsyncMock()
-        mock_session.request = MagicMock(return_value=mock_api_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_http_client = AsyncMock()
+        mock_http_client.request = AsyncMock(return_value=mock_api_response)
+        mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+        mock_http_client.__aexit__ = AsyncMock()
 
-        # Mock SSL context creation
-        mock_ssl_context = MagicMock(spec=ssl.SSLContext)
-        mock_ssl_context.load_verify_locations = MagicMock()
-
-        with (
-            patch("aiohttp.ClientSession", return_value=mock_session),
-            patch("ssl.create_default_context", return_value=mock_ssl_context),
-        ):
+        with patch("httpx.AsyncClient", return_value=mock_http_client):
             result = await make_api_request("GET", "internal_api", "/test")
 
         assert result["success"] is True

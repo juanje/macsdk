@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Annotated
 
-import aiohttp
+import httpx
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, ToolException, tool
 
@@ -51,19 +51,16 @@ async def fetch_file(
         >>> fetch_file("https://internal.server/log", ssl_verify=False)
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                url,
-                timeout=aiohttp.ClientTimeout(total=timeout),
-                ssl=ssl_verify,
-            ) as response:
-                if response.status != 200:
-                    raise ToolException(
-                        f"HTTP {response.status} fetching {url}. "
-                        "This is a tool error, not content from the file."
-                    )
+        async with httpx.AsyncClient(verify=ssl_verify, timeout=timeout) as client:
+            response = await client.get(url)
 
-                content = await response.text()
+            if response.status_code != 200:
+                raise ToolException(
+                    f"HTTP {response.status_code} fetching {url}. "
+                    "This is a tool error, not content from the file."
+                )
+
+            content = response.text
 
         # Apply filters
         lines = content.splitlines()
@@ -82,12 +79,12 @@ async def fetch_file(
 
         return "\n".join(lines)
 
-    except aiohttp.ClientSSLError as e:
+    except httpx.HTTPStatusError as e:
         raise ToolException(
-            f"SSL certificate error for {url}. "
-            f"Try with ssl_verify=False for internal servers. Error: {e}"
+            f"HTTP {e.response.status_code} fetching {url}. "
+            "This is a tool error, not content from the file."
         )
-    except aiohttp.ClientError as e:
+    except httpx.RequestError as e:
         raise ToolException(
             f"Network error fetching {url}: {e}. "
             "This is a connection problem, not an error from the remote file."
@@ -127,16 +124,13 @@ async def fetch_and_save(
         ... )
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                url,
-                timeout=aiohttp.ClientTimeout(total=timeout),
-                ssl=ssl_verify,
-            ) as response:
-                if response.status != 200:
-                    raise ToolException(f"HTTP {response.status} fetching {url}")
+        async with httpx.AsyncClient(verify=ssl_verify, timeout=timeout) as client:
+            response = await client.get(url)
 
-                content = await response.read()
+            if response.status_code != 200:
+                raise ToolException(f"HTTP {response.status_code} fetching {url}")
+
+            content = response.content
 
         # Ensure directory exists
         path = Path(save_path)
@@ -148,11 +142,9 @@ async def fetch_and_save(
 
         return f"Successfully saved to {save_path} ({len(content)} bytes)"
 
-    except aiohttp.ClientSSLError as e:
-        raise ToolException(
-            f"SSL certificate error for {url}. Try with ssl_verify=False. Error: {e}"
-        )
-    except aiohttp.ClientError as e:
+    except httpx.HTTPStatusError as e:
+        raise ToolException(f"HTTP {e.response.status_code} fetching {url}. Error: {e}")
+    except httpx.RequestError as e:
         raise ToolException(f"Network error fetching {url}: {e}")
     except ToolException:
         raise
@@ -187,43 +179,37 @@ async def fetch_json(
         >>> fetch_json("https://api.example.com/users", extract="$[*].email")
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                url,
-                timeout=aiohttp.ClientTimeout(total=timeout),
-                headers={"Accept": "application/json"},
-                ssl=ssl_verify,
-            ) as response:
-                if response.status != 200:
-                    raise ToolException(f"HTTP {response.status} fetching {url}")
+        async with httpx.AsyncClient(verify=ssl_verify, timeout=timeout) as client:
+            response = await client.get(url, headers={"Accept": "application/json"})
 
-                import json
+            if response.status_code != 200:
+                raise ToolException(f"HTTP {response.status_code} fetching {url}")
 
-                data = await response.json()
+            import json
 
-                # Apply JSONPath extraction if specified
-                if extract:
-                    from jsonpath_ng import parse
+            data = response.json()
 
-                    expr = parse(extract)
-                    matches = [match.value for match in expr.find(data)]
+            # Apply JSONPath extraction if specified
+            if extract:
+                from jsonpath_ng import parse
 
-                    if len(matches) == 0:
-                        raise ToolException(
-                            f"No matches found for JSONPath expression '{extract}'"
-                        )
-                    elif len(matches) == 1:
-                        data = matches[0]
-                    else:
-                        data = matches
+                expr = parse(extract)
+                matches = [match.value for match in expr.find(data)]
 
-                return json.dumps(data, indent=2, default=str)
+                if len(matches) == 0:
+                    raise ToolException(
+                        f"No matches found for JSONPath expression '{extract}'"
+                    )
+                elif len(matches) == 1:
+                    data = matches[0]
+                else:
+                    data = matches
 
-    except aiohttp.ClientSSLError as e:
-        raise ToolException(
-            f"SSL certificate error for {url}. Try with ssl_verify=False. Error: {e}"
-        )
-    except aiohttp.ClientError as e:
+            return json.dumps(data, indent=2, default=str)
+
+    except httpx.HTTPStatusError as e:
+        raise ToolException(f"HTTP {e.response.status_code} fetching {url}. Error: {e}")
+    except httpx.RequestError as e:
         raise ToolException(f"Network error fetching {url}: {e}")
     except ToolException:
         raise

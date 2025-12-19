@@ -11,7 +11,8 @@ import logging
 from pathlib import Path
 from urllib.parse import urlparse
 
-import aiohttp
+import aiofiles
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ async def download_certificate(url: str, force_refresh: bool = False) -> Path:
 
     Raises:
         ValueError: If the URL is invalid or content is not a certificate.
-        aiohttp.ClientError: If download fails.
+        httpx.HTTPError: If download fails.
 
     Example:
         >>> # Download corporate CA certificate
@@ -119,19 +120,27 @@ async def download_certificate(url: str, force_refresh: bool = False) -> Path:
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     # Download certificate using system SSL context
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            response.raise_for_status()
-            content = await response.text()
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        content = response.text
 
     # Validate content
     if not _validate_cert_content(content):
+        # Log first few bytes for debugging (sanitized)
+        preview = content[:100].replace("\n", " ").replace("\r", "")
+        logger.error(
+            f"Downloaded content from {url} failed certificate validation. "
+            f"Content preview: {preview}..."
+        )
         raise ValueError(
             f"Downloaded content from {url} does not appear to be a valid certificate"
         )
 
-    # Save to cache
-    cache_path.write_text(content, encoding="utf-8")
+    # Save to cache asynchronously
+    async with aiofiles.open(cache_path, mode="w", encoding="utf-8") as f:
+        await f.write(content)
+
     logger.info(f"Certificate cached at {cache_path}")
 
     return cache_path
@@ -151,7 +160,7 @@ async def get_certificate_path(cert_spec: str, force_refresh: bool = False) -> s
 
     Raises:
         ValueError: If URL is invalid or content is not a certificate.
-        aiohttp.ClientError: If download fails.
+        httpx.HTTPError: If download fails.
         FileNotFoundError: If local path doesn't exist.
 
     Example:
