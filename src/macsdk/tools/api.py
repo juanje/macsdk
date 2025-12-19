@@ -129,12 +129,13 @@ async def _make_request(
             }
 
     # Retry logic with exponential backoff
+    # Create client outside retry loop for connection pooling
     last_error = None
-    for attempt in range(service_config.max_retries):
-        try:
-            async with httpx.AsyncClient(
-                verify=verify, timeout=service_config.timeout
-            ) as client:
+    async with httpx.AsyncClient(
+        verify=verify, timeout=service_config.timeout
+    ) as client:
+        for attempt in range(service_config.max_retries):
+            try:
                 response = await client.request(
                     method=method,
                     url=url,
@@ -166,14 +167,14 @@ async def _make_request(
                     "data": data,
                 }
 
-        except httpx.HTTPError as e:
-            last_error = str(e)
-            if attempt < service_config.max_retries - 1:
-                await asyncio.sleep(2**attempt)  # Exponential backoff
-                continue
-        except Exception as e:
-            last_error = str(e)
-            break
+            except httpx.HTTPError as e:
+                last_error = str(e)
+                if attempt < service_config.max_retries - 1:
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
+                    continue
+            except Exception as e:
+                last_error = str(e)
+                break
 
     retries = service_config.max_retries
     return {

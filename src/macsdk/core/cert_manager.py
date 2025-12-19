@@ -6,6 +6,7 @@ from remote URLs, making it easier to work with corporate certificate servers.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 from pathlib import Path
@@ -18,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 # Default cache directory for downloaded certificates
 _CACHE_DIR = Path.home() / ".cache" / "macsdk" / "certs"
+
+# Lock dictionary to prevent concurrent downloads of the same certificate
+_download_locks: dict[str, asyncio.Lock] = {}
 
 
 def _is_url(path: str) -> bool:
@@ -81,6 +85,9 @@ async def download_certificate(url: str, force_refresh: bool = False) -> Path:
     (trusted CAs), so the server hosting the certificate must have a
     valid SSL certificate.
 
+    This function uses per-URL locking to prevent race conditions when
+    multiple concurrent requests attempt to download the same certificate.
+
     Args:
         url: URL to download the certificate from.
         force_refresh: If True, re-download even if cached.
@@ -109,41 +116,42 @@ async def download_certificate(url: str, force_refresh: bool = False) -> Path:
 
     cache_path = _get_cache_path(url)
 
-    # Return cached certificate if exists and not forcing refresh
-    if cache_path.exists() and not force_refresh:
-        logger.debug(f"Using cached certificate from {cache_path}")
+    # Get or create a lock for this URL to prevent concurrent downloads
+    if url not in _download_locks:
+        _download_locks[url] = asyncio.Lock()
+
+    async with _download_locks[url]:
+        # Check again if cached after acquiring lock
+        # (another task may have downloaded it)
+        if cache_path.exists() and not force_refresh:
+            logger.debug(f"Using cached certificate from {cache_path}")
+            return cache_path
+
+        logger.info(f"Downloading certificate from {url}")
+
+        # Ensure cache directory exists
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Download certificate using system SSL context
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            content = response.text
+
+        # Validate content
+        if not _validate_cert_content(content):
+            raise ValueError(
+                f"Downloaded content from {url} does not appear to be a "
+                "valid certificate"
+            )
+
+        # Save to cache asynchronously
+        async with aiofiles.open(cache_path, mode="w", encoding="utf-8") as f:
+            await f.write(content)
+
+        logger.info(f"Certificate cached at {cache_path}")
+
         return cache_path
-
-    logger.info(f"Downloading certificate from {url}")
-
-    # Ensure cache directory exists
-    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Download certificate using system SSL context
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        response.raise_for_status()
-        content = response.text
-
-    # Validate content
-    if not _validate_cert_content(content):
-        # Log first few bytes for debugging (sanitized)
-        preview = content[:100].replace("\n", " ").replace("\r", "")
-        logger.error(
-            f"Downloaded content from {url} failed certificate validation. "
-            f"Content preview: {preview}..."
-        )
-        raise ValueError(
-            f"Downloaded content from {url} does not appear to be a valid certificate"
-        )
-
-    # Save to cache asynchronously
-    async with aiofiles.open(cache_path, mode="w", encoding="utf-8") as f:
-        await f.write(content)
-
-    logger.info(f"Certificate cached at {cache_path}")
-
-    return cache_path
 
 
 async def get_certificate_path(cert_spec: str, force_refresh: bool = False) -> str:
