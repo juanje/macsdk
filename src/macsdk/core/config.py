@@ -141,7 +141,8 @@ class MACSDKConfig(BaseSettings):
     classifier_reasoning_effort: Optional[str] = "low"
 
     # Web Server Configuration
-    server_host: str = "0.0.0.0"
+    # Bind to all interfaces by default (users can override to localhost in production)
+    server_host: str = "0.0.0.0"  # nosec B104
     server_port: int = 8000
     message_max_length: int = 5000
     warmup_timeout: float = 15.0

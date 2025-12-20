@@ -134,8 +134,8 @@ class PromptDebugMiddleware(AgentMiddleware):  # type: ignore[type-arg]
                                     text_parts.append(str(block.get("text", "")))
                             if text_parts:
                                 content_str = "\n".join(text_parts)
-                        except Exception:
-                            pass
+                        except Exception:  # nosec B110
+                            pass  # Content parsing failure, will try other methods
 
                     if not content_str:
                         if isinstance(raw_content, list):
