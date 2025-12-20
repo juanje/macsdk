@@ -173,6 +173,18 @@ class SimpleRecursiveLoader:
             # Make HTTP request with shared client (enables connection pooling)
             response = client.get(url)
             response.raise_for_status()
+
+            # Check Content-Type to avoid processing binary files
+            content_type = response.headers.get("Content-Type", "").lower()
+            if not any(
+                html_type in content_type
+                for html_type in ["text/html", "application/xhtml", "text/plain"]
+            ):
+                logger.debug(f"Skipping non-HTML content at {url}: {content_type}")
+                if self.progress_callback:
+                    self.progress_callback(url, 0)
+                return []
+
             html = response.text
 
             # Parse HTML once to avoid redundant parsing
@@ -185,7 +197,7 @@ class SimpleRecursiveLoader:
                     page_content=content,
                     metadata={
                         "source": url,
-                        "content_type": response.headers.get("Content-Type", ""),
+                        "content_type": content_type,
                     },
                 )
                 documents.append(doc)
