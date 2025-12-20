@@ -487,8 +487,9 @@ def create_retriever(
             page_pbar.update(1)
             # Extract domain from URL for cleaner display
             try:
-                domain = url.split("/")[2]
-                path = "/" + "/".join(url.split("/")[3:])
+                parsed = urlparse(url)
+                domain = parsed.netloc
+                path = parsed.path
                 if len(path) > 40:
                     path = path[:37] + "..."
                 page_pbar.set_postfix_str(f"{domain}{path}")
@@ -518,14 +519,14 @@ def create_retriever(
                 try:
                     for future in as_completed(future_to_source):
                         url, docs, error = future.result()
+                        # Extract domain using urlparse for robustness
+                        short_url = urlparse(url).netloc
                         if error:
                             logger.error(f"Error loading {url}: {error}")
-                            short_url = url.split("/")[2]  # Extract domain
                             page_pbar.write(f"⚠️  FAILED: {short_url} - {error[:60]}...")
                         else:
                             if len(docs) == 0:
                                 logger.warning(f"No documents loaded from {url}")
-                                short_url = url.split("/")[2]
                                 page_pbar.write(
                                     f"⚠️  EMPTY:  {short_url} - No documents found"
                                 )
@@ -535,7 +536,6 @@ def create_retriever(
                                     f"from {url}"
                                 )
                                 all_docs.extend(docs)
-                                short_url = url.split("/")[2]
                                 page_pbar.write(
                                     f"✅ SUCCESS: {short_url} - {len(docs):3d} docs"
                                 )
