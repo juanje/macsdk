@@ -85,6 +85,34 @@ def _is_url(path: str) -> bool:
     return parsed.scheme in ("http", "https")
 
 
+def _resolve_cert_path(source: RAGSourceConfig) -> tuple[Path | None, str | None]:
+    """Resolve certificate path from source configuration.
+
+    Helper to avoid duplicating certificate resolution logic.
+
+    Args:
+        source: Source configuration with cert_path and/or cert_url.
+
+    Returns:
+        Tuple of (cert_path, error_message). If successful, cert_path is set
+        and error_message is None. If failed, cert_path is None and
+        error_message contains the error.
+    """
+    import asyncio
+
+    cert_spec = source.cert_path or source.cert_url
+    if not cert_spec:
+        return (None, None)
+
+    try:
+        cert_path_str = asyncio.run(get_certificate_path(cert_spec))
+        return (Path(cert_path_str), None)
+    except Exception as e:
+        error_msg = f"Certificate error: {e}"
+        logger.error(f"Failed to get certificate for {cert_spec}: {e}")
+        return (None, error_msg)
+
+
 def _load_markdown_from_url(
     url: str,
     cert_path: Path | None = None,
@@ -131,18 +159,9 @@ def _load_markdown_documents(
 
         if _is_url(path_or_url):
             # Remote markdown file
-            import asyncio
-
-            cert_path = None
-            if source.cert_path or source.cert_url:
-                cert_spec = source.cert_path or source.cert_url
-                if cert_spec:
-                    try:
-                        cert_path_str = asyncio.run(get_certificate_path(cert_spec))
-                        cert_path = Path(cert_path_str)
-                    except Exception as e:
-                        logger.error(f"Failed to get certificate: {e}")
-                        return (path_or_url, [], f"Certificate error: {e}")
+            cert_path, error = _resolve_cert_path(source)
+            if error:
+                return (path_or_url, [], error)
 
             content = _load_markdown_from_url(
                 path_or_url, cert_path, verify_ssl=source.verify_ssl
@@ -334,8 +353,6 @@ def _load_html_documents(
     Returns:
         Tuple of (url, docs, error_message).
     """
-    import asyncio
-
     url = source.url
     logger.info(f"[PARALLEL] Starting to load HTML from {url}")
 
@@ -347,18 +364,14 @@ def _load_html_documents(
             # Disable SSL verification
             logger.warning(f"SSL verification disabled for {url}")
             verify = False
-        elif source.cert_path or source.cert_url:
-            # Use custom certificate
-            cert_spec = source.cert_path or source.cert_url
-            if cert_spec:
-                try:
-                    # Get certificate path using core cert_manager
-                    cert_path_str = asyncio.run(get_certificate_path(cert_spec))
-                    logger.info(f"Using certificate: {cert_path_str}")
-                    verify = cert_path_str
-                except Exception as e:
-                    logger.error(f"Failed to get certificate: {e}")
-                    return (url, [], f"Certificate error: {e}")
+        else:
+            # Use custom certificate if configured
+            cert_path, error = _resolve_cert_path(source)
+            if error:
+                return (url, [], error)
+            if cert_path:
+                verify = str(cert_path)
+                logger.info(f"Using certificate: {verify}")
 
         # Load documents using SimpleRecursiveLoader
         loader = SimpleRecursiveLoader(
