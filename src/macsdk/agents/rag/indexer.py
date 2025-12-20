@@ -21,8 +21,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
-import ssl
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -31,7 +29,6 @@ from urllib.parse import urlparse
 import bs4
 import requests
 from langchain_chroma import Chroma
-from langchain_community.document_loaders import RecursiveUrlLoader
 from langchain_core.documents import Document
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -39,13 +36,14 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import SecretStr
 from tqdm import tqdm
 
+from macsdk.core.cert_manager import get_certificate_path
 from macsdk.core.config import config as macsdk_config
 
-from .cert_manager import get_cert_for_source
 from .config import RAGConfig, RAGSourceConfig, get_rag_config
+from .recursive_loader import SimpleRecursiveLoader
 
 if TYPE_CHECKING:
-    pass
+    from .recursive_loader import ProgressCallback
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +131,19 @@ def _load_markdown_documents(
 
         if _is_url(path_or_url):
             # Remote markdown file
-            cert_path = get_cert_for_source(source)
+            import asyncio
+
+            cert_path = None
+            if source.cert_path or source.cert_url:
+                cert_spec = source.cert_path or source.cert_url
+                if cert_spec:
+                    try:
+                        cert_path_str = asyncio.run(get_certificate_path(cert_spec))
+                        cert_path = Path(cert_path_str)
+                    except Exception as e:
+                        logger.error(f"Failed to get certificate: {e}")
+                        return (path_or_url, [], f"Certificate error: {e}")
+
             content = _load_markdown_from_url(
                 path_or_url, cert_path, verify_ssl=source.verify_ssl
             )
@@ -312,95 +322,66 @@ def load_existing_retriever(
 def _load_html_documents(
     source: RAGSourceConfig,
     config: RAGConfig,
+    progress_callback: "ProgressCallback | None" = None,
 ) -> tuple[str, list[Document], str | None]:
     """Load documents from a web URL (HTML).
 
     Args:
         source: Source configuration.
         config: RAG configuration.
+        progress_callback: Optional callback for progress updates per page.
 
     Returns:
         Tuple of (url, docs, error_message).
     """
+    import asyncio
+
     url = source.url
     logger.info(f"[PARALLEL] Starting to load HTML from {url}")
 
     try:
-        # Get certificate if needed
-        cert_path = get_cert_for_source(source)
-        old_cert_env = None
-        old_ssl_context = None
+        # Determine SSL verification setting
+        verify: bool | str = True
 
-        # Log SSL settings
         if not source.verify_ssl:
+            # Disable SSL verification
             logger.warning(f"SSL verification disabled for {url}")
-        elif cert_path:
-            logger.info(f"Using certificate: {cert_path}")
+            verify = False
+        elif source.cert_path or source.cert_url:
+            # Use custom certificate
+            cert_spec = source.cert_path or source.cert_url
+            if cert_spec:
+                try:
+                    # Get certificate path using core cert_manager
+                    cert_path_str = asyncio.run(get_certificate_path(cert_spec))
+                    logger.info(f"Using certificate: {cert_path_str}")
+                    verify = cert_path_str
+                except Exception as e:
+                    logger.error(f"Failed to get certificate: {e}")
+                    return (url, [], f"Certificate error: {e}")
 
-        # Set certificate via environment variable if needed
-        if cert_path:
-            old_cert_env = os.environ.get("REQUESTS_CA_BUNDLE")
-            os.environ["REQUESTS_CA_BUNDLE"] = str(cert_path)
+        # Load documents using SimpleRecursiveLoader
+        loader = SimpleRecursiveLoader(
+            url=url,
+            max_depth=config.max_depth,
+            extractor=simple_extractor,
+            verify=verify,
+            timeout=30,
+            progress_callback=progress_callback,
+        )
+        docs = loader.load()
 
-        # Disable SSL verification if requested
-        # RecursiveUrlLoader may use requests or urllib internally
-        old_requests_get = None
-        if not source.verify_ssl:
-            # Suppress InsecureRequestWarning when SSL is disabled
-            import urllib3
+        # Add metadata to documents
+        # ChromaDB only accepts primitive types, so convert tags list to string
+        tags_str = ",".join(source.tags) if source.tags else ""
+        for doc in docs:
+            doc.metadata["source_name"] = source.name
+            doc.metadata["source_url"] = url
+            doc.metadata["tags"] = tags_str
+            doc.metadata["type"] = "html"
 
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-            # Create an unverified SSL context for urllib
-            old_ssl_context = ssl._create_default_https_context
-            ssl._create_default_https_context = ssl._create_unverified_context  # type: ignore[assignment]
-
-            # Also patch requests to disable SSL verification
-            old_requests_get = requests.get
-
-            def patched_get(*args: object, **kwargs: object) -> requests.Response:
-                kwargs["verify"] = False
-                return old_requests_get(*args, **kwargs)  # type: ignore[arg-type]
-
-            requests.get = patched_get  # type: ignore[assignment]
-
-        try:
-            # Build loader kwargs
-            loader_kwargs: dict[str, object] = {
-                "url": url,
-                "max_depth": config.max_depth,
-                "extractor": simple_extractor,
-            }
-
-            loader = RecursiveUrlLoader(**loader_kwargs)  # type: ignore[arg-type]
-            docs = loader.load()
-
-            # Add metadata to documents
-            # ChromaDB only accepts primitive types, so convert tags list to string
-            tags_str = ",".join(source.tags) if source.tags else ""
-            for doc in docs:
-                doc.metadata["source_name"] = source.name
-                doc.metadata["source_url"] = url
-                doc.metadata["tags"] = tags_str
-                doc.metadata["type"] = "html"
-
-            logger.info(f"[PARALLEL] Completed loading {url} - {len(docs)} docs")
-            return (url, docs, None)
-
-        finally:
-            # Restore original environment variable
-            if cert_path:
-                if old_cert_env is not None:
-                    os.environ["REQUESTS_CA_BUNDLE"] = old_cert_env
-                else:
-                    os.environ.pop("REQUESTS_CA_BUNDLE", None)
-
-            # Restore SSL context and requests.get
-            if not source.verify_ssl:
-                if old_ssl_context is not None:
-                    ssl._create_default_https_context = old_ssl_context
-                if old_requests_get is not None:
-                    requests.get = old_requests_get
+        logger.info(f"[PARALLEL] Completed loading {url} - {len(docs)} docs")
+        return (url, docs, None)
 
     except Exception as e:
         logger.error(f"[PARALLEL] Failed to load {url}: {e}")
@@ -410,23 +391,26 @@ def _load_html_documents(
 def _load_source_documents(
     source: RAGSourceConfig,
     config: RAGConfig,
+    progress_callback: "ProgressCallback | None" = None,
 ) -> tuple[str, list[Document], str | None]:
     """Load documents from a source based on its type.
 
     Args:
         source: Source configuration.
         config: RAG configuration.
+        progress_callback: Optional callback for progress updates.
 
     Returns:
         Tuple of (source_path, docs, error_message).
     """
+
     source_type = source.type.lower()
 
     if source_type == "markdown":
         return _load_markdown_documents(source, config)
     else:
         # Default to HTML
-        return _load_html_documents(source, config)
+        return _load_html_documents(source, config, progress_callback)
 
 
 def create_retriever(
@@ -484,38 +468,65 @@ def create_retriever(
     print("📥 Submitting all URLs simultaneously...")
     for i, source in enumerate(sources, 1):
         print(f"   {i}. {source.url}")
-    print(f"\n⏳ Waiting for {len(sources)} parallel downloads to complete...\n")
+    print("\n⏳ Crawling web pages (progress shown per page)...\n")
 
     logger.info(
         f"Starting parallel loading of {len(sources)} sources "
         f"with {min(len(sources), 4)} workers"
     )
 
-    try:
-        with ThreadPoolExecutor(max_workers=min(len(sources), 4)) as executor:
-            # Submit all source loading tasks
-            future_to_source = {
-                executor.submit(_load_source_documents, source, config): source
-                for source in sources
-            }
-            logger.info(f"All {len(sources)} tasks submitted")
+    # Create a thread-safe progress callback
+    import threading
 
-            # Process results as they complete with progress bar
-            with tqdm(
-                total=len(sources), desc="Loading URLs", unit="url", ncols=100
-            ) as pbar:
+    progress_lock = threading.Lock()
+
+    def page_progress_callback(url: str, docs_count: int) -> None:
+        """Thread-safe callback to update progress bar per page."""
+        with progress_lock:
+            # Update the progress bar
+            page_pbar.update(1)
+            # Extract domain from URL for cleaner display
+            try:
+                domain = url.split("/")[2]
+                path = "/" + "/".join(url.split("/")[3:])
+                if len(path) > 40:
+                    path = path[:37] + "..."
+                page_pbar.set_postfix_str(f"{domain}{path}")
+            except Exception:
+                pass
+
+    try:
+        # We don't know total pages in advance, so use unknown total
+        # Progress bar will just show count
+        with tqdm(
+            total=None,
+            desc="Loading pages",
+            unit="page",
+            ncols=100,
+        ) as page_pbar:
+            with ThreadPoolExecutor(max_workers=min(len(sources), 4)) as executor:
+                # Submit all source loading tasks with progress callback
+                future_to_source = {
+                    executor.submit(
+                        _load_source_documents, source, config, page_progress_callback
+                    ): source
+                    for source in sources
+                }
+                logger.info(f"All {len(sources)} tasks submitted")
+
+                # Process results as they complete
                 try:
                     for future in as_completed(future_to_source):
                         url, docs, error = future.result()
                         if error:
                             logger.error(f"Error loading {url}: {error}")
                             short_url = url.split("/")[2]  # Extract domain
-                            pbar.write(f"⚠️  FAILED: {short_url} - {error[:60]}...")
+                            page_pbar.write(f"⚠️  FAILED: {short_url} - {error[:60]}...")
                         else:
                             if len(docs) == 0:
                                 logger.warning(f"No documents loaded from {url}")
                                 short_url = url.split("/")[2]
-                                pbar.write(
+                                page_pbar.write(
                                     f"⚠️  EMPTY:  {short_url} - No documents found"
                                 )
                             else:
@@ -525,13 +536,12 @@ def create_retriever(
                                 )
                                 all_docs.extend(docs)
                                 short_url = url.split("/")[2]
-                                pbar.write(
+                                page_pbar.write(
                                     f"✅ SUCCESS: {short_url} - {len(docs):3d} docs"
                                 )
-                        pbar.update(1)
                 except KeyboardInterrupt:
                     logger.warning("Keyboard interrupt, cancelling remaining tasks")
-                    pbar.write("\n⚠️  Cancelling parallel loading...")
+                    page_pbar.write("\n⚠️  Cancelling parallel loading...")
                     for future in future_to_source:
                         future.cancel()
                     raise
