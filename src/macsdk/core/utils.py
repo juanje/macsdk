@@ -40,8 +40,8 @@ def log_progress(message: str, config: "RunnableConfig | None" = None) -> None:
             try:
                 writer_func(message)
                 return
-            except Exception:
-                pass  # Fall through to other methods
+            except Exception:  # nosec B110
+                pass  # Fall through to other logging methods
 
     # Try to use LangGraph's context stream writer (for node context)
     try:

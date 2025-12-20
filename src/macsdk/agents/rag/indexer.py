@@ -282,7 +282,8 @@ def _get_collection_name_for_sources(
     urls_str = "|".join(sorted_urls)
     chunk_info = f"{config.chunk_size}_{config.chunk_overlap}_{config.max_depth}"
     content = f"{urls_str}_{chunk_info}"
-    url_hash = hashlib.md5(content.encode()).hexdigest()[:8]
+    # MD5 used only for collection ID generation (not for security)
+    url_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()[:8]
     return f"macsdk-docs-{url_hash}"
 
 
@@ -527,8 +528,8 @@ def create_retriever(
                 if len(path) > 40:
                     path = path[:37] + "..."
                 page_pbar.set_postfix_str(f"{domain}{path}")
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Progress bar display failure is non-critical
 
     try:
         # We don't know total pages in advance, so use unknown total

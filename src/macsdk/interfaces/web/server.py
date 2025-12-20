@@ -63,8 +63,8 @@ async def safe_send_json(websocket: WebSocket, data: dict) -> None:
     try:
         if websocket.client_state == WebSocketState.CONNECTED:
             await websocket.send_json(data)
-    except Exception:
-        pass
+    except Exception:  # nosec B110
+        pass  # WebSocket may be closed, safe to ignore
 
 
 def create_initial_state() -> ChatbotState:

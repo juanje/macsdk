@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
+import subprocess  # nosec B404
 import tomllib
 from pathlib import Path
 
@@ -116,8 +116,8 @@ def add_agent_to_chatbot(
     # Run uv sync
     console.print("  [dim]Running uv sync...[/dim]")
     try:
-        subprocess.run(
-            ["uv", "sync"],
+        subprocess.run(  # nosec B603, B607
+            ["uv", "sync"],  # Controlled command, no user input
             cwd=chatbot_path,
             capture_output=True,
             check=True,
