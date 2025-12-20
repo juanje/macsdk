@@ -246,5 +246,7 @@ class SimpleRecursiveLoader:
         visited: set[str] = set()
         # Normalize starting URL for consistent visited tracking
         normalized_start = self._normalize_url(self.url)
-        with httpx.Client(verify=self.verify, timeout=self.timeout) as client:
+        with httpx.Client(
+            verify=self.verify, timeout=self.timeout, follow_redirects=True
+        ) as client:
             return self._crawl_recursive(normalized_start, visited, client)
