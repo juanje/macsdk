@@ -129,6 +129,7 @@ class SimpleRecursiveLoader:
         self,
         url: str,
         visited: set[str],
+        client: httpx.Client,
         depth: int = 0,
     ) -> list[Document]:
         """Recursively crawl pages starting from given URL.
@@ -136,6 +137,7 @@ class SimpleRecursiveLoader:
         Args:
             url: URL to crawl.
             visited: Set of already visited URLs.
+            client: Reusable httpx.Client for connection pooling.
             depth: Current recursion depth.
 
         Returns:
@@ -148,11 +150,10 @@ class SimpleRecursiveLoader:
         documents = []
 
         try:
-            # Make HTTP request with httpx
-            with httpx.Client(verify=self.verify, timeout=self.timeout) as client:
-                response = client.get(url)
-                response.raise_for_status()
-                html = response.text
+            # Make HTTP request with shared client (enables connection pooling)
+            response = client.get(url)
+            response.raise_for_status()
+            html = response.text
 
             # Extract content using provided extractor
             content = self.extractor(html)
@@ -174,7 +175,9 @@ class SimpleRecursiveLoader:
             if depth < self.max_depth - 1:
                 links = self._extract_links(html, url)
                 for link in links:
-                    documents.extend(self._crawl_recursive(link, visited, depth + 1))
+                    documents.extend(
+                        self._crawl_recursive(link, visited, client, depth + 1)
+                    )
 
         except httpx.HTTPStatusError as e:
             logger.warning(f"HTTP error loading {url}: {e.response.status_code}")
@@ -197,8 +200,13 @@ class SimpleRecursiveLoader:
     def load(self) -> list[Document]:
         """Load all documents by crawling recursively from root URL.
 
+        Uses a single httpx.Client instance for all requests to enable
+        connection pooling and Keep-Alive, significantly improving performance
+        when crawling multiple pages from the same domain.
+
         Returns:
             List of Document objects from all crawled pages.
         """
         visited: set[str] = set()
-        return self._crawl_recursive(self.url, visited)
+        with httpx.Client(verify=self.verify, timeout=self.timeout) as client:
+            return self._crawl_recursive(self.url, visited, client)
