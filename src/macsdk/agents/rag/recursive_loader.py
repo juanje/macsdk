@@ -82,6 +82,8 @@ class SimpleRecursiveLoader:
         self.timeout = timeout
         self.progress_callback = progress_callback
         self.base_url = self._parse_base_url(url)
+        # Cache netloc to avoid re-parsing on every link extraction
+        self.base_netloc = urlparse(self.base_url).netloc
 
     def _parse_base_url(self, url: str) -> str:
         """Extract base URL (scheme + netloc).
@@ -95,6 +97,24 @@ class SimpleRecursiveLoader:
         parsed = urlparse(url)
         return f"{parsed.scheme}://{parsed.netloc}"
 
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URL to avoid duplicates.
+
+        Removes trailing slashes and fragments for consistent comparison.
+
+        Args:
+            url: URL to normalize.
+
+        Returns:
+            Normalized URL.
+        """
+        # Remove fragments
+        url = url.split("#")[0]
+        # Remove trailing slash (but keep it if it's just the domain)
+        if url.endswith("/") and url.count("/") > 2:
+            url = url.rstrip("/")
+        return url
+
     def _extract_links(self, soup: BeautifulSoup, current_url: str) -> list[str]:
         """Extract all valid links from HTML.
 
@@ -106,10 +126,9 @@ class SimpleRecursiveLoader:
             current_url: Current page URL (for resolving relative links).
 
         Returns:
-            List of absolute URLs to follow.
+            List of normalized absolute URLs to follow.
         """
         links = []
-        base_netloc = urlparse(self.base_url).netloc
 
         for a_tag in soup.find_all("a", href=True):
             href = a_tag["href"]
@@ -119,10 +138,10 @@ class SimpleRecursiveLoader:
 
             # Only follow links from same domain (strict netloc comparison)
             parsed = urlparse(absolute_url)
-            if parsed.netloc == base_netloc:
-                # Remove fragments
-                absolute_url = absolute_url.split("#")[0]
-                links.append(absolute_url)
+            if parsed.netloc == self.base_netloc:
+                # Normalize to avoid duplicates (removes trailing slashes, etc.)
+                normalized_url = self._normalize_url(absolute_url)
+                links.append(normalized_url)
 
         return list(set(links))  # Deduplicate
 
@@ -213,5 +232,7 @@ class SimpleRecursiveLoader:
             List of Document objects from all crawled pages.
         """
         visited: set[str] = set()
+        # Normalize starting URL for consistent visited tracking
+        normalized_start = self._normalize_url(self.url)
         with httpx.Client(verify=self.verify, timeout=self.timeout) as client:
-            return self._crawl_recursive(self.url, visited, client)
+            return self._crawl_recursive(normalized_start, visited, client)
