@@ -8,7 +8,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from api_agent import ApiAgent
+try:
+    from api_agent import ApiAgent  # type: ignore[import-not-found]
+
+    API_AGENT_AVAILABLE = True
+except ImportError:
+    API_AGENT_AVAILABLE = False
 
 from macsdk.agents import RAGAgent
 from macsdk.core import get_registry, register_agent
@@ -19,7 +24,7 @@ def register_all_agents() -> None:
 
     This chatbot includes:
     - RAG Agent: For documentation Q&A (configured via config.yml)
-    - API Agent: For interacting with JSONPlaceholder REST API
+    - API Agent: For interacting with JSONPlaceholder REST API (if available)
     """
     registry = get_registry()
 
@@ -29,7 +34,8 @@ def register_all_agents() -> None:
         register_agent(RAGAgent())
 
     # API Agent for REST API interactions (JSONPlaceholder)
-    if not registry.is_registered("api_agent"):
+    # Only register if api_agent package is installed
+    if API_AGENT_AVAILABLE and not registry.is_registered("api_agent"):
         register_agent(ApiAgent())
 
 
