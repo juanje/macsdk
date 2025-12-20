@@ -1,0 +1,20 @@
+name: AI Code Review
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    container:
+      image: registry.gitlab.com/redhat/edge/ci-cd/ai-code-review:latest
+    steps:
+      - name: Run AI Review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          ai-code-review --pr-number ${{ github.event.pull_request.number }} --post
