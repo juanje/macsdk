@@ -125,6 +125,10 @@ class SimpleRecursiveLoader:
         Only returns links from the same domain and under the base path to prevent
         crawling external sites or unrelated sections of the same domain.
 
+        Uses strict path matching: a link's path must exactly match base_path or
+        start with base_path + "/" to prevent partial matches (e.g., /doc should
+        not match /documentation).
+
         Args:
             soup: Parsed BeautifulSoup object.
             current_url: Current page URL (for resolving relative links).
@@ -142,9 +146,12 @@ class SimpleRecursiveLoader:
 
             # Only follow links from same domain and under base path
             parsed = urlparse(absolute_url)
-            if parsed.netloc == self.base_netloc and parsed.path.startswith(
-                self.base_path
-            ):
+            # Strict path matching: exact match or under subdirectory
+            # Prevents /doc from matching /documentation
+            path_match = parsed.path == self.base_path or parsed.path.startswith(
+                self.base_path + "/"
+            )
+            if parsed.netloc == self.base_netloc and path_match:
                 # Remove fragments but keep URL as provided by the website
                 # (preserving trailing slashes to avoid 404s)
                 clean_url = absolute_url.split("#")[0]
