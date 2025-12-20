@@ -4,21 +4,25 @@ This module provides utilities for managing SSL certificates when
 crawling documentation from internal/corporate URLs that require
 custom CA certificates.
 
-Certificates can be:
-- Downloaded from a URL and cached locally
-- Loaded from a local file path
-- Combined with system certificates for use with requests
+Features:
+- Download and cache certificates from URLs
+- Load certificates from local file paths
+- Create combined certificate bundles (system + custom certs)
+
+Note: The combined bundle is necessary for libraries like `requests`
+that replace (rather than extend) system certificates when given a custom cert.
 """
 
 from __future__ import annotations
 
-import hashlib
+import asyncio
 import logging
-import ssl
 from pathlib import Path
 from urllib.parse import urlparse
 
 import certifi
+
+from macsdk.core.cert_manager import get_certificate_path
 
 from .config import RAGSourceConfig, get_rag_config
 
@@ -26,56 +30,65 @@ logger = logging.getLogger(__name__)
 
 
 def _get_cert_cache_dir() -> Path:
-    """Get the certificate cache directory, creating it if needed."""
+    """Get the certificate cache directory for combined certificate bundles.
+
+    Returns:
+        Path to the cache directory (creates it if needed).
+    """
     config = get_rag_config()
     cache_dir = config.cert_cache_dir
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
 
-def _get_cert_filename(url: str) -> str:
-    """Generate a unique filename for a certificate URL."""
-    url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
-    return f"cert_{url_hash}.pem"
+def _get_certificate_sync(cert_spec: str) -> Path | None:
+    """Get a certificate from a URL or local path (synchronous).
 
+    Handles both remote certificate URLs (downloads and caches) and
+    local file paths (validates existence).
 
-def download_certificate(cert_url: str) -> Path | None:
-    """Download a certificate from a URL and cache it locally.
+    Note: Uses asyncio.run() to bridge async core functionality. This is safe
+    because the RAG indexer calls this from within a ThreadPoolExecutor,
+    not from an active event loop.
 
     Args:
-        cert_url: URL to download the certificate from.
+        cert_spec: Either a URL (http/https) or local file path.
 
     Returns:
-        Path to the cached certificate file, or None if download failed.
+        Path to the certificate file, or None if failed.
+
+    Raises:
+        RuntimeError: If called from within an active event loop. This indicates
+                      incorrect usage - this function must be called from a
+                      synchronous context (e.g., ThreadPoolExecutor).
     """
-    import urllib.request
-
-    cache_dir = _get_cert_cache_dir()
-    cert_filename = _get_cert_filename(cert_url)
-    cert_path = cache_dir / cert_filename
-
-    # Return cached certificate if it exists
-    if cert_path.exists():
-        logger.debug(f"Using cached certificate: {cert_path}")
-        return cert_path
-
-    logger.info(f"Downloading certificate from {cert_url}")
-
     try:
-        # Create SSL context that doesn't verify (for initial download)
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-
-        with urllib.request.urlopen(cert_url, context=ctx) as response:
-            cert_data = response.read()
-
-        cert_path.write_bytes(cert_data)
-        logger.info(f"Certificate cached at {cert_path}")
-        return cert_path
-
+        cert_path_str = asyncio.run(get_certificate_path(cert_spec))
+        return Path(cert_path_str)
+    except RuntimeError as e:
+        # Catch event loop conflicts with a clear error message
+        if "cannot be called from a running event loop" in str(e):
+            logger.error(
+                f"Certificate retrieval failed: {e}. "
+                "This function cannot be called from an async context. "
+                "Ensure RAG indexer runs certificate operations "
+                "in a ThreadPoolExecutor."
+            )
+            raise RuntimeError(
+                "Certificate manager cannot be called from an active event loop. "
+                "This is a programming error - the RAG indexer must call "
+                "certificate operations from a ThreadPoolExecutor, "
+                "not from the main event loop."
+            ) from e
+        # Other RuntimeErrors should be re-raised
+        raise
+    except (ValueError, FileNotFoundError) as e:
+        # Certificate URL invalid or local file not found
+        logger.error(f"Certificate error for {cert_spec}: {e}")
+        return None
     except Exception as e:
-        logger.error(f"Failed to download certificate from {cert_url}: {e}")
+        # Unexpected error (network issues, etc.)
+        logger.error(f"Unexpected error getting certificate from {cert_spec}: {e}")
         return None
 
 
@@ -112,40 +125,44 @@ def create_combined_cert_bundle(custom_cert_path: Path) -> Path | None:
 
 
 def get_cert_for_source(source: RAGSourceConfig) -> Path | None:
-    """Get the appropriate certificate for a documentation source.
+    """Get the appropriate certificate bundle for a documentation source.
 
-    This function handles:
-    - No certificate (returns None)
-    - Local certificate path
-    - Remote certificate URL (downloads and caches)
+    Handles both local certificate paths and remote URLs. The certificate
+    is combined with system certificates to create a bundle that works with
+    both public and internal/corporate sites.
+
+    Configuration precedence (for backward compatibility):
+    1. cert_path (local file) takes precedence
+    2. cert_url (remote download) is used if cert_path is not set
 
     Args:
         source: The documentation source configuration.
 
     Returns:
-        Path to the certificate file (or combined bundle), or None.
+        Path to the combined certificate bundle, or None if no cert configured.
     """
-    # No certificate configured
-    if not source.cert_url and not source.cert_path:
+    # Preserve precedence: local path overrides URL (backward compatibility)
+    cert_spec = source.cert_path or source.cert_url
+    if not cert_spec:
+        # No certificate configured
         return None
 
-    # Local certificate path
-    if source.cert_path:
-        cert_path = Path(source.cert_path)
-        if not cert_path.exists():
-            logger.warning(f"Certificate not found: {source.cert_path}")
-            return None
-        logger.debug(f"Using local certificate: {cert_path}")
-        return create_combined_cert_bundle(cert_path)
+    logger.info(f"Getting certificate for source '{source.name}': {cert_spec}")
 
-    # Remote certificate URL
-    if source.cert_url:
-        downloaded_cert = download_certificate(source.cert_url)
-        if downloaded_cert:
-            return create_combined_cert_bundle(downloaded_cert)
+    # Get certificate (download if URL, validate if local path)
+    cert_path = _get_certificate_sync(cert_spec)
+    if not cert_path:
+        logger.error(f"Failed to get certificate for source '{source.name}'")
         return None
 
-    return None
+    # Combine with system certificates for compatibility with requests library
+    combined_bundle = create_combined_cert_bundle(cert_path)
+    if combined_bundle:
+        logger.info(
+            f"Created combined certificate bundle for '{source.name}': "
+            f"{combined_bundle}"
+        )
+    return combined_bundle
 
 
 def needs_custom_cert(url: str) -> bool:
