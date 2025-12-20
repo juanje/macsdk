@@ -95,21 +95,21 @@ class SimpleRecursiveLoader:
         parsed = urlparse(url)
         return f"{parsed.scheme}://{parsed.netloc}"
 
-    def _extract_links(self, html: str, current_url: str) -> list[str]:
+    def _extract_links(self, soup: BeautifulSoup, current_url: str) -> list[str]:
         """Extract all valid links from HTML.
 
         Only returns links from the same domain as base_url to prevent
         crawling external sites.
 
         Args:
-            html: HTML content to parse.
+            soup: Parsed BeautifulSoup object.
             current_url: Current page URL (for resolving relative links).
 
         Returns:
             List of absolute URLs to follow.
         """
-        soup = BeautifulSoup(html, "html.parser")
         links = []
+        base_netloc = urlparse(self.base_url).netloc
 
         for a_tag in soup.find_all("a", href=True):
             href = a_tag["href"]
@@ -117,8 +117,9 @@ class SimpleRecursiveLoader:
             # Convert relative URLs to absolute
             absolute_url = urljoin(current_url, href)
 
-            # Only follow links from same domain
-            if absolute_url.startswith(self.base_url):
+            # Only follow links from same domain (strict netloc comparison)
+            parsed = urlparse(absolute_url)
+            if parsed.netloc == base_netloc:
                 # Remove fragments
                 absolute_url = absolute_url.split("#")[0]
                 links.append(absolute_url)
@@ -155,6 +156,9 @@ class SimpleRecursiveLoader:
             response.raise_for_status()
             html = response.text
 
+            # Parse HTML once to avoid redundant parsing
+            soup = BeautifulSoup(html, "html.parser")
+
             # Extract content using provided extractor
             content = self.extractor(html)
             if content:
@@ -172,8 +176,9 @@ class SimpleRecursiveLoader:
                 self.progress_callback(url, len(documents))
 
             # Extract and follow links if not at max depth
+            # Reuse parsed soup to avoid redundant parsing
             if depth < self.max_depth - 1:
-                links = self._extract_links(html, url)
+                links = self._extract_links(soup, url)
                 for link in links:
                     documents.extend(
                         self._crawl_recursive(link, visited, client, depth + 1)
