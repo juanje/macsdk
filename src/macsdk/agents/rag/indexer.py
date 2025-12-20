@@ -90,6 +90,10 @@ def _resolve_cert_path(source: RAGSourceConfig) -> tuple[Path | None, str | None
 
     Helper to avoid duplicating certificate resolution logic.
 
+    Note: This function uses asyncio.run() which is safe here because
+    the RAG indexer calls this from within a ThreadPoolExecutor (in
+    create_retriever), not from an active event loop.
+
     Args:
         source: Source configuration with cert_path and/or cert_url.
 
@@ -97,6 +101,11 @@ def _resolve_cert_path(source: RAGSourceConfig) -> tuple[Path | None, str | None
         Tuple of (cert_path, error_message). If successful, cert_path is set
         and error_message is None. If failed, cert_path is None and
         error_message contains the error.
+
+    Raises:
+        RuntimeError: If called from within an active event loop. This would
+                      indicate incorrect usage - this function must be called
+                      from a synchronous context (ThreadPoolExecutor).
     """
     import asyncio
 
@@ -107,6 +116,18 @@ def _resolve_cert_path(source: RAGSourceConfig) -> tuple[Path | None, str | None
     try:
         cert_path_str = asyncio.run(get_certificate_path(cert_spec))
         return (Path(cert_path_str), None)
+    except RuntimeError as e:
+        # Specific handling for event loop conflicts
+        if "cannot be called from a running event loop" in str(e):
+            error_msg = (
+                "Certificate resolution failed: asyncio.run() called from "
+                "async context. The RAG indexer must run in a "
+                "ThreadPoolExecutor, not from an event loop."
+            )
+            logger.error(f"{error_msg} Original error: {e}")
+            return (None, error_msg)
+        # Re-raise other RuntimeErrors
+        raise
     except Exception as e:
         error_msg = f"Certificate error: {e}"
         logger.error(f"Failed to get certificate for {cert_spec}: {e}")
