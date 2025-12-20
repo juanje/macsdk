@@ -306,9 +306,8 @@ def web(host: str, port: int, debug: bool) -> None:
         debug_enabled = debug or _config.debug
 
         # Look for static files in project root
-        static_dir = Path.cwd() / "static"
-        if not static_dir.exists():
-            static_dir = None
+        static_path = Path.cwd() / "static"
+        static_dir: Path | None = static_path if static_path.exists() else None
 
         console.print()
         debug_msg = " [yellow](debug mode)[/]" if debug_enabled else ""
