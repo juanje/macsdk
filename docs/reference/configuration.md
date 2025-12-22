@@ -35,7 +35,13 @@ classifier_reasoning_effort: low
 # Middleware Configuration
 # =============================================================================
 include_datetime: true  # Inject datetime context with pre-calculated dates
+enable_todo: true       # Enable task planning for SUPERVISOR (default: true)
 debug: false            # Show prompts sent to LLM (for debugging)
+
+# Agent-specific middleware (specialist agents are disabled by default)
+# Enable only for agents that need complex task planning
+# diagnostic_agent:
+#   enable_todo: true   # Enable task planning for this specific agent
 
 # Context summarization (for long conversations)
 summarization_enabled: false
@@ -272,6 +278,17 @@ All configuration options can be set via environment variables:
 | `SERVER_PORT` | Web server port | `8000` |
 | `MESSAGE_MAX_LENGTH` | Max message length | `5000` |
 | `WARMUP_TIMEOUT` | Startup timeout | `15.0` |
+
+### Middleware Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `INCLUDE_DATETIME` | Include datetime context | `true` |
+| `ENABLE_TODO` | Enable task planning middleware | `true` |
+| `DEBUG` | Show prompts sent to LLM | `false` |
+| `SUMMARIZATION_ENABLED` | Enable context summarization | `false` |
+| `SUMMARIZATION_TRIGGER_TOKENS` | Token threshold for summarization | `100000` |
+| `SUMMARIZATION_KEEP_MESSAGES` | Recent messages to preserve | `6` |
 
 ### Agent Execution
 

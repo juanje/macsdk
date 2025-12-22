@@ -57,3 +57,10 @@ You have access to a DevOps monitoring API with these endpoints:
 4. When asked about services, `get_service_health_summary` gives a quick overview
 5. Always provide actionable insights based on the data
 """
+
+# Task Planning Prompt (used when enable_todo=True)
+# Import from SDK or define custom version
+try:
+    from macsdk.prompts import TODO_PLANNING_SPECIALIST_PROMPT
+except ImportError:
+    TODO_PLANNING_SPECIALIST_PROMPT = ""

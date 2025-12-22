@@ -8,6 +8,74 @@ override these prompts in their own prompts.py module.
 # Dynamic placeholder for agent capabilities - will be filled at runtime
 AGENT_CAPABILITIES_PLACEHOLDER = "{agent_capabilities}"
 
+# Task Planning Prompts - Injected conditionally when enable_todo=True
+
+# Common task planning concepts
+TODO_PLANNING_COMMON = """## Task Planning with To-Do List
+
+You have access to an internal to-do list for tracking complex multi-step
+investigations.
+
+**When to Use Task Planning:**
+- Complex queries requiring multiple steps or calls
+- Investigations with dependencies between steps
+- Queries that mention "why", "diagnose", or "investigate"
+- Situations where you need to gather information from multiple sources
+
+**Breaking Down Complex Queries:**
+- Identify all information needed to fully answer the question
+- Break into discrete investigation steps
+- Track progress as you gather information
+- Don't respond until all necessary information is collected
+
+**Task Tracking:**
+- Mark tasks complete as you gather information
+- Review remaining tasks before responding
+- Ensure all investigation paths are followed
+"""
+
+# Task planning prompt for supervisor (uses agents as tools)
+TODO_PLANNING_SUPERVISOR_PROMPT = (
+    TODO_PLANNING_COMMON
+    + """
+**Example Investigation Flow (Using Specialist Agents):**
+
+User: "Why did the deployment fail?"
+
+Your Process:
+1. Call deployment_agent("recent deployments")
+   -> Returns: deployment #7 failed
+2. Call deployment_agent("deployment #7 details")
+   -> Returns: pipeline #3 failed
+3. Call pipeline_agent("pipeline #3 failed jobs")
+   -> Returns: Job #15 failed
+4. Call job_agent("job #15 logs")
+   -> Returns: "database_test.py line 45: ConnectionError"
+5. Synthesize complete answer with root cause and recommendation
+"""
+)
+
+# Task planning prompt for specialist agents (uses tools)
+TODO_PLANNING_SPECIALIST_PROMPT = (
+    TODO_PLANNING_COMMON
+    + """
+**Example Investigation Flow (Using Tools):**
+
+User: "Why did the deployment fail?"
+
+Your Process:
+1. Call get_recent_deployments()
+   -> Returns: deployment #7 failed
+2. Call get_deployment_details(deployment_id=7)
+   -> Returns: failed at step "database_test"
+3. Call get_test_logs(deployment_id=7, test_name="database_test")
+   -> Returns: "ConnectionError: Unable to connect to database on port 5432"
+4. Call check_database_status()
+   -> Returns: "Database service is down"
+5. Synthesize complete answer with root cause and recommendation
+"""
+)
+
 SUPERVISOR_PROMPT = """You are an intelligent supervisor that orchestrates specialist agents to fully answer user questions.
 
 ## Available Agents (Tools)

@@ -1636,7 +1636,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "jinja2", specifier = ">=3.0.0" },
     { name = "jsonpath-ng", specifier = ">=1.6.0" },
-    { name = "langchain", specifier = ">=1.0.0" },
+    { name = "langchain", specifier = ">=1.0.1" },
     { name = "langchain-chroma", marker = "extra == 'rag'", specifier = ">=0.1.0" },
     { name = "langchain-community", marker = "extra == 'rag'", specifier = ">=0.2.0" },
     { name = "langchain-core", specifier = ">=1.0.0" },

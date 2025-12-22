@@ -335,6 +335,109 @@ def register_all_agents():
 5. **Handle errors gracefully**: Return helpful error messages
 6. **Use streaming**: Call `log_progress` for long operations
 
+## Task Planning with TodoListMiddleware
+
+For complex multi-step queries that require coordination between multiple agents, you can enable task planning middleware:
+
+### Configuration
+
+**Important:** The global `enable_todo` setting applies **only to the supervisor**, not to specialist agents.
+
+**Supervisor (enabled by default):**
+
+```yaml
+# Task Planning for supervisor (coordinates multiple agents)
+enable_todo: true  # Default: true
+```
+
+**Agent-specific setting (disabled by default):**
+
+Agents don't inherit the global setting. Enable explicitly for agents that need it:
+
+```yaml
+# Supervisor uses global setting
+enable_todo: true
+
+# Enable for specific agents that need task planning
+diagnostic_agent:
+  enable_todo: true   # Complex multi-step diagnostics
+
+investigation_agent:
+  enable_todo: true   # Deep investigations
+
+# Simple agents don't need it (default: false)
+# api_lookup_agent: no config needed, uses default (false)
+```
+
+**Priority order for specialist agents:**
+1. Parameter passed to agent's `run()` method
+2. Agent-specific config (`api_agent.enable_todo`)
+3. Default value (`False` for agents)
+
+**Priority order for supervisor:**
+1. Parameter passed to `create_supervisor_agent()`
+2. Global config (`enable_todo`)
+3. Default value (`True` for supervisor)
+
+### How It Works
+
+When enabled, the TodoListMiddleware equips agents with an internal to-do list for tracking complex investigations:
+
+- **Breaks down complex queries** into manageable steps
+- **Tracks progress** as the agent gathers information
+- **Ensures completeness** by reviewing remaining tasks before responding
+
+### When to Use
+
+Enable task planning for agents that handle:
+- Multi-step investigations ("Why did the deployment fail?")
+- Queries requiring multiple tool calls with dependencies
+- Complex diagnostic workflows
+
+### Example
+
+User asks: "Why did the deployment fail?"
+
+With task planning enabled:
+1. Agent creates internal plan: Check deployments → Get pipeline details → Fetch logs
+2. Tracks progress through each step
+3. Ensures all investigation paths are followed
+4. Returns complete answer with root cause
+
+### Task Planning Prompts
+
+Specialist agents use `TODO_PLANNING_SPECIALIST_PROMPT`, which includes examples tailored for tool-based workflows:
+
+```python
+# The SDK automatically imports this in generated agents
+from macsdk.prompts import TODO_PLANNING_SPECIALIST_PROMPT
+```
+
+This prompt differs from `TODO_PLANNING_SUPERVISOR_PROMPT` (used by supervisors) because:
+- **Specialist prompts**: Show examples using tools (`get_deployment_details()`, `fetch_logs()`)
+- **Supervisor prompts**: Show examples coordinating agents (`call deployment_agent`, `call pipeline_agent`)
+
+#### Customizing for Your Domain
+
+You can override the default in your agent's `prompts.py`:
+
+```python
+from macsdk.prompts import TODO_PLANNING_COMMON
+
+# Build on the common base with domain-specific examples
+TODO_PLANNING_SPECIALIST_PROMPT = (
+    TODO_PLANNING_COMMON + """
+**Example Investigation Flow for Your Domain:**
+1. Call get_domain_specific_data()
+2. Call analyze_results(data)
+3. Call get_recommendations()
+... your custom examples ...
+"""
+)
+```
+
+The SDK automatically injects this prompt when `enable_todo=True`.
+
 ## Advanced: Using Subgraphs
 
 For agents that need multi-step processing, you can use LangGraph:

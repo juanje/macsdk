@@ -15,7 +15,11 @@
 - **Architecture Pattern:** Asynchronous (FastAPI/httpx) & Agentic/RAG (LangGraph/ChromaDB)
 
 ### Key Dependencies (for Context7 & API Understanding)
-- **langchain>=1.0.0 / langgraph>=1.0.0** - Critical for reviewing AI agent orchestration, state graphs, and LLM interaction logic. The supervisor uses LangGraph for workflow orchestration.
+- **langchain>=1.0.1 / langgraph>=1.0.0** - Critical for reviewing AI agent orchestration, state graphs, and LLM interaction logic. The supervisor uses LangGraph for workflow orchestration.
+  - **IMPORTANT:** LangChain released version 1.0.0 in **October 2025**, moving from 0.3.x series. Current version in use: **1.1.2**
+  - **NEW in 1.0+:** `langchain.agents.middleware.TodoListMiddleware` - Native middleware for agent task planning, part of the new middleware system introduced in 1.0
+  - LangChain 1.0 includes: `create_agent` abstraction, middleware system (built-in: human-in-the-loop, summarization, PII redaction), and support for custom middleware
+  - If reviewing against older LangChain docs (0.3.x or earlier), note that middleware patterns and `create_agent()` signatures have changed significantly
 - **langchain-google-genai>=2.0.0** - Default LLM provider integration with Google's Gemini models.
 - **pydantic>=2.0.0** - Enforces strict data validation and settings management using V2 syntax. All configuration and agent responses use Pydantic models.
 - **fastapi>=0.115.0** - Powers the web interface with WebSocket support for real-time streaming of agent responses.
@@ -65,6 +69,7 @@ macsdk/
 │   │
 │   ├── middleware/          # Cross-cutting concerns
 │   │   ├── datetime_context.py  # Inject current datetime
+│   │   ├── todo.py              # Task planning (LangChain 1.0+)
 │   │   ├── summarization.py     # Context compression
 │   │   └── debug_prompts.py     # Prompt debugging
 │   │
@@ -107,7 +112,7 @@ macsdk/
 - `src/macsdk/core/` - Core orchestration (protocol, registry, supervisor, state, config)
 - `src/macsdk/agents/` - Built-in agents (RAG agent with ChromaDB integration)
 - `src/macsdk/interfaces/` - User interfaces (CLI with Rich, Web with FastAPI/WebSocket)
-- `src/macsdk/middleware/` - Cross-cutting concerns (datetime context, summarization, debug)
+- `src/macsdk/middleware/` - Cross-cutting concerns (datetime context, task planning, summarization, debug)
 - `src/macsdk/tools/` - Reusable tools (API interactions, remote agents)
 - `src/macsdk/cli/` - Scaffolding commands with Jinja2 templates
 
@@ -115,7 +120,7 @@ macsdk/
 - **SpecialistAgent Protocol:** Defines the contract all agents must implement (`name`, `capabilities`, `run()`, `as_tool()`). Enables type-safe agent registration.
 - **AgentRegistry:** Singleton registry for dynamic agent discovery and tool conversion. Agents are registered at runtime and exposed as LangChain tools.
 - **Supervisor Agent:** Central orchestrator using LangGraph to route queries. Dynamically builds prompts from registered agent capabilities.
-- **Middleware Pipeline:** Wraps supervisor execution for datetime injection, context summarization, and prompt debugging.
+- **Middleware Pipeline:** Wraps supervisor execution for datetime injection, task planning (LangChain 1.0+), context summarization, and prompt debugging.
 - **State Management:** Uses `ChatbotState` (TypedDict) to track messages and workflow steps across LangGraph nodes.
 
 **Entry Points:** 
@@ -133,6 +138,8 @@ macsdk/
 - **src/macsdk/agents/rag/indexer.py** - Document loading and indexing with parallel processing, supports HTML (web crawling) and Markdown sources.
 - **src/macsdk/agents/rag/recursive_loader.py** - Custom httpx-based web crawler with connection pooling, progress callbacks, and SSL certificate support for RAG document ingestion.
 - **src/macsdk/core/cert_manager.py** - SSL certificate management with download/caching of remote certificates and local path validation. Used by both API tools and RAG crawler.
+- **src/macsdk/middleware/todo.py** - TodoListMiddleware wrapper for LangChain 1.0+ task planning; demonstrates protocol compliance and conditional prompt injection.
+- **src/macsdk/prompts.py** - Centralized prompt definitions including supervisor prompt and role-specific task planning prompts (supervisor vs specialist).
 - **src/macsdk/tools/api.py** - API tools (`api_get`, `api_post`) with retry logic, JSONPath extraction, and certificate management.
 - **src/macsdk/cli/commands/new.py** - Project scaffolding logic; generates chatbots/agents from Jinja2 templates.
 
@@ -144,6 +151,7 @@ macsdk/
 - **Async Patterns:** All I/O operations use `async`/`await`; agents implement `async def run()` for compatibility with LangGraph async execution.
 - **Testing:** Unit tests mock LLM calls; integration tests use actual LangChain/LangGraph but with mocked external services (APIs, ChromaDB).
 - **Templates:** Jinja2 templates in `src/macsdk/cli/templates/` generate complete project structures with proper imports and type hints.
+- **Template Code Formatting:** Templates must generate code that passes ruff linting (88 char line limit). Long function calls should be split across multiple lines in the template itself.
 
 ## Code Review Focus Areas
 
@@ -153,7 +161,7 @@ macsdk/
 
 - **[AgentRegistry Thread Safety]** - Review `src/macsdk/core/registry.py` for potential race conditions during agent registration in async contexts. The global singleton pattern may need protection if agents are registered after server startup.
 
-- **[Supervisor Prompt Construction]** - In `src/macsdk/core/supervisor.py`, verify `get_all_capabilities()` returns deterministic, well-formatted agent descriptions. Middleware order is critical: DatetimeContext → Summarization → Supervisor → DebugPrompts.
+- **[Supervisor Prompt Construction]** - In `src/macsdk/core/supervisor.py`, verify `get_all_capabilities()` returns deterministic, well-formatted agent descriptions. Middleware order is critical: DatetimeContext → TodoList (if enabled) → Summarization → Supervisor → DebugPrompts.
 
 - **[Pydantic Field Descriptions]** - In `models.py` files, `Field(description=...)` strings are consumed by LLMs for tool/agent selection. Must be precise, actionable, and include examples where ambiguity exists.
 
@@ -251,9 +259,30 @@ class DatetimeContextMiddleware(AgentMiddleware):
 
 **Middleware Execution Order:**
 1. DatetimeContext - injects temporal context
-2. Summarization - compresses old messages if context too large
-3. Supervisor - main LLM routing
-4. DebugPrompts - logs final prompt for debugging
+2. TodoList (if enabled) - enables task planning for complex investigations
+3. Summarization - compresses old messages if context too large
+4. Supervisor - main LLM routing
+5. DebugPrompts - logs final prompt for debugging
+
+**Note**: Order matters. Summarization MUST run before supervisor to prevent context window overflow.
+
+### Task Planning Middleware (LangChain 1.0+)
+
+`TodoListMiddleware` from LangChain 1.0+ enables task breakdown for complex queries:
+
+```python
+from macsdk.middleware import TodoListMiddleware
+middleware = [TodoListMiddleware(enabled=True)]
+```
+
+**Configuration:**
+- Global: `enable_todo: true` (supervisor default: `True`, specialists: `False`)
+- Agent-specific: `api_agent.enable_todo: true` (hierarchical override)
+
+**Important for review:**
+- Middleware source: `langchain.agents.middleware` (LangChain 1.0.0+)
+- Agent functions return `tuple[Any, str]` (agent, system_prompt) for dynamic prompt injection
+- `type: ignore[misc]` on wrapper expected (LangChain base may lack types)
 
 ## Code Review Checklist
 
@@ -277,7 +306,7 @@ When reviewing changes to this project, verify:
 - [ ] New agents implement `SpecialistAgent` protocol correctly
 - [ ] Agent `capabilities` descriptions are LLM-friendly (verbose, actionable)
 - [ ] State mutations append to `messages`, never replace
-- [ ] Middleware respects execution order (Datetime→Summarization→Supervisor→Debug)
+- [ ] Middleware respects execution order (Datetime→TodoList(optional)→Summarization→Supervisor→Debug)
 - [ ] Configuration uses Pydantic V2 `BaseModel` with validators
 
 ### Documentation & Style
@@ -338,13 +367,45 @@ The `ChatbotState.messages` list follows an **append-only** pattern:
 
 ### Middleware Execution Order
 
-Middleware wraps the supervisor invocation and executes in a specific order:
-1. **DebugPrompts** (if enabled) - captures the final prompt
-2. **DatetimeContext** - injects current datetime into system message
-3. **Summarization** - compresses old messages if context too large
-4. **Supervisor** - actual LLM invocation with tools
+Middleware wraps the supervisor invocation:
+1. **DatetimeContext** - injects current datetime
+2. **TodoList** (if `enable_todo=True`) - adds task planning (LangChain 1.0+)
+3. **Summarization** - compresses old messages if too large
+4. **Supervisor** - LLM invocation with tools
+5. **DebugPrompts** (if enabled) - logs final prompt
 
-**Critical:** Summarization MUST run before the supervisor to prevent context window overflow errors.
+**Critical:** 
+- Summarization MUST run before supervisor to prevent context window overflow
+- TodoList default: `True` for supervisor, `False` for specialists
+
+### Task Planning Design Decisions (TodoListMiddleware)
+
+**Supervisor-first pattern:**
+- Supervisor: enabled by default (coordinates multi-step investigations)
+- Specialists: disabled by default (single-domain queries, opt-in via agent-specific config)
+
+**Conditional prompt injection:**
+- Task planning prompts only injected when `enable_todo=True` for that agent
+- Prevents confusing agents without middleware
+
+**Separate prompts by role:**
+- `TODO_PLANNING_SUPERVISOR_PROMPT`: agent-coordination examples (e.g., "call deployment_agent")
+- `TODO_PLANNING_SPECIALIST_PROMPT`: tool-based examples (e.g., "get_deployment_details()")
+- Prevents confusion between orchestration patterns and direct tool usage
+
+**Return type change:**
+- Agent creation functions return `tuple[Any, str]` (agent, system_prompt) not just `Any`
+- Required for dynamic prompt injection
+- Scope limited to internal module functions
+
+**Supervisor vs Specialist prompt handling:**
+- **Supervisor** (`create_supervisor_agent`): Binds system_prompt internally during `create_agent()` call
+  - Used directly by LangGraph as a node
+  - Prompt construction happens once per request
+- **Specialists** (`create_*_agent`): Return `(agent, system_prompt)` tuple
+  - Consumed by `run_agent_with_tools()` wrapper
+  - Allows for additional processing before agent invocation
+- This difference is intentional, driven by different execution contexts
 
 ### Lazy Model Initialization
 
@@ -546,6 +607,8 @@ Project scaffolding uses Jinja2 templates. Security considerations:
 - Mock all external services (LLM, APIs, ChromaDB)
 - Use `pytest-asyncio` for async test functions
 - Focus on protocol compliance and state transitions
+- **Important:** Tests that create supervisor/agents must mock `get_answer_model()` to avoid requiring API keys
+- Use `# type: ignore[call-arg]` for Pydantic models with `extra="allow"` and dynamic fields
 
 **Integration Tests:**
 - Use real LangChain/LangGraph (complex to mock correctly)
@@ -567,6 +630,40 @@ The project uses `uv` workspace feature:
 
 **Review focus:** Changes to `pyproject.toml` should maintain workspace member references.
 
+### Dynamic Agent Configuration (Pydantic `extra="allow"`)
+
+The `MACSDKConfig` class uses Pydantic's `extra="allow"` setting to support agent-specific configuration:
+
+```python
+model_config = SettingsConfigDict(
+    extra="allow",  # Allow custom config fields
+)
+```
+
+**Purpose:**
+- Enables passing arbitrary agent configurations: `api_agent={"enable_todo": True}`
+- Agents can read their specific config via: `getattr(config, "agent_name", {})`
+- Supports hierarchical configuration: global settings + agent-specific overrides
+
+**For Review:**
+- Dynamic fields like `api_agent={}` in config will show mypy errors: `Unexpected keyword argument`
+- This is EXPECTED behavior; use `# type: ignore[call-arg]` on these lines
+- The configuration works at runtime due to Pydantic's `extra="allow"`
+- Tests in `tests/unit/core/test_agent_specific_config.py` verify this pattern
+
+**Pattern:**
+```python
+# In agent code:
+agent_config = getattr(config, "my_agent", {})
+enable_todo = agent_config.get("enable_todo", False)  # Agent-specific default
+```
+
+**Agent naming guarantee:**
+- All `agent_slug` values are guaranteed to be valid Python identifiers
+- Generated via `slugify()` in `src/macsdk/cli/utils.py` (converts hyphens/spaces to underscores, lowercase, removes invalid chars)
+- This ensures `getattr(config, "agent_slug")` works correctly for dynamic agent configuration
+- Templates use `{{ agent_slug }}` which is always a valid identifier
+
 ### Deprecation Handling
 
 LangChain/LangGraph are rapidly evolving:
@@ -574,4 +671,20 @@ LangChain/LangGraph are rapidly evolving:
 - `mypy` ignores missing stubs for LangChain modules
 - Code should target latest stable versions (1.0+) of LangChain ecosystem
 
-**Review focus:** New LangChain usage should follow current best practices, not deprecated patterns (e.g., use `create_agent()`, not `AgentExecutor`).
+**IMPORTANT - LangChain 1.0+ Breaking Changes (October 2025):**
+- LangChain moved from 0.3.x to 1.0.0 with significant API changes
+- New middleware system: `langchain.agents.middleware` module introduced in 1.0.0
+- Built-in middleware: human-in-the-loop, summarization, PII redaction, and support for custom middleware (including `TodoListMiddleware`)
+- `TodoListMiddleware` is a 1.0+ feature - does NOT exist in 0.3.x or earlier
+- Agent creation with `create_agent()` now supports middleware parameter natively
+
+**IMPORTANT - LangChain Version Context:**
+- Current version in use: **1.1.2** (stable, Oct-Nov 2025)
+- **NEW in 1.0+:** Native middleware system including `TodoListMiddleware` for task planning
+- **NEW in 1.1+:** Model profiles (`.profile` attribute), `ModelRetryMiddleware`, smarter summarization
+- `langchain-google-genai`: Currently `>=2.0.0` (v4.0.0 available with breaking changes)
+
+**Review focus:** 
+- New LangChain usage should follow 1.0+ patterns, not 0.3.x patterns
+- Middleware patterns are fundamentally different between 0.3.x and 1.0+
+- If reviewing against older LangChain docs (pre-1.0), be aware of breaking changes
