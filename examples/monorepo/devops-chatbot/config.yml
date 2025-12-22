@@ -48,7 +48,7 @@ rag:
   sources:
     # MACSDK Documentation (local markdown files)
     - name: "macsdk_docs"
-      url: "../../docs/"
+      url: "../../../docs/"
       type: "markdown"
       tags: ["macsdk", "sdk", "documentation"]
 

@@ -23,6 +23,14 @@
 # =============================================================================
 # include_datetime: true           # Inject current datetime into prompts
 
+# Task Planning (for supervisor coordination)
+# enable_todo: true               # Enable for supervisor (default: true)
+
+# Agent-specific middleware (disabled by default for agents)
+# Enable only for agents that need complex task planning:
+# diagnostic_agent:
+#   enable_todo: true  # Enable task planning for this specific agent
+
 # Context summarization (for long conversations)
 # summarization_enabled: false
 # summarization_trigger_tokens: 100000

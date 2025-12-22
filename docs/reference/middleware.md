@@ -7,6 +7,7 @@ MACSDK includes middleware components that enhance agent capabilities automatica
 | Middleware | Purpose | Default |
 |------------|---------|---------|
 | `DatetimeContextMiddleware` | Injects current date/time and pre-calculated date references | Enabled |
+| `TodoListMiddleware` | Enables task planning for complex multi-step queries | Enabled |
 | `SummarizationMiddleware` | Summarizes long conversations to stay within token limits | Disabled |
 | `PromptDebugMiddleware` | Displays prompts sent to the LLM for debugging | Disabled |
 
@@ -61,6 +62,171 @@ When enabled, agents receive this context automatically:
 ### Example Use Case
 
 When a user asks "Show me failed pipelines from last week", the agent can immediately use the pre-calculated `Last 7 days` date in its API call without needing custom date logic in the prompt.
+
+## TodoListMiddleware
+
+Equips agents with an internal to-do list for tracking complex multi-step investigations.
+
+### Configuration
+
+**For Supervisor (enabled by default):**
+
+```yaml
+# config.yml
+enable_todo: true  # Default: true (supervisor only)
+```
+
+**For Specialist Agents (disabled by default):**
+
+Specialist agents don't inherit the global setting. Enable explicitly when needed:
+
+```yaml
+# Supervisor uses global setting
+enable_todo: true
+
+# Enable for specific agents that need task planning
+diagnostic_agent:
+  enable_todo: true   # Explicitly enable for complex agents
+```
+
+### What It Provides
+
+When enabled, agents can:
+- Break down complex queries into manageable tasks
+- Track progress on multi-step investigations
+- Mark tasks as complete
+- Review remaining work before responding
+
+### How It Works
+
+The middleware automatically provides:
+1. An internal to-do list managed by the agent
+2. Context-specific system prompts for task planning guidance:
+   - `TODO_PLANNING_SUPERVISOR_PROMPT`: For supervisors coordinating specialist agents
+   - `TODO_PLANNING_SPECIALIST_PROMPT`: For specialist agents using tools
+3. Natural language task tracking (no explicit tool calls needed)
+
+The agent naturally plans and tracks tasks in its reasoning:
+
+```
+Agent internal reasoning:
+"Let me break this down:
+1. Check deployment status
+2. Get pipeline details
+3. Fetch error logs
+4. Analyze root cause
+
+Starting with step 1..."
+```
+
+### When to Use
+
+Enable for agents that handle:
+- **Complex diagnostics**: "Why did the deployment fail?"
+- **Multi-step investigations**: Queries requiring multiple dependent tool calls
+- **Comprehensive analysis**: Tasks needing information from multiple sources
+
+Disable for agents that:
+- Handle simple lookups
+- Use single tool calls
+- Don't require planning
+
+### Benefits
+
+- **Ensures completeness**: Agents follow through on all investigation paths
+- **Better coordination**: Tracks dependencies between steps
+- **Improved reliability**: Reduces premature responses with incomplete information
+
+### Middleware Ordering
+
+When using multiple middleware, order matters. TodoListMiddleware should be placed **before** SummarizationMiddleware:
+
+```python
+middleware = []
+middleware.append(DatetimeContextMiddleware())
+middleware.append(TodoListMiddleware())      # ✓ Before Summarization
+middleware.append(SummarizationMiddleware()) # ✗ After TodoList
+```
+
+**Rationale**: The task planner needs access to full conversation context to make informed planning decisions. If summarization runs first, the planner sees compressed context and may miss important details.
+
+### Example Use Case
+
+**User query**: "Why did deployment #5 fail and what services are affected?"
+
+**With TodoListMiddleware enabled**:
+1. Agent creates internal plan: Check deployment → Get pipeline → Find failed jobs → Get logs → Check affected services
+2. Tracks progress through each step
+3. Ensures all questions are answered before responding
+4. Returns complete answer with root cause and impact
+
+**Without middleware**:
+- May stop after first finding ("Deployment #5 failed")
+- Might miss investigating affected services
+- Less systematic investigation
+
+### Task Planning Prompts
+
+The SDK provides two specialized prompts that are automatically injected when `enable_todo=True`:
+
+#### For Supervisor Agents
+
+The supervisor uses `TODO_PLANNING_SUPERVISOR_PROMPT`, which includes examples of coordinating specialist agents:
+
+```python
+from macsdk.prompts import TODO_PLANNING_SUPERVISOR_PROMPT
+
+# Examples use agent calls:
+# 1. Call deployment_agent("recent deployments")
+# 2. Call pipeline_agent("pipeline #3 failed jobs")
+# ...
+```
+
+#### For Specialist Agents
+
+Specialist agents use `TODO_PLANNING_SPECIALIST_PROMPT`, which includes examples of using tools:
+
+```python
+from macsdk.prompts import TODO_PLANNING_SPECIALIST_PROMPT
+
+# Examples use tool calls:
+# 1. Call get_recent_deployments()
+# 2. Call get_deployment_details(deployment_id=7)
+# ...
+```
+
+#### Customizing Prompts
+
+You can override the default prompts in your agent's `prompts.py`:
+
+```python
+from macsdk.prompts import TODO_PLANNING_COMMON
+
+# Define your own specialized version
+TODO_PLANNING_SPECIALIST_PROMPT = (
+    TODO_PLANNING_COMMON + """
+**Custom Investigation Flow:**
+... your specific examples ...
+"""
+)
+```
+
+The SDK automatically injects the appropriate prompt based on the agent type.
+
+### Programmatic Usage
+
+```python
+from langchain.agents import create_agent
+from macsdk.middleware import TodoListMiddleware
+
+middleware = [TodoListMiddleware(enabled=True)]
+
+agent = create_agent(
+    model=get_answer_model(),
+    tools=get_tools(),
+    middleware=middleware,
+)
+```
 
 ## SummarizationMiddleware
 

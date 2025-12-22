@@ -12,9 +12,13 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.config import get_stream_writer
 
-from ..middleware import DatetimeContextMiddleware, SummarizationMiddleware
+from ..middleware import (
+    DatetimeContextMiddleware,
+    SummarizationMiddleware,
+    TodoListMiddleware,
+)
 from ..middleware.debug_prompts import PromptDebugMiddleware
-from ..prompts import SUPERVISOR_PROMPT
+from ..prompts import SUPERVISOR_PROMPT, TODO_PLANNING_SUPERVISOR_PROMPT
 from .config import config
 from .llm import get_answer_model
 from .registry import get_all_agent_tools, get_all_capabilities
@@ -44,6 +48,7 @@ def _build_supervisor_prompt() -> str:
 
 def create_supervisor_agent(
     include_datetime: bool | None = None,
+    enable_todo: bool | None = None,
     debug: bool | None = None,
 ) -> Any:
     """Create the intelligent supervisor agent.
@@ -53,6 +58,8 @@ def create_supervisor_agent(
 
     Args:
         include_datetime: Whether to include datetime context middleware.
+            If None, uses the config value (default: True).
+        enable_todo: Whether to enable task planning middleware.
             If None, uses the config value (default: True).
         debug: Whether to enable debug middleware that shows prompts.
             If None, uses the config value (default: False).
@@ -65,6 +72,11 @@ def create_supervisor_agent(
 
     # Build dynamic prompt with capabilities
     system_prompt = _build_supervisor_prompt()
+
+    # Inject task planning prompt if todo middleware is enabled
+    todo_enabled = enable_todo if enable_todo is not None else config.enable_todo
+    if todo_enabled:
+        system_prompt = system_prompt + "\n\n" + TODO_PLANNING_SUPERVISOR_PROMPT
 
     # Build middleware list
     middleware: list[Any] = []
@@ -80,6 +92,10 @@ def create_supervisor_agent(
     )
     if datetime_enabled:
         middleware.append(DatetimeContextMiddleware(enabled=True))
+
+    # Add todo middleware if enabled (before summarization to see full context)
+    if todo_enabled:
+        middleware.append(TodoListMiddleware(enabled=True))
 
     # Add summarization middleware if enabled
     if config.summarization_enabled:

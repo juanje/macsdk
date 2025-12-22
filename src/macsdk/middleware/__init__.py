@@ -23,10 +23,12 @@ from .datetime_context import (
 )
 from .debug_prompts import PromptDebugMiddleware
 from .summarization import SummarizationMiddleware
+from .todo import TodoListMiddleware
 
 __all__ = [
     "DatetimeContextMiddleware",
     "PromptDebugMiddleware",
     "SummarizationMiddleware",
+    "TodoListMiddleware",
     "format_datetime_context",
 ]

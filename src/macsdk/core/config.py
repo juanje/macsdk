@@ -149,6 +149,7 @@ class MACSDKConfig(BaseSettings):
 
     # Middleware Configuration
     include_datetime: bool = True  # Inject datetime context into prompts
+    enable_todo: bool = True  # Enable ToDo middleware for task planning
 
     # Summarization Configuration
     summarization_enabled: bool = False  # Enable context summarization

@@ -17,10 +17,14 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, tool
 
 from macsdk.core import config, get_answer_model, run_agent_with_tools
-from macsdk.middleware import DatetimeContextMiddleware, PromptDebugMiddleware
+from macsdk.middleware import (
+    DatetimeContextMiddleware,
+    PromptDebugMiddleware,
+    TodoListMiddleware,
+)
 
 from .models import AgentResponse
-from .prompts import SYSTEM_PROMPT
+from .prompts import SYSTEM_PROMPT, TODO_PLANNING_SPECIALIST_PROMPT
 from .tools import get_tools
 
 if TYPE_CHECKING:
@@ -40,16 +44,35 @@ Uses generic SDK tools (api_get, fetch_file) plus custom tools
 for specialized operations with JSONPath extraction."""
 
 
-def create_api_agent(debug: bool | None = None) -> Any:
+def create_api_agent(
+    debug: bool | None = None,
+    enable_todo: bool | None = None,
+) -> tuple[Any, str]:
     """Create the api-agent agent.
 
     Args:
         debug: Whether to enable debug mode (shows prompts).
             If None, uses the config value (default: False).
+        enable_todo: Whether to enable task planning middleware.
+            If None, uses the config value (default: True).
 
     Returns:
-        Configured agent instance with DevOps tools.
+        Tuple of (configured agent instance, system prompt with optional planning).
     """
+    # Check for agent-specific config (e.g., api_agent: {enable_todo: true})
+    # Note: Agents don't inherit global enable_todo (that's for supervisor only)
+    agent_config = getattr(config, "api_agent", {})
+    if isinstance(agent_config, dict) and "enable_todo" in agent_config:
+        todo_default = agent_config["enable_todo"]
+    else:
+        todo_default = False  # Agents disabled by default
+
+    # Build system prompt with optional task planning
+    system_prompt = SYSTEM_PROMPT
+    todo_enabled = enable_todo if enable_todo is not None else todo_default
+    if todo_enabled:
+        system_prompt = system_prompt + "\n\n" + TODO_PLANNING_SPECIALIST_PROMPT
+
     # Build middleware list
     middleware: list[Any] = []
 
@@ -61,12 +84,18 @@ def create_api_agent(debug: bool | None = None) -> Any:
     # Add datetime context middleware
     middleware.append(DatetimeContextMiddleware())
 
-    return create_agent(
+    # Add todo middleware if enabled
+    if todo_enabled:
+        middleware.append(TodoListMiddleware(enabled=True))
+
+    agent = create_agent(
         model=get_answer_model(),
         tools=get_tools(),
         middleware=middleware,
         response_format=AgentResponse,
     )
+
+    return agent, system_prompt
 
 
 async def run_api_agent(
@@ -74,6 +103,7 @@ async def run_api_agent(
     context: dict | None = None,
     run_config: RunnableConfig | None = None,
     debug: bool | None = None,
+    enable_todo: bool | None = None,
 ) -> dict:
     """Run the api-agent agent.
 
@@ -83,15 +113,17 @@ async def run_api_agent(
         run_config: Optional runnable configuration.
         debug: Whether to enable debug mode (shows prompts).
             If None, uses the config value (default: False).
+        enable_todo: Whether to enable task planning middleware.
+            If None, uses the config value (default: True).
 
     Returns:
         Agent response dictionary.
     """
-    agent = create_api_agent(debug=debug)
+    agent, system_prompt = create_api_agent(debug=debug, enable_todo=enable_todo)
     return await run_agent_with_tools(
         agent=agent,
         query=query,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         agent_name="api_agent",
         context=context,
         config=run_config,
@@ -122,6 +154,7 @@ class ApiAgent:
         context: dict | None = None,
         run_config: RunnableConfig | None = None,
         debug: bool | None = None,
+        enable_todo: bool | None = None,
     ) -> dict:
         """Execute the agent.
 
@@ -130,11 +163,12 @@ class ApiAgent:
             context: Optional context from previous interactions.
             run_config: Optional runnable configuration.
             debug: Whether to enable debug mode (shows prompts).
+            enable_todo: Whether to enable task planning middleware.
 
         Returns:
             Agent response dictionary.
         """
-        return await run_api_agent(query, context, run_config, debug)
+        return await run_api_agent(query, context, run_config, debug, enable_todo)
 
     def as_tool(self) -> "BaseTool":
         """Return this agent as a LangChain tool."""
