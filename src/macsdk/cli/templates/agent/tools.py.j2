@@ -41,14 +41,14 @@ def get_tools() -> list:
     """Get the tools for this agent, ensuring API is registered.
 
     Returns:
-        List of generic tools from MACSDK.
+        List of generic tools from this agent.
     """
     _ensure_api_registered()
     return [api_get, fetch_file]
 
 
 # Tools exposed for CLI inspection
-TOOLS = [api_get, fetch_file]
+TOOLS = get_tools()
 
 
 # =============================================================================
