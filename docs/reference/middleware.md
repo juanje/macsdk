@@ -174,7 +174,7 @@ The SDK provides two specialized prompts that are automatically injected when `e
 The supervisor uses `TODO_PLANNING_SUPERVISOR_PROMPT`, which includes examples of coordinating specialist agents:
 
 ```python
-from macsdk.prompts import TODO_PLANNING_SUPERVISOR_PROMPT
+from macsdk.agents.supervisor import TODO_PLANNING_SUPERVISOR_PROMPT
 
 # Examples use agent calls:
 # 1. Call deployment_agent("recent deployments")
@@ -187,7 +187,7 @@ from macsdk.prompts import TODO_PLANNING_SUPERVISOR_PROMPT
 Specialist agents use `TODO_PLANNING_SPECIALIST_PROMPT`, which includes examples of using tools:
 
 ```python
-from macsdk.prompts import TODO_PLANNING_SPECIALIST_PROMPT
+from macsdk.agents.supervisor import TODO_PLANNING_SPECIALIST_PROMPT
 
 # Examples use tool calls:
 # 1. Call get_recent_deployments()
@@ -200,7 +200,7 @@ from macsdk.prompts import TODO_PLANNING_SPECIALIST_PROMPT
 You can override the default prompts in your agent's `prompts.py`:
 
 ```python
-from macsdk.prompts import TODO_PLANNING_COMMON
+from macsdk.agents.supervisor import TODO_PLANNING_COMMON
 
 # Define your own specialized version
 TODO_PLANNING_SPECIALIST_PROMPT = (
@@ -209,6 +209,11 @@ TODO_PLANNING_SPECIALIST_PROMPT = (
 ... your specific examples ...
 """
 )
+```
+
+**Note:** You can also import from `macsdk.prompts` for backward compatibility:
+```python
+from macsdk.prompts import TODO_PLANNING_SUPERVISOR_PROMPT  # Still works
 ```
 
 The SDK automatically injects the appropriate prompt based on the agent type.

@@ -410,7 +410,7 @@ Specialist agents use `TODO_PLANNING_SPECIALIST_PROMPT`, which includes examples
 
 ```python
 # The SDK automatically imports this in generated agents
-from macsdk.prompts import TODO_PLANNING_SPECIALIST_PROMPT
+from macsdk.agents.supervisor import TODO_PLANNING_SPECIALIST_PROMPT
 ```
 
 This prompt differs from `TODO_PLANNING_SUPERVISOR_PROMPT` (used by supervisors) because:
@@ -422,7 +422,7 @@ This prompt differs from `TODO_PLANNING_SUPERVISOR_PROMPT` (used by supervisors)
 You can override the default in your agent's `prompts.py`:
 
 ```python
-from macsdk.prompts import TODO_PLANNING_COMMON
+from macsdk.agents.supervisor import TODO_PLANNING_COMMON
 
 # Build on the common base with domain-specific examples
 TODO_PLANNING_SPECIALIST_PROMPT = (
@@ -434,6 +434,11 @@ TODO_PLANNING_SPECIALIST_PROMPT = (
 ... your custom examples ...
 """
 )
+```
+
+**Note:** For backward compatibility, you can also import from `macsdk.prompts`:
+```python
+from macsdk.prompts import TODO_PLANNING_SPECIALIST_PROMPT  # Still works
 ```
 
 The SDK automatically injects this prompt when `enable_todo=True`.
