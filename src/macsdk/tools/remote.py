@@ -51,7 +51,9 @@ async def fetch_file(
         >>> fetch_file("https://internal.server/log", ssl_verify=False)
     """
     try:
-        async with httpx.AsyncClient(verify=ssl_verify, timeout=timeout) as client:
+        async with httpx.AsyncClient(
+            verify=ssl_verify, timeout=timeout, follow_redirects=True
+        ) as client:
             response = await client.get(url)
 
             if response.status_code != 200:
@@ -124,7 +126,9 @@ async def fetch_and_save(
         ... )
     """
     try:
-        async with httpx.AsyncClient(verify=ssl_verify, timeout=timeout) as client:
+        async with httpx.AsyncClient(
+            verify=ssl_verify, timeout=timeout, follow_redirects=True
+        ) as client:
             response = await client.get(url)
 
             if response.status_code != 200:
@@ -179,7 +183,9 @@ async def fetch_json(
         >>> fetch_json("https://api.example.com/users", extract="$[*].email")
     """
     try:
-        async with httpx.AsyncClient(verify=ssl_verify, timeout=timeout) as client:
+        async with httpx.AsyncClient(
+            verify=ssl_verify, timeout=timeout, follow_redirects=True
+        ) as client:
             response = await client.get(url, headers={"Accept": "application/json"})
 
             if response.status_code != 200:
