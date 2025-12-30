@@ -61,6 +61,6 @@ You have access to a DevOps monitoring API with these endpoints:
 # Task Planning Prompt (used when enable_todo=True)
 # Import from SDK or define custom version
 try:
-    from macsdk.prompts import TODO_PLANNING_SPECIALIST_PROMPT
+    from macsdk.agents.supervisor import TODO_PLANNING_SPECIALIST_PROMPT
 except ImportError:
     TODO_PLANNING_SPECIALIST_PROMPT = ""
