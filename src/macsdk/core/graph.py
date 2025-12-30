@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Callable, Literal
 
 from langgraph.graph import END, START, StateGraph
 
+from ..agents.supervisor import supervisor_agent_node
 from .state import ChatbotState
-from .supervisor import supervisor_agent_node
 
 if TYPE_CHECKING:
     from langgraph.graph.graph import CompiledGraph

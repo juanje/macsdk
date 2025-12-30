@@ -25,6 +25,7 @@ Example:
     >>> graph = create_chatbot_graph()
 """
 
+from ..agents.supervisor import supervisor_agent_node
 from .api_registry import (
     APIServiceConfig,
     clear_api_services,
@@ -61,7 +62,6 @@ from .registry import (
     register_agent,
 )
 from .state import ChatbotState
-from .supervisor import supervisor_agent_node
 from .utils import (
     STREAM_WRITER_KEY,
     create_config_with_writer,

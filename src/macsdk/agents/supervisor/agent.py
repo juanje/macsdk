@@ -12,20 +12,20 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.config import get_stream_writer
 
-from ..middleware import (
+from ...core.config import config
+from ...core.llm import get_answer_model
+from ...core.registry import get_all_agent_tools, get_all_capabilities
+from ...core.utils import STREAM_WRITER_KEY, log_progress
+from ...middleware import (
     DatetimeContextMiddleware,
     SummarizationMiddleware,
     TodoListMiddleware,
 )
-from ..middleware.debug_prompts import PromptDebugMiddleware
-from ..prompts import SUPERVISOR_PROMPT, TODO_PLANNING_SUPERVISOR_PROMPT
-from .config import config
-from .llm import get_answer_model
-from .registry import get_all_agent_tools, get_all_capabilities
-from .utils import STREAM_WRITER_KEY, log_progress
+from ...middleware.debug_prompts import PromptDebugMiddleware
+from .prompts import SUPERVISOR_PROMPT, TODO_PLANNING_SUPERVISOR_PROMPT
 
 if TYPE_CHECKING:
-    from .state import ChatbotState
+    from ...core.state import ChatbotState
 
 
 def _build_supervisor_prompt() -> str:
@@ -205,9 +205,7 @@ async def supervisor_agent_node(
 
         # Get current stream writer and pass it through config for tools
         # Use configurable recursion limit for complex multi-agent workflows
-        from .config import config as sdk_config
-
-        run_config: dict = {"recursion_limit": sdk_config.recursion_limit}
+        run_config: dict = {"recursion_limit": config.recursion_limit}
         try:
             writer = get_stream_writer()
             if writer is not None:

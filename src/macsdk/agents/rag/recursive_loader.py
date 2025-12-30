@@ -139,7 +139,7 @@ class SimpleRecursiveLoader:
         links = []
 
         for a_tag in soup.find_all("a", href=True):
-            href = a_tag["href"]
+            href = str(a_tag["href"])  # Convert to str for type safety
 
             # Convert relative URLs to absolute
             absolute_url = urljoin(current_url, href)

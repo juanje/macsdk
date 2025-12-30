@@ -219,8 +219,9 @@ def generated_chatbot(integration_test_dir: Path) -> Generator[Path, None, None]
         add_local_macsdk_dependency(chatbot_dir)
 
         # Install dependencies (including dev group for testing)
+        # Force reinstall to ensure we use the local macsdk code
         try:
-            run_uv_command(["sync", "--group", "dev"], cwd=chatbot_dir)
+            run_uv_command(["sync", "--group", "dev", "--reinstall"], cwd=chatbot_dir)
         except subprocess.CalledProcessError as e:
             pytest.fail(f"Failed to sync chatbot dependencies: {e.stderr}")
 
@@ -265,8 +266,9 @@ def generated_agent(integration_test_dir: Path) -> Generator[Path, None, None]:
         add_local_macsdk_dependency(agent_dir)
 
         # Install dependencies (including dev group for testing)
+        # Force reinstall to ensure we use the local macsdk code
         try:
-            run_uv_command(["sync", "--group", "dev"], cwd=agent_dir)
+            run_uv_command(["sync", "--group", "dev", "--reinstall"], cwd=agent_dir)
         except subprocess.CalledProcessError as e:
             pytest.fail(f"Failed to sync agent dependencies: {e.stderr}")
 
@@ -318,8 +320,9 @@ def chatbot_with_agent(
         pyproject_path.write_text(pyproject_content)
 
         # Sync again with new dependency
+        # Force reinstall to ensure we use the local macsdk code
         try:
-            run_uv_command(["sync"], cwd=chatbot_dir)
+            run_uv_command(["sync", "--reinstall"], cwd=chatbot_dir)
         except subprocess.CalledProcessError as e:
             pytest.fail(f"Failed to sync with agent dependency: {e.stderr}")
 
