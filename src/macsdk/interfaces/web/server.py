@@ -74,6 +74,7 @@ def create_initial_state() -> ChatbotState:
         "user_query": "",
         "chatbot_response": "",
         "workflow_step": "query",
+        "agent_results": "",
     }
 
 
@@ -107,6 +108,7 @@ def create_web_app(
                 "user_query": WARMUP_QUERY,
                 "chatbot_response": "",
                 "workflow_step": "processing",
+                "agent_results": "",
             }
             try:
                 async with asyncio.timeout(config.warmup_timeout):

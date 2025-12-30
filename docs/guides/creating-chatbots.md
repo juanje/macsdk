@@ -226,6 +226,120 @@ Always be concise and actionable in your responses.
 """
 ```
 
+## Customizing Response Format
+
+The response formatter synthesizes raw agent results into polished responses. You can customize the tone, format, and style by overriding specific prompt components in `prompts.py`.
+
+### Composable Formatter Prompts
+
+Instead of replacing the entire formatter prompt, override only the parts you need:
+
+```python
+from macsdk.prompts import build_formatter_prompt
+
+# Change only the tone
+FORMATTER_PROMPT = build_formatter_prompt(
+    tone="""
+## Tone Guidelines
+
+- Always respond in Spanish
+- Use formal language (usted)
+- Be professional and respectful
+- Keep responses brief and actionable
+"""
+)
+```
+
+### Available Components
+
+You can override any of these components:
+
+#### 1. Tone (`tone`)
+
+Control the personality and style:
+
+```python
+FORMATTER_PROMPT = build_formatter_prompt(
+    tone="""
+## Tone Guidelines
+
+- Friendly and encouraging
+- Use emojis sparingly
+- Be enthusiastic about helping
+- Use simple, clear language
+"""
+)
+```
+
+#### 2. Format (`format_rules`)
+
+Control the output structure:
+
+```python
+FORMATTER_PROMPT = build_formatter_prompt(
+    format_rules="""
+## Format Guidelines
+
+- Use plain text (no markdown formatting)
+- Always start with a summary sentence
+- Use numbered lists for steps
+- Keep responses under 200 words
+- End with a follow-up question
+"""
+)
+```
+
+#### 3. Extra Instructions (`extra`)
+
+Add domain-specific rules:
+
+```python
+FORMATTER_PROMPT = build_formatter_prompt(
+    extra="""
+## Additional Guidelines
+
+- Always mention if data is from cache or live API
+- Include timestamps for time-sensitive information
+- Suggest relevant documentation links when applicable
+- Flag any security concerns prominently
+"""
+)
+```
+
+### Combine Multiple Customizations
+
+Override multiple components at once:
+
+```python
+FORMATTER_PROMPT = build_formatter_prompt(
+    tone="""
+## Tone Guidelines
+- Technical and precise
+- Use industry terminology
+- Be direct and efficient
+""",
+    format_rules="""
+## Format Guidelines
+- Use markdown code blocks for commands
+- Highlight warnings with ⚠️
+- Use tables for comparisons
+""",
+    extra="""
+## Additional Guidelines
+- Always include links to relevant documentation
+- Provide examples for complex concepts
+"""
+)
+```
+
+### Default Behavior
+
+By default, the formatter:
+- Uses plain text output (no markdown formatting)
+- Maintains a professional yet friendly tone
+- Synthesizes information from multiple agents
+- Ensures conversation history consistency
+
 ## Container Deployment
 
 Each generated chatbot includes a `Containerfile` for building container images.

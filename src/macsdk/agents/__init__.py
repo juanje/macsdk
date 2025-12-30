@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .rag import RAGAgent
 
+from .formatter import formatter_node
 from .supervisor import (
     AGENT_CAPABILITIES_PLACEHOLDER,
     SUPERVISOR_PROMPT,
@@ -38,6 +39,8 @@ __all__ = [
     "TODO_PLANNING_COMMON",
     "TODO_PLANNING_SPECIALIST_PROMPT",
     "TODO_PLANNING_SUPERVISOR_PROMPT",
+    # Formatter Agent
+    "formatter_node",
 ]
 
 
