@@ -40,6 +40,7 @@ class TestChatbotState:
             "user_query": TEST_HUMAN_MESSAGE,
             "chatbot_response": "",
             "workflow_step": TEST_WORKFLOW_STEP_QUERY,
+            "agent_results": "",
         }
         assert len(state["messages"]) == 1
         assert isinstance(state["messages"][0], HumanMessage)
@@ -51,6 +52,7 @@ class TestChatbotState:
             "user_query": "",
             "chatbot_response": TEST_AI_MESSAGE,
             "workflow_step": TEST_WORKFLOW_STEP_COMPLETE,
+            "agent_results": "",
         }
         assert isinstance(state["messages"][0], AIMessage)
 
@@ -65,6 +67,7 @@ class TestChatbotState:
             "user_query": TEST_FOLLOWUP_MESSAGE,
             "chatbot_response": "",
             "workflow_step": "processing",
+            "agent_results": "",
         }
         assert len(state["messages"]) == 3
 
@@ -76,5 +79,6 @@ class TestChatbotState:
                 "user_query": "",
                 "chatbot_response": "",
                 "workflow_step": step,
+                "agent_results": "",
             }
             assert state["workflow_step"] == step

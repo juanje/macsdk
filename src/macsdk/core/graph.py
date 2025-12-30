@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Callable, Literal
 
 from langgraph.graph import END, START, StateGraph
 
+from ..agents.formatter import formatter_node
 from ..agents.supervisor import supervisor_agent_node
 from .state import ChatbotState
 
@@ -39,7 +40,7 @@ def create_chatbot_graph(
     """Create chatbot graph for CLI with interactive loop.
 
     The graph flow is:
-    START -> supervisor -> END
+    START -> supervisor -> formatter -> END
 
     Args:
         register_agents_func: Optional function to register agents.
@@ -55,12 +56,26 @@ def create_chatbot_graph(
     async def supervisor_node(state: ChatbotState) -> ChatbotState:
         return await supervisor_agent_node(state, register_agents_func, debug=debug)
 
-    # Add the supervisor node
+    # Add nodes
     graph_builder.add_node("supervisor", supervisor_node)
+    graph_builder.add_node("formatter", formatter_node)
 
-    # Simple flow: START -> supervisor -> END
+    # Define conditional routing from supervisor
+    def route_after_supervisor(state: ChatbotState) -> Literal["formatter", "end"]:
+        """Route to formatter only if explicitly requested."""
+        step = state.get("workflow_step", "")
+        if step == "format":
+            return "formatter"
+        return "end"
+
+    # Flow: START -> supervisor -> (formatter OR end) -> END
     graph_builder.add_edge(START, "supervisor")
-    graph_builder.add_edge("supervisor", END)
+    graph_builder.add_conditional_edges(
+        "supervisor",
+        route_after_supervisor,
+        {"formatter": "formatter", "end": END},
+    )
+    graph_builder.add_edge("formatter", END)
 
     return graph_builder.compile()
 

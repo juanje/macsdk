@@ -229,12 +229,13 @@ async def supervisor_agent_node(
 
         log_progress("Response ready.\n")
 
-        # Update state with response
+        # Update state with raw results for formatter
+        # NOTE: Don't update 'messages' here - the formatter will append the
+        # polished response to maintain conversation history consistency
         state.update(
             {
-                "chatbot_response": response_text,
-                "messages": [AIMessage(content=response_text)],
-                "workflow_step": "complete",
+                "agent_results": response_text,
+                "workflow_step": "format",
             }
         )
 

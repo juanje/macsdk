@@ -6,8 +6,9 @@ Welcome to the MACSDK (Multi-Agent Chatbot SDK) documentation.
 
 MACSDK is a comprehensive SDK for building customizable multi-agent chatbots. It provides:
 
-- **Core Framework**: Protocol definitions, agent registry, and supervisor orchestration
+- **Core Framework**: Protocol definitions, agent registry, supervisor orchestration, and response formatting
 - **Built-in RAG Agent**: Index documentation and answer questions using retrieval-augmented generation
+- **Response Formatter**: Customizable response synthesis with composable prompts for tone and format
 - **API Tools**: Ready-to-use tools for REST API interactions with JSONPath extraction
 - **CLI Tools**: Scaffolding commands to generate chatbots and agents
 - **Web & CLI Interfaces**: Beautiful Rich-powered CLI and FastAPI web server with WebSocket streaming
@@ -22,6 +23,7 @@ MACSDK is a comprehensive SDK for building customizable multi-agent chatbots. It
 - [API Tools Reference](reference/tools.md)
 - [CLI Reference](reference/cli.md)
 - [Configuration Reference](reference/configuration.md)
+- [Response Formatter Reference](reference/formatter.md)
 - [Middleware Reference](reference/middleware.md)
 - [Protocol Reference](reference/protocol.md)
 
@@ -63,7 +65,7 @@ MACSDK is a comprehensive SDK for building customizable multi-agent chatbots. It
 4. **Register Agents**: Add agents to your chatbot with `macsdk add-agent`
 5. **Run**: Start with `my-chatbot chat` (CLI) or `my-chatbot web` (web interface)
 
-The supervisor automatically routes user queries to the appropriate specialist agents based on their declared capabilities.
+The supervisor automatically routes user queries to the appropriate specialist agents based on their declared capabilities. The response formatter then synthesizes the raw results into a polished, user-friendly response.
 
 ## Features
 

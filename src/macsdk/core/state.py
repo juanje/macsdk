@@ -23,9 +23,12 @@ class ChatbotState(TypedDict):
         user_query: The current user query being processed.
         chatbot_response: The final response to send to the user.
         workflow_step: Current step in the workflow (query, processing, complete, error).
+        agent_results: Raw results from specialist agents before formatting.
+            Used by formatter_node to synthesize the final response.
     """
 
     messages: Annotated[list, add_messages]
     user_query: str
     chatbot_response: str
     workflow_step: str
+    agent_results: str

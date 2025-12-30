@@ -51,10 +51,13 @@ macsdk/
 │   │   ├── api_registry.py  # API service registry
 │   │   └── cert_manager.py  # SSL certificate handling
 │   │
-│   ├── agents/              # Built-in agents (supervisor, RAG)
+│   ├── agents/              # Built-in agents (supervisor, formatter, RAG)
 │   │   ├── supervisor/      # Supervisor agent (orchestrator)
 │   │   │   ├── agent.py     # Supervisor implementation
 │   │   │   └── prompts.py   # Supervisor prompts
+│   │   ├── formatter/       # Response formatter agent
+│   │   │   ├── agent.py     # Formatter implementation
+│   │   │   └── prompts.py   # Composable formatter prompts
 │   │   └── rag/             # RAG agent (ChromaDB + retrieval)
 │   │       ├── agent.py     # RAGAgent implementation
 │   │       ├── config.py    # RAG configuration
@@ -217,12 +220,14 @@ The framework uses **TypedDict-based state** for LangGraph workflows:
 ```python
 class ChatbotState(TypedDict):
     messages: list[BaseMessage]  # Conversation history
-    workflow_step: str  # Current step (supervisor/tool/end)
+    workflow_step: str  # Current step (supervisor/formatter/end)
+    agent_results: str  # Raw results from supervisor before formatting
 ```
 
 **Best Practices:**
 - Always append to `messages`, never replace
-- Use `workflow_step` to prevent infinite loops
+- Use `workflow_step` to control flow (supervisor → formatter → end)
+- `agent_results` stores raw output from supervisor for formatter processing
 - Middleware wraps state transitions, not individual nodes
 
 ### Configuration Pattern
@@ -337,21 +342,36 @@ When reviewing changes to this project, verify:
 
 ### Built-in Agents Architecture
 
-Built-in agents (supervisor, RAG) are now organized under `src/macsdk/agents/` subdirectories:
-- **Supervisor** (`agents/supervisor/`): Central orchestrator, moved from `core/supervisor.py`
+Built-in agents (supervisor, formatter, RAG) are now organized under `src/macsdk/agents/` subdirectories:
+- **Supervisor** (`agents/supervisor/`): Central orchestrator, routes queries to specialist agents
+- **Formatter** (`agents/formatter/`): Response synthesizer, formats raw agent results into polished responses
 - **RAG** (`agents/rag/`): Document Q&A with ChromaDB (optional dependencies)
 
 **Key Design Decisions:**
+- **Separation of Concerns**: Supervisor focuses on orchestration, Formatter on presentation
+- **Composable Prompts**: Formatter prompt split into CORE/TONE/FORMAT/EXTRA for selective customization
+- **Conversation History Strategy**: Only formatted responses (not raw `agent_results`) are appended to `messages`
+  * Rationale: Avoids context bloat from duplicate information (raw + formatted)
+  * Trade-off: If formatter omits specific details (IDs, numbers), they're not in message history
+  * Mitigation: Supervisor can re-invoke agents in future turns if specific data is needed
+  * This prioritizes conversation history readability and token efficiency over raw data persistence
 - **Lazy Loading for RAG**: Uses `__getattr__` to avoid loading `langchain_community` and `chromadb` at import time
 - **TYPE_CHECKING Block**: Ensures RAGAgent is visible to mypy/IDEs while maintaining runtime lazy behavior
 - **`__dir__` Implementation**: Enables RAGAgent to appear in `dir()` and IDE autocompletion
-- **Backward Compatibility**: Re-exports in `core/__init__.py` maintain existing import paths
-- **Prompts Colocated**: Supervisor prompts moved to `agents/supervisor/prompts.py` for better organization
+- **Backward Compatibility**: Re-exports in `core/__init__.py` and `prompts.py` maintain existing import paths
+- **Prompts Colocated**: Agent prompts moved to respective `agents/<agent>/prompts.py` for better organization
+
+**Graph Flow:**
+```
+START → supervisor_node → formatter_node → END
+        (orchestration)    (presentation)
+```
 
 **Review Focus:**
 - Verify imports use re-exports (`from macsdk.core import supervisor_agent_node`) or direct paths
 - Check lazy loading doesn't break at runtime due to missing optional dependencies
 - Ensure `TYPE_CHECKING` imports don't create circular dependencies
+- Verify `agent_results` field is properly initialized in all state creation points
 
 ### Protocol-Based Architecture (not Inheritance)
 
@@ -389,7 +409,7 @@ The `ChatbotState.messages` list follows an **append-only** pattern:
 
 ### Middleware Execution Order
 
-Middleware wraps the supervisor invocation:
+Middleware wraps the supervisor invocation (formatter runs after supervisor in graph):
 1. **DatetimeContext** - injects current datetime
 2. **TodoList** (if `enable_todo=True`) - adds task planning (LangChain 1.0+)
 3. **Summarization** - compresses old messages if too large
@@ -605,6 +625,20 @@ Project scaffolding uses Jinja2 templates. Security considerations:
    - User queries are passed directly to LLM (by design)
    - System prompts are constructed from `capabilities` strings (trusted)
    - Agent responses are trusted (assumed to be controlled by developer)
+
+5. **Formatter Agent - Simple Text Separators**
+   - The formatter agent uses simple text separators (Markdown headers) to structure prompts
+   - User input and agent results are injected directly without escaping/sanitization
+   - This is intentional because the formatter has:
+     * No tools (cannot execute actions)
+     * No access to sensitive data
+     * No external system access
+     * Only formats text for display
+   - Worst case "injection": Poorly formatted response (cosmetic issue only)
+   - Text separators are clear and don't require escaping external content
+   - XML tags are useful in templates but not when injecting untrusted content
+   - Sanitizing would be security theater - no actual risk to mitigate
+   - **For reviewers:** Do NOT suggest escaping/sanitizing formatter inputs unless you can demonstrate actual harm beyond "user sees weird formatting"
 
 ### Performance Considerations
 

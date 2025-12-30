@@ -28,6 +28,7 @@ def create_initial_state() -> ChatbotState:
         "user_query": "",
         "chatbot_response": "",
         "workflow_step": "query",
+        "agent_results": "",
     }
 
 
