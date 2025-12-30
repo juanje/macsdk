@@ -41,10 +41,9 @@
 ```
 macsdk/
 ├── src/macsdk/              # Core SDK package
-│   ├── core/                # Core orchestration logic
+│   ├── core/                # Core infrastructure (protocol, registry, config)
 │   │   ├── protocol.py      # SpecialistAgent protocol definition
 │   │   ├── registry.py      # Global agent registry
-│   │   ├── supervisor.py    # Supervisor agent orchestration
 │   │   ├── graph.py         # LangGraph workflow builder
 │   │   ├── state.py         # ChatbotState TypedDict
 │   │   ├── config.py        # Configuration management
@@ -52,7 +51,10 @@ macsdk/
 │   │   ├── api_registry.py  # API service registry
 │   │   └── cert_manager.py  # SSL certificate handling
 │   │
-│   ├── agents/              # Built-in specialist agents
+│   ├── agents/              # Built-in agents (supervisor, RAG)
+│   │   ├── supervisor/      # Supervisor agent (orchestrator)
+│   │   │   ├── agent.py     # Supervisor implementation
+│   │   │   └── prompts.py   # Supervisor prompts
 │   │   └── rag/             # RAG agent (ChromaDB + retrieval)
 │   │       ├── agent.py     # RAGAgent implementation
 │   │       ├── config.py    # RAG configuration
@@ -109,8 +111,8 @@ macsdk/
 
 ### Architecture Patterns
 **Code Organization:** Modular SDK architecture with clear separation:
-- `src/macsdk/core/` - Core orchestration (protocol, registry, supervisor, state, config)
-- `src/macsdk/agents/` - Built-in agents (RAG agent with ChromaDB integration)
+- `src/macsdk/core/` - Core infrastructure (protocol, registry, state, graph, config, LLM)
+- `src/macsdk/agents/` - Built-in agents (supervisor orchestrator, RAG with ChromaDB)
 - `src/macsdk/interfaces/` - User interfaces (CLI with Rich, Web with FastAPI/WebSocket)
 - `src/macsdk/middleware/` - Cross-cutting concerns (datetime context, task planning, summarization, debug)
 - `src/macsdk/tools/` - Reusable tools (API interactions, remote agents)
@@ -130,7 +132,8 @@ macsdk/
 ### Important Files for Review Context
 - **src/macsdk/core/protocol.py** - Defines the `SpecialistAgent` Protocol; the foundation of the entire agent system. All agents must implement this contract.
 - **src/macsdk/core/registry.py** - Global agent registry for dynamic registration/discovery. Critical for understanding multi-agent orchestration.
-- **src/macsdk/core/supervisor.py** - Core supervisor logic with dynamic prompt generation, middleware integration, and tool-based agent invocation.
+- **src/macsdk/agents/supervisor/agent.py** - Supervisor agent implementation with dynamic prompt generation, middleware integration, and tool-based agent invocation.
+- **src/macsdk/agents/supervisor/prompts.py** - Centralized supervisor prompts including task planning prompts for supervisor and specialists.
 - **src/macsdk/core/graph.py** - LangGraph workflow construction; defines the supervisor→tool→supervisor routing loop.
 - **src/macsdk/interfaces/cli.py** - CLI runtime loop with Rich formatting; shows state initialization and graph execution patterns.
 - **src/macsdk/interfaces/web/server.py** - FastAPI/WebSocket server for real-time streaming; critical for async patterns.
@@ -139,7 +142,8 @@ macsdk/
 - **src/macsdk/agents/rag/recursive_loader.py** - Custom httpx-based web crawler with connection pooling, progress callbacks, and SSL certificate support for RAG document ingestion.
 - **src/macsdk/core/cert_manager.py** - SSL certificate management with download/caching of remote certificates and local path validation. Used by both API tools and RAG crawler.
 - **src/macsdk/middleware/todo.py** - TodoListMiddleware wrapper for LangChain 1.0+ task planning; demonstrates protocol compliance and conditional prompt injection.
-- **src/macsdk/prompts.py** - Centralized prompt definitions including supervisor prompt and role-specific task planning prompts (supervisor vs specialist).
+- **src/macsdk/prompts.py** - Re-exports supervisor prompts for backward compatibility. Actual prompts now in `agents/supervisor/prompts.py`.
+- **src/macsdk/agents/__init__.py** - Implements lazy loading for RAGAgent using `__getattr__` with `TYPE_CHECKING` block for static analysis.
 - **src/macsdk/tools/api.py** - API tools (`api_get`, `api_post`) with retry logic, JSONPath extraction, and certificate management.
 - **src/macsdk/cli/commands/new.py** - Project scaffolding logic; generates chatbots/agents from Jinja2 templates.
 
@@ -161,7 +165,7 @@ macsdk/
 
 - **[AgentRegistry Thread Safety]** - Review `src/macsdk/core/registry.py` for potential race conditions during agent registration in async contexts. The global singleton pattern may need protection if agents are registered after server startup.
 
-- **[Supervisor Prompt Construction]** - In `src/macsdk/core/supervisor.py`, verify `get_all_capabilities()` returns deterministic, well-formatted agent descriptions. Middleware order is critical: DatetimeContext → TodoList (if enabled) → Summarization → Supervisor → DebugPrompts.
+- **[Supervisor Prompt Construction]** - In `src/macsdk/agents/supervisor/agent.py`, verify `get_all_capabilities()` returns deterministic, well-formatted agent descriptions. Middleware order is critical: DatetimeContext → TodoList (if enabled) → Summarization → Supervisor → DebugPrompts.
 
 - **[Pydantic Field Descriptions]** - In `models.py` files, `Field(description=...)` strings are consumed by LLMs for tool/agent selection. Must be precise, actionable, and include examples where ambiguity exists.
 
@@ -331,6 +335,24 @@ When reviewing changes to this project, verify:
 
 ## Business Logic & Implementation Decisions
 
+### Built-in Agents Architecture
+
+Built-in agents (supervisor, RAG) are now organized under `src/macsdk/agents/` subdirectories:
+- **Supervisor** (`agents/supervisor/`): Central orchestrator, moved from `core/supervisor.py`
+- **RAG** (`agents/rag/`): Document Q&A with ChromaDB (optional dependencies)
+
+**Key Design Decisions:**
+- **Lazy Loading for RAG**: Uses `__getattr__` to avoid loading `langchain_community` and `chromadb` at import time
+- **TYPE_CHECKING Block**: Ensures RAGAgent is visible to mypy/IDEs while maintaining runtime lazy behavior
+- **`__dir__` Implementation**: Enables RAGAgent to appear in `dir()` and IDE autocompletion
+- **Backward Compatibility**: Re-exports in `core/__init__.py` maintain existing import paths
+- **Prompts Colocated**: Supervisor prompts moved to `agents/supervisor/prompts.py` for better organization
+
+**Review Focus:**
+- Verify imports use re-exports (`from macsdk.core import supervisor_agent_node`) or direct paths
+- Check lazy loading doesn't break at runtime due to missing optional dependencies
+- Ensure `TYPE_CHECKING` imports don't create circular dependencies
+
 ### Protocol-Based Architecture (not Inheritance)
 
 The framework uses **Protocol** (`SpecialistAgent`) instead of base class inheritance. This decision:
@@ -495,7 +517,9 @@ content = [
 ]
 ```
 
-The `_extract_text_content()` helper in `supervisor.py` handles both formats. **Review focus:** Ensure new code that processes `message.content` uses this helper or handles both formats.
+The `_extract_text_content()` helper in `agents/supervisor/agent.py` handles both formats.
+
+**Review focus:** Ensure new code that processes `message.content` uses this helper or handles both formats.
 
 ### Recursion Limit Errors
 
@@ -684,7 +708,7 @@ LangChain/LangGraph are rapidly evolving:
 - **NEW in 1.1+:** Model profiles (`.profile` attribute), `ModelRetryMiddleware`, smarter summarization
 - `langchain-google-genai`: Currently `>=2.0.0` (v4.0.0 available with breaking changes)
 
-**Review focus:** 
+**Review focus:**
 - New LangChain usage should follow 1.0+ patterns, not 0.3.x patterns
 - Middleware patterns are fundamentally different between 0.3.x and 1.0+
 - If reviewing against older LangChain docs (pre-1.0), be aware of breaking changes
