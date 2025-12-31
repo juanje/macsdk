@@ -160,7 +160,6 @@ module = [
     "langchain_chroma.*",
     "langchain_community.*",
     "langchain_text_splitters.*",
-    "pydantic_settings.*",
     "yaml",
     "bs4",
     "chromadb",
