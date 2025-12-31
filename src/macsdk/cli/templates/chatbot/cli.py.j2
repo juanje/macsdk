@@ -193,10 +193,26 @@ def index(force: bool) -> None:
     This command crawls and indexes the documentation sources
     configured in config.yml. Run this before using RAG queries.
     """
-    try:
-        # Lazy import heavy RAG dependencies
-        from macsdk.agents.rag import clear_rag_cache, create_retriever, get_rag_config
+    # Lazy import heavy dependencies
+    from macsdk.agents.rag import clear_rag_cache, create_retriever, get_rag_config
+    from macsdk.core import ConfigurationError, create_config
 
+    try:
+        # Validate API key first (needed for embeddings)
+        _config = create_config(search_path=Path.cwd())
+        _config.validate_api_key()
+
+        # Load RAG config and validate before showing UI
+        rag_config = get_rag_config()
+        if not rag_config.enabled:
+            console.print("\n[yellow]⚠ RAG is disabled in config.yml[/]\n")
+            return
+
+        if not rag_config.sources:
+            console.print("\n[yellow]⚠ No RAG sources configured in config.yml[/]\n")
+            return
+
+        # Now show the indexing UI
         console.print()
         console.print(
             Panel(
@@ -206,16 +222,10 @@ def index(force: bool) -> None:
             )
         )
 
-        # Load config
-        config = get_rag_config()
-        if not config.enabled:
-            console.print("\n[yellow]⚠ RAG is disabled in config.yml[/]\n")
-            return
-
         # Show sources table
         console.print()
         table = Table(
-            title=f"[bold]Sources to index ({len(config.sources)})[/]",
+            title=f"[bold]Sources to index ({len(rag_config.sources)})[/]",
             show_header=True,
             header_style="bold",
             border_style="dim",
@@ -224,7 +234,7 @@ def index(force: bool) -> None:
         table.add_column("Name", style="cyan")
         table.add_column("URL", style="dim")
 
-        for i, source in enumerate(config.sources, 1):
+        for i, source in enumerate(rag_config.sources, 1):
             table.add_row(str(i), source.name, source.url)
 
         console.print(table)
@@ -235,7 +245,7 @@ def index(force: bool) -> None:
 
         console.print()
         with console.status("[cyan]Indexing documentation...[/]", spinner="dots"):
-            retriever = create_retriever(config=config, force_reindex=force)
+            retriever = create_retriever(config=rag_config, force_reindex=force)
 
         if retriever:
             console.print("[green]✓ Indexing complete![/]")
@@ -245,6 +255,9 @@ def index(force: bool) -> None:
         else:
             console.print("[red]✗ Indexing failed. Check the errors above.[/]\n")
 
+    except ConfigurationError as e:
+        error_console.print(f"[red]✗ Configuration Error:[/] {e}")
+        sys.exit(1)
     except Exception as e:
         error_console.print(f"\n[red]✗ Error during indexing:[/] {e}")
         sys.exit(1)
