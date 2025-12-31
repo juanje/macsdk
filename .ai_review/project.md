@@ -251,6 +251,37 @@ class ChatbotConfig(BaseModel):
 - Use `Field()` validators for runtime validation
 - Separate config classes per component (e.g., `RAGConfig`, `APIServiceConfig`)
 
+### Generated Project Configuration (Design Decisions)
+
+Generated chatbots and agents include a `config.py` that extends `MACSDKConfig` using Pydantic Settings:
+
+```python
+from pydantic_settings import SettingsConfigDict
+from macsdk.core import MACSDKConfig
+
+class MyAgentConfig(MACSDKConfig):
+    api_token: SecretStr | None = None  # Secrets
+    api_base_url: HttpUrl | None = None  # Validated URLs
+    api_timeout: int = 30  # Simple values
+```
+
+**Design Decisions (DO NOT flag these as issues):**
+
+1. **`pydantic-settings` is a transitive dependency** - Generated projects do NOT need to explicitly add `pydantic-settings` to their `pyproject.toml`. It is a **direct dependency of `macsdk`** (see line 28 of root `pyproject.toml`), so it's always available.
+
+2. **`env_file=".env"` only searches CWD** - Unlike `load_dotenv()` which searches parent directories, Pydantic Settings only reads `.env` from the current working directory. This is intentional and follows 12-factor app conventions. Users run CLIs from project root.
+
+3. **Global instantiation `config = ...Config()`** - The config object is instantiated at module import time. This is "fail-fast" by design: if required fields are missing, the app fails immediately at startup rather than later in production. All example fields in templates use `| None = None` to avoid crashes in fresh environments.
+
+4. **`extra="ignore"` in generated configs** - Generated project configs use `extra="ignore"` to prevent loading random environment variables. This overrides `MACSDKConfig`'s `extra="allow"` (which is for internal SDK extension) and is intentional.
+
+5. **No `load_dotenv()` needed** - Pydantic Settings with `env_file=".env"` handles `.env` loading automatically. The `python-dotenv` dependency was removed intentionally.
+
+**Security Best Practices (documented in templates):**
+- Use `SecretStr` for tokens/credentials (prevents exposure in logs/repr)
+- Use `HttpUrl` for URL validation
+- Templates include commented examples of all patterns
+
 ### Middleware Pattern
 
 Middleware wraps the supervisor invocation for cross-cutting concerns:

@@ -314,6 +314,7 @@ def _create_local_agent(
     # Render and write agent templates (subset - no pyproject, README, etc.)
     templates = [
         ("agent/__init__.py.j2", agent_dir / "__init__.py"),
+        ("agent/config.py.j2", agent_dir / "config.py"),
         ("agent/agent.py.j2", agent_dir / "agent.py"),
         ("agent/tools.py.j2", agent_dir / "tools.py"),
         ("agent/prompts.py.j2", agent_dir / "prompts.py"),

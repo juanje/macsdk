@@ -186,6 +186,7 @@ def create_agent_project(
     # Render and write templates
     templates = [
         ("agent/__init__.py.j2", src_dir / "__init__.py"),
+        ("agent/config.py.j2", src_dir / "config.py"),
         ("agent/models.py.j2", src_dir / "models.py"),
         ("agent/prompts.py.j2", src_dir / "prompts.py"),
         ("agent/tools.py.j2", src_dir / "tools.py"),
