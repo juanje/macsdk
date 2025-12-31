@@ -78,7 +78,7 @@ SUPERVISOR_PROMPT = """You are an intelligent supervisor that orchestrates speci
 
 ## Available Agents (Tools)
 
-Each tool invokes a specialist agent. Use them to gather information:
+You have these specialist agents available as tools. Call them by name with a query:
 {agent_capabilities}
 
 ## Core Principle: ITERATE UNTIL COMPLETE

@@ -189,21 +189,15 @@ class {{ agent_class }}:
         agent_instance = self
 
         @tool
-        async def invoke_{{ agent_slug }}(
+        async def {{ agent_slug }}(
             query: str,
             config: Annotated[RunnableConfig, InjectedToolArg],
         ) -> str:
-            """Invoke the {{ name }} agent for DevOps monitoring.
-
-            Use this for:
-            - Service health checks
-            - Pipeline and deployment status
-            - Alert monitoring
-            - Log analysis
+            """Query this specialist agent with a natural language request.
 
             Args:
-                query: The query to process.
-                config: Runnable configuration (injected).
+                query: What you want this agent to do or find out.
+                config: Runnable configuration (injected automatically).
 
             Returns:
                 The agent's response text.
@@ -211,4 +205,4 @@ class {{ agent_class }}:
             result = await agent_instance.run(query, run_config=config)
             return str(result["response"])
 
-        return invoke_{{ agent_slug }}
+        return {{ agent_slug }}
