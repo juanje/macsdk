@@ -55,20 +55,33 @@ TOOLS = get_tools()
 # CUSTOMIZATION
 # =============================================================================
 #
-# To use your own API:
+# To use your own API with authentication:
 #
-# 1. Modify _ensure_api_registered() to register your API:
+# 1. Add your credentials to config.py (the class already exists there):
+#
+#        api_token: SecretStr | None = None
+#        api_base_url: str = "https://api.example.com"
+#
+# 2. Use them here in _ensure_api_registered():
+#
+#    from .config import config
 #
 #    register_api_service(
 #        name="myapi",
-#        base_url="https://api.example.com",
-#        token=os.environ.get("API_TOKEN"),  # Optional auth
+#        base_url=config.api_base_url,
+#        token=config.api_token.get_secret_value() if config.api_token else None,
 #        timeout=30,
 #    )
 #
-# 2. Update the system prompt (prompts.py) to describe your API endpoints
+# 3. Update the system prompt (prompts.py) to describe your API endpoints
 #
-# 3. The LLM will use api_get with your endpoints automatically!
+# 4. The LLM will use api_get with your endpoints automatically!
+#
+# Benefits of using config instead of os.environ.get():
+# - Pydantic automatically loads values from .env file
+# - Type validation and default values
+# - Single source of truth for all configuration
+# - No need for load_dotenv() in your code
 #
 # For creating custom tools instead of using generic ones,
 # see examples/api-agent/ for a complete example.

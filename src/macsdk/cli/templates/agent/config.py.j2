@@ -1,4 +1,4 @@
-"""Local configuration for {{ display_name }}.
+"""Local configuration for {{ name }}.
 
 Extend MACSDKConfig to add your own settings.
 """
@@ -11,35 +11,36 @@ from macsdk.core import MACSDKConfig
 # from pydantic import HttpUrl, SecretStr
 
 
-class {{ config_class_name }}Config(MACSDKConfig):
-    """Configuration for {{ display_name }}.
+class {{ agent_class }}Config(MACSDKConfig):
+    """Configuration for {{ name }}.
 
-    Add your chatbot-specific settings here.
+    Add your agent-specific settings here.
     They will be loaded from environment variables or .env file.
 
     Example:
         # In .env:
-        EXTERNAL_API_TOKEN=your_token_here
-        MAX_RETRIES=5
+        API_TOKEN=your_token_here
+        API_TIMEOUT=30
 
         # Access in code:
         from .config import config
-        retries = config.max_retries  # Regular values work directly
-        if config.external_api_token:  # Check optional SecretStr before accessing
-            token = config.external_api_token.get_secret_value()
+        timeout = config.api_timeout  # Regular values work directly
+        if config.api_token:  # Check optional SecretStr before accessing
+            token = config.api_token.get_secret_value()
     """
 
     # Add your custom settings here. Common patterns:
     #
     # Secrets (hidden in logs/repr):
-    # external_api_token: SecretStr | None = None
+    # api_token: SecretStr | None = None
     #
     # URLs (validated format):
-    # webhook_url: HttpUrl | None = None
+    # api_base_url: HttpUrl | None = None
     #
     # Simple values:
-    # max_retries: int = 3
+    # api_timeout: int = 30
     # debug_mode: bool = False
+    # project_id: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -49,4 +50,5 @@ class {{ config_class_name }}Config(MACSDKConfig):
     )
 
 
-config = {{ config_class_name }}Config()
+config = {{ agent_class }}Config()
+

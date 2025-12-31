@@ -80,6 +80,7 @@ class TestAgentGeneration:
         assert generated_agent.exists()
         assert (generated_agent / "pyproject.toml").exists()
         assert (generated_agent / "src" / agent_slug / "__init__.py").exists()
+        assert (generated_agent / "src" / agent_slug / "config.py").exists()
         assert (generated_agent / "src" / agent_slug / "agent.py").exists()
         assert (generated_agent / "src" / agent_slug / "tools.py").exists()
         assert (generated_agent / "src" / agent_slug / "models.py").exists()
@@ -200,6 +201,7 @@ class TestMonoRepoWorkflow:
         agent_dir = local_agents_dir / "weather"
         assert agent_dir.exists()
         assert (agent_dir / "__init__.py").exists()
+        assert (agent_dir / "config.py").exists()
         assert (agent_dir / "agent.py").exists()
         assert (agent_dir / "tools.py").exists()
         assert (agent_dir / "prompts.py").exists()
