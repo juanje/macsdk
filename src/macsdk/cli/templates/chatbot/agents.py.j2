@@ -7,13 +7,19 @@ The register_all_agents() function is called when the chatbot starts.
 from __future__ import annotations
 
 from typing import Any
-{% if with_rag %}
 
+{% if with_rag %}
 from macsdk.agents import RAGAgent
 from macsdk.core import get_registry, register_agent
+{% else %}
+from macsdk.core import get_registry
+{% endif %}
+
+# --- BEGIN AGENT IMPORTS ---
 
 
 def register_all_agents() -> None:
+{% if with_rag %}
     """Register all specialist agents.
 
     The RAG agent is pre-configured. Customize it in config.yml.
@@ -23,29 +29,16 @@ def register_all_agents() -> None:
     """
     registry = get_registry()
 
+    # --- BEGIN AGENT REGISTRATION ---
     # RAG Agent for documentation Q&A
     # Configure sources, glossary, etc. in config.yml
     if not registry.is_registered("rag_agent"):
         register_agent(RAGAgent())
-
-    # Add more agents here:
-    # from my_agent import MyAgent
-    # if not registry.is_registered("my_agent"):
-    #     register_agent(MyAgent())
 {% else %}
-
-from macsdk.core import get_registry
-
-# Import register_agent when you add agents:
-# from macsdk.core import register_agent
-
-
-def register_all_agents() -> None:
     """Register all specialist agents.
 
     Add your agents here. Example:
 
-        from macsdk.core import register_agent
         from my_agent import MyAgent
 
         if not registry.is_registered("my_agent"):
@@ -56,10 +49,8 @@ def register_all_agents() -> None:
         macsdk add-agent . --package my-agent
     """
     registry = get_registry()
-    # Add your agents here:
-    # from my_agent import MyAgent
-    # if not registry.is_registered("my_agent"):
-    #     register_agent(MyAgent())
+
+    # --- BEGIN AGENT REGISTRATION ---
     _ = registry  # Avoid unused variable warning
 {% endif %}
 

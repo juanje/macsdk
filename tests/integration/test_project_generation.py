@@ -30,6 +30,7 @@ class TestChatbotGeneration:
         assert (generated_chatbot / "src" / chatbot_slug / "__init__.py").exists()
         assert (generated_chatbot / "src" / chatbot_slug / "agents.py").exists()
         assert (generated_chatbot / "src" / chatbot_slug / "cli.py").exists()
+        assert (generated_chatbot / "src" / chatbot_slug / "py.typed").exists()
 
     def test_chatbot_can_import(self, generated_chatbot: Path) -> None:
         """Generated chatbot code can be imported."""
@@ -84,6 +85,7 @@ class TestAgentGeneration:
         assert (generated_agent / "src" / agent_slug / "agent.py").exists()
         assert (generated_agent / "src" / agent_slug / "tools.py").exists()
         assert (generated_agent / "src" / agent_slug / "models.py").exists()
+        assert (generated_agent / "src" / agent_slug / "py.typed").exists()
         assert (generated_agent / "src" / agent_slug / "prompts.py").exists()
         assert (generated_agent / "tests" / "test_agent.py").exists()
 

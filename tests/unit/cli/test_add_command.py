@@ -19,6 +19,7 @@ from macsdk.cli.commands.add import (
     _create_local_agent,
     _find_agents_file,
     _find_chatbot_slug,
+    _find_import_insert_position,
     _find_pyproject,
 )
 from macsdk.cli.main import cli
@@ -382,3 +383,121 @@ def register_all_agents() -> None:
             # Verify agents.py was updated
             agents_content = Path("my-chatbot/src/my_chatbot/agents.py").read_text()
             assert "from .local_agents.weather import WeatherAgent" in agents_content
+
+
+class TestFindImportInsertPosition:
+    """Tests for _find_import_insert_position function."""
+
+    def test_empty_file(self) -> None:
+        """Returns 0 for empty file."""
+        lines: list[str] = []
+        assert _find_import_insert_position(lines) == 0
+
+    def test_file_with_only_docstring(self) -> None:
+        """Inserts after module docstring."""
+        lines = [
+            '"""Module docstring."""',
+            "",
+        ]
+        assert _find_import_insert_position(lines) == 1
+
+    def test_file_with_multiline_docstring(self) -> None:
+        """Inserts after multi-line docstring."""
+        lines = [
+            '"""Module docstring.',
+            "",
+            "More documentation.",
+            '"""',
+            "",
+        ]
+        assert _find_import_insert_position(lines) == 4
+
+    def test_respects_future_imports(self) -> None:
+        """Inserts after __future__ imports."""
+        lines = [
+            '"""Docstring."""',
+            "",
+            "from __future__ import annotations",
+            "",
+        ]
+        assert _find_import_insert_position(lines) == 3
+
+    def test_inserts_after_existing_imports(self) -> None:
+        """Inserts after last existing import."""
+        lines = [
+            '"""Docstring."""',
+            "",
+            "from __future__ import annotations",
+            "",
+            "import os",
+            "from pathlib import Path",
+            "",
+        ]
+        assert _find_import_insert_position(lines) == 6
+
+    def test_file_with_only_future_import(self) -> None:
+        """Handles file with only __future__ import."""
+        lines = [
+            "from __future__ import annotations",
+        ]
+        assert _find_import_insert_position(lines) == 1
+
+    def test_file_with_comments_before_imports(self) -> None:
+        """Handles comments between docstring and imports."""
+        lines = [
+            '"""Docstring."""',
+            "",
+            "# Some comment",
+            "# Another comment",
+            "",
+            "from __future__ import annotations",
+            "",
+        ]
+        assert _find_import_insert_position(lines) == 6
+
+    def test_single_quote_docstring(self) -> None:
+        """Handles single-quote docstrings."""
+        lines = [
+            "'''Single quote docstring.'''",
+            "",
+            "import os",
+        ]
+        assert _find_import_insert_position(lines) == 3
+
+    def test_ignores_local_imports_inside_functions(self) -> None:
+        """Does not use indented imports (inside functions) as anchors."""
+        lines = [
+            '"""Docstring."""',
+            "",
+            "from __future__ import annotations",
+            "",
+            "import os",
+            "",
+            "",
+            "def some_function():",
+            "    from pathlib import Path  # Local import",
+            "    return Path('.')",
+        ]
+        # Should insert after top-level 'import os' (line 5), not after local import
+        assert _find_import_insert_position(lines) == 5
+
+    def test_raw_string_docstring(self) -> None:
+        """Handles raw string docstrings (r-prefix)."""
+        lines = [
+            'r"""Raw docstring with regex patterns like \\d+."""',
+            "",
+            "import os",
+        ]
+        assert _find_import_insert_position(lines) == 3
+
+    def test_multiline_raw_docstring(self) -> None:
+        """Handles multiline raw string docstrings."""
+        lines = [
+            'r"""Raw docstring.',
+            "",
+            "With regex: \\d+",
+            '"""',
+            "",
+            "import os",
+        ]
+        assert _find_import_insert_position(lines) == 6

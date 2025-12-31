@@ -20,6 +20,71 @@ from ..utils import derive_class_name, slugify
 console = Console()
 
 
+def _find_import_insert_position(lines: list[str]) -> int:
+    """Find the correct position to insert a new import statement.
+
+    Respects:
+    - Module docstrings (single or triple quotes)
+    - from __future__ imports (must be first)
+    - Existing import blocks
+
+    Args:
+        lines: List of file lines.
+
+    Returns:
+        Line index where new import should be inserted.
+    """
+    import_idx = 0
+    in_docstring = False
+    docstring_char = None
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+
+        # Track docstrings (triple quotes, including raw strings r""")
+        if not in_docstring:
+            # Handle regular and raw string docstrings
+            if stripped.startswith(('"""', "'''")):
+                docstring_char = stripped[:3]
+            elif stripped.startswith(('r"""', "r'''")):
+                docstring_char = stripped[1:4]  # Skip 'r' prefix
+            else:
+                docstring_char = None
+
+            if docstring_char:
+                # Check if docstring ends on same line
+                if stripped.count(docstring_char) >= 2:
+                    import_idx = i + 1
+                else:
+                    in_docstring = True
+                continue
+        else:
+            if docstring_char and docstring_char in stripped:
+                in_docstring = False
+                import_idx = i + 1
+            continue
+
+        # Skip empty lines and comments at the start
+        if not stripped or stripped.startswith("#"):
+            if import_idx == 0:
+                import_idx = i + 1
+            continue
+
+        # __future__ imports must come first, always skip past them
+        if stripped.startswith("from __future__"):
+            import_idx = i + 1
+            continue
+
+        # Found a top-level import, track position after it
+        # Only consider unindented lines to avoid local imports inside functions
+        is_top_level = not line.startswith((" ", "\t"))
+        is_import = stripped.startswith("from ") or stripped.startswith("import ")
+        if is_import and is_top_level:
+            import_idx = i + 1
+
+    return import_idx
+
+
 # =============================================================================
 # PUBLIC API - Called by CLI
 # =============================================================================
@@ -453,27 +518,25 @@ def _add_agent_to_agents_file(
 
     agent_name = agent_package.replace("-", "_")
 
-    # Ensure register_agent is imported
-    if (
-        "register_agent" not in content
-        or "# from macsdk.core import register_agent" in content
-    ):
+    # Ensure register_agent is imported (use regex to avoid false positives from comments)
+    # Matches: "from x import register_agent" or "from x import a, register_agent"
+    has_register_agent_import = (
+        re.search(
+            r"^\s*from\s+\S+\s+import\s+.*\bregister_agent\b", content, re.MULTILINE
+        )
+        is not None
+    )
+    if not has_register_agent_import:
         # Prefer adding to existing get_registry import (more robust)
-        if (
-            "from macsdk.core import get_registry" in content
-            and ", register_agent" not in content
-        ):
+        if "from macsdk.core import get_registry" in content:
             content = content.replace(
                 "from macsdk.core import get_registry",
                 "from macsdk.core import get_registry, register_agent",
             )
-        elif "from macsdk.core import register_agent" not in content:
-            # Add new import line
+        else:
+            # Add new import line at correct position
             lines = content.split("\n")
-            import_idx = 0
-            for i, line in enumerate(lines):
-                if line.startswith("from ") or line.startswith("import "):
-                    import_idx = i + 1
+            import_idx = _find_import_insert_position(lines)
             lines.insert(import_idx, "from macsdk.core import register_agent")
             content = "\n".join(lines)
 
@@ -488,12 +551,9 @@ def _add_agent_to_agents_file(
             f"{import_marker}\n{import_stmt}",
         )
     else:
-        # Add import at top of file after existing imports
+        # Add import at correct position (after docstrings, __future__, existing imports)
         lines = content.split("\n")
-        import_idx = 0
-        for i, line in enumerate(lines):
-            if line.startswith("from ") or line.startswith("import "):
-                import_idx = i + 1
+        import_idx = _find_import_insert_position(lines)
         lines.insert(import_idx, import_stmt)
         content = "\n".join(lines)
 

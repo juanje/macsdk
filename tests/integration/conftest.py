@@ -341,7 +341,6 @@ from __future__ import annotations
 from typing import Any
 
 from {agent_slug} import {agent_class}
-
 from macsdk.core import get_registry, register_agent
 
 

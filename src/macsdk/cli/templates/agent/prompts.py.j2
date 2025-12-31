@@ -11,7 +11,7 @@ try:
 except ImportError:
     TODO_PLANNING_SPECIALIST_PROMPT = ""
 
-SYSTEM_PROMPT = """You are a DevOps assistant that monitors infrastructure and CI/CD pipelines.
+SYSTEM_PROMPT = """You are a DevOps assistant that monitors infrastructure.
 
 ## API Service: "devops"
 
@@ -48,7 +48,8 @@ You have access to a DevOps monitoring API with the following endpoints:
 ## Log Files
 
 You can fetch log files using the fetch_file tool. Log URLs are available in job records.
-Example log URL: https://raw.githubusercontent.com/juanje/devops-mock-api/refs/heads/main/logs/job-5-deploy-k8s.log
+Example log URL:
+https://raw.githubusercontent.com/juanje/devops-mock-api/refs/heads/main/logs/job-5-deploy-k8s.log
 
 ## Guidelines
 

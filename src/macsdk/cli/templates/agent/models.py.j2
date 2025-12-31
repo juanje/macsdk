@@ -10,8 +10,7 @@ BaseAgentResponse already includes:
 Add your own fields for domain-specific data.
 """
 
-# Uncomment these imports when adding custom fields:
-# from typing import Optional
+# Uncomment this import when adding custom fields:
 # from pydantic import Field
 
 from macsdk.core import BaseAgentResponse
@@ -26,34 +25,36 @@ class AgentResponse(BaseAgentResponse):
     Example fields (customize for your use case):
 
         # For an API agent:
-        api_status: Optional[str] = Field(
-            None, description="Status from the API call"
+        api_status: str | None = Field(
+            default=None, description="Status from the API call"
         )
-        data_count: Optional[int] = Field(
-            None, description="Number of items retrieved"
+        data_count: int | None = Field(
+            default=None, description="Number of items retrieved"
         )
 
         # For a job/task agent:
-        job_id: Optional[str] = Field(
-            None, description="Job or task identifier"
+        job_id: str | None = Field(
+            default=None, description="Job or task identifier"
         )
-        status: Optional[str] = Field(
-            None, description="Job status (pending, running, completed, failed)"
+        status: str | None = Field(
+            default=None, description="Job status (pending, running, completed, failed)"
         )
-        error_summary: Optional[str] = Field(
-            None, description="Summary of any errors encountered"
+        error_summary: str | None = Field(
+            default=None, description="Summary of any errors encountered"
         )
 
         # For a search/RAG agent:
         sources: list[str] = Field(
             default_factory=list, description="Sources used for the response"
         )
-        confidence: Optional[float] = Field(
-            None, description="Confidence score (0.0 to 1.0)"
+        confidence: float | None = Field(
+            default=None, description="Confidence score (0.0 to 1.0)"
         )
+
+    Note: Always use `default=None` (not positional None) for mypy compatibility.
     """
 
     # Add your custom fields here:
-    # status: Optional[str] = Field(None, description="Operation status")
-    # data: Optional[dict] = Field(None, description="Retrieved data")
+    # status: str | None = Field(default=None, description="Operation status")
+    # data: dict | None = Field(default=None, description="Retrieved data")
     pass
