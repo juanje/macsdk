@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -133,19 +134,19 @@ class MACSDKConfig(BaseSettings):
 
     # LLM Configuration
     llm_model: str = "gemini-2.5-flash"
-    llm_temperature: float = 0.3
+    llm_temperature: float = Field(default=0.3, ge=0.0, le=2.0)
     llm_reasoning_effort: Optional[str] = "medium"
     google_api_key: Optional[str] = None
     classifier_model: str = "gemini-2.5-flash"
-    classifier_temperature: float = 0.0
+    classifier_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     classifier_reasoning_effort: Optional[str] = "low"
 
     # Web Server Configuration
     # Bind to all interfaces by default (users can override to localhost in production)
     server_host: str = "0.0.0.0"  # nosec B104
-    server_port: int = 8000
-    message_max_length: int = 5000
-    warmup_timeout: float = 15.0
+    server_port: int = Field(default=8000, ge=1, le=65535)
+    message_max_length: int = Field(default=5000, gt=0)
+    warmup_timeout: float = Field(default=15.0, gt=0)
 
     # Middleware Configuration
     include_datetime: bool = True  # Inject datetime context into prompts
@@ -153,11 +154,11 @@ class MACSDKConfig(BaseSettings):
 
     # Summarization Configuration
     summarization_enabled: bool = False  # Enable context summarization
-    summarization_trigger_tokens: int = 100000  # Token threshold to trigger
-    summarization_keep_messages: int = 6  # Messages to keep unsummarized
+    summarization_trigger_tokens: int = Field(default=100000, gt=0)
+    summarization_keep_messages: int = Field(default=6, ge=1)
 
     # Agent Execution Configuration
-    recursion_limit: int = 50  # Max iterations for agent tool calls
+    recursion_limit: int = Field(default=50, ge=1)
     # Use higher values (100+) for complex workflows with many steps
 
     # Debug Configuration

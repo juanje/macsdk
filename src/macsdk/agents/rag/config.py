@@ -11,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from macsdk.core.config import load_config_from_yaml
 
@@ -83,14 +83,17 @@ class RAGConfig(BaseModel):
     # Indexing settings
     chunk_size: int = Field(
         default=1000,
+        gt=0,
         description="Size of text chunks for indexing",
     )
     chunk_overlap: int = Field(
         default=200,
+        ge=0,
         description="Overlap between consecutive chunks",
     )
     max_depth: int = Field(
         default=3,
+        ge=1,
         description="Maximum crawl depth for documentation URLs",
     )
     embedding_model: str = Field(
@@ -101,10 +104,12 @@ class RAGConfig(BaseModel):
     # Retrieval settings
     retriever_k: int = Field(
         default=6,
+        ge=1,
         description="Number of documents to retrieve",
     )
     max_rewrites: int = Field(
         default=2,
+        ge=0,
         description="Maximum query rewrites before fallback",
     )
     model_name: str = Field(
@@ -113,6 +118,8 @@ class RAGConfig(BaseModel):
     )
     temperature: float = Field(
         default=0.3,
+        ge=0.0,
+        le=2.0,
         description="Temperature for answer generation",
     )
 
@@ -137,6 +144,16 @@ class RAGConfig(BaseModel):
         default=Path.home() / ".cache" / "macsdk" / "certs",
         description="Directory for cached SSL certificates",
     )
+
+    @model_validator(mode="after")
+    def validate_chunk_overlap(self) -> "RAGConfig":
+        """Ensure chunk_overlap is smaller than chunk_size."""
+        if self.chunk_overlap >= self.chunk_size:
+            raise ValueError(
+                f"chunk_overlap ({self.chunk_overlap}) must be smaller than "
+                f"chunk_size ({self.chunk_size})"
+            )
+        return self
 
 
 def load_rag_config(

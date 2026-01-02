@@ -92,7 +92,8 @@ async def _make_request(
     except ValueError as e:
         return {"success": False, "error": str(e)}
 
-    url = f"{service_config.base_url}/{endpoint.lstrip('/')}"
+    # HttpUrl may add trailing slash to root domains, strip it to avoid double-slash
+    url = f"{str(service_config.base_url).rstrip('/')}/{endpoint.lstrip('/')}"
 
     # Build headers
     request_headers = dict(service_config.headers)

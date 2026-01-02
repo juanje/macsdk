@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from macsdk.core.config import (
     CONFIG_FILE_ENV_VAR,
@@ -223,3 +224,71 @@ server_port: {TEST_SERVER_PORT}
         assert config.llm_model == TEST_LLM_MODEL
         assert config.llm_temperature == TEST_TEMPERATURE
         assert config.server_port == TEST_SERVER_PORT
+
+
+class TestMACSDKConfigValidators:
+    """Tests for Pydantic Field validators in MACSDKConfig."""
+
+    def test_temperature_too_high_raises(self) -> None:
+        """Temperature above 2.0 raises ValidationError."""
+        with pytest.raises(ValidationError, match="llm_temperature"):
+            MACSDKConfig(llm_temperature=2.5)
+
+    def test_temperature_negative_raises(self) -> None:
+        """Negative temperature raises ValidationError."""
+        with pytest.raises(ValidationError, match="llm_temperature"):
+            MACSDKConfig(llm_temperature=-0.1)
+
+    def test_temperature_at_boundaries_valid(self) -> None:
+        """Temperature at 0.0 and 2.0 are valid."""
+        config_min = MACSDKConfig(llm_temperature=0.0)
+        config_max = MACSDKConfig(llm_temperature=2.0)
+        assert config_min.llm_temperature == 0.0
+        assert config_max.llm_temperature == 2.0
+
+    def test_classifier_temperature_too_high_raises(self) -> None:
+        """Classifier temperature above 2.0 raises ValidationError."""
+        with pytest.raises(ValidationError, match="classifier_temperature"):
+            MACSDKConfig(classifier_temperature=2.1)
+
+    def test_server_port_too_high_raises(self) -> None:
+        """Port above 65535 raises ValidationError."""
+        with pytest.raises(ValidationError, match="server_port"):
+            MACSDKConfig(server_port=70000)
+
+    def test_server_port_zero_raises(self) -> None:
+        """Port 0 raises ValidationError."""
+        with pytest.raises(ValidationError, match="server_port"):
+            MACSDKConfig(server_port=0)
+
+    def test_server_port_at_boundaries_valid(self) -> None:
+        """Port at 1 and 65535 are valid."""
+        config_min = MACSDKConfig(server_port=1)
+        config_max = MACSDKConfig(server_port=65535)
+        assert config_min.server_port == 1
+        assert config_max.server_port == 65535
+
+    def test_message_max_length_zero_raises(self) -> None:
+        """Message max length 0 raises ValidationError."""
+        with pytest.raises(ValidationError, match="message_max_length"):
+            MACSDKConfig(message_max_length=0)
+
+    def test_warmup_timeout_zero_raises(self) -> None:
+        """Warmup timeout 0 raises ValidationError."""
+        with pytest.raises(ValidationError, match="warmup_timeout"):
+            MACSDKConfig(warmup_timeout=0.0)
+
+    def test_summarization_trigger_tokens_zero_raises(self) -> None:
+        """Summarization trigger tokens 0 raises ValidationError."""
+        with pytest.raises(ValidationError, match="summarization_trigger_tokens"):
+            MACSDKConfig(summarization_trigger_tokens=0)
+
+    def test_summarization_keep_messages_zero_raises(self) -> None:
+        """Summarization keep messages 0 raises ValidationError."""
+        with pytest.raises(ValidationError, match="summarization_keep_messages"):
+            MACSDKConfig(summarization_keep_messages=0)
+
+    def test_recursion_limit_zero_raises(self) -> None:
+        """Recursion limit 0 raises ValidationError."""
+        with pytest.raises(ValidationError, match="recursion_limit"):
+            MACSDKConfig(recursion_limit=0)
