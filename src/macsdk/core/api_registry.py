@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +25,12 @@ class APIServiceConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     name: str
-    base_url: str
+    base_url: HttpUrl
     token: SecretStr | None = None
-    headers: dict[str, str] = {}
-    timeout: int = 30
-    max_retries: int = 3
-    rate_limit: int | None = None  # requests per hour
+    headers: dict[str, str] = Field(default_factory=dict)
+    timeout: int = Field(default=30, gt=0)
+    max_retries: int = Field(default=3, ge=0)
+    rate_limit: int | None = Field(default=None, gt=0)
     ssl_cert: str | None = None  # Path to SSL certificate file
     ssl_verify: bool = True  # Set to False to disable SSL verification (insecure!)
 
@@ -94,9 +94,11 @@ def register_api_service(
     if not ssl_verify:
         logger.warning(f"SSL verification disabled for service '{name}' - INSECURE!")
 
+    # Normalize URL (remove trailing slash)
+    normalized_url = base_url.rstrip("/")
     _api_services[name] = APIServiceConfig(
         name=name,
-        base_url=base_url.rstrip("/"),
+        base_url=HttpUrl(normalized_url),
         token=SecretStr(token) if token else None,
         headers=headers or {},
         timeout=timeout,
@@ -105,7 +107,7 @@ def register_api_service(
         ssl_cert=ssl_cert,
         ssl_verify=ssl_verify,
     )
-    logger.info(f"Registered API service: {name} ({base_url})")
+    logger.info(f"Registered API service: {name} ({normalized_url})")
 
 
 def get_api_service(name: str) -> APIServiceConfig:

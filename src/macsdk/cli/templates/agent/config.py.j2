@@ -40,6 +40,12 @@ class {{ agent_class }}Config(MACSDKConfig):
     # api_timeout: int = 30
     # debug_mode: bool = False
     # project_id: str = ""
+    #
+    # Values with validation (recommended for user-facing config):
+    # from pydantic import Field
+    # max_retries: int = Field(default=3, ge=0, le=10)
+    # temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    # port: int = Field(default=8080, ge=1, le=65535)
 
     model_config = SettingsConfigDict(
         env_file=".env",

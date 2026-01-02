@@ -332,8 +332,22 @@ When reviewing changes to this project, verify:
 - [ ] All functions have complete type annotations (args + return type)
 - [ ] `from __future__ import annotations` present in modified modules
 - [ ] No mypy errors in strict mode (`disallow_untyped_defs=true`)
-- [ ] Ruff linting passes (line length 88, imports sorted)
+- [ ] Ruff linting passes (line length 100, imports sorted)
 - [ ] No bare `except:` clauses; use specific exception types
+
+**Pydantic Type Coercion Style:**
+When using Pydantic types like `HttpUrl`, `SecretStr`, etc., prefer explicit instantiation
+over relying on Pydantic's automatic coercion. This keeps mypy happy without `# type: ignore`.
+
+```python
+# ✅ Preferred: Explicit instantiation
+config = APIServiceConfig(name="test", base_url=HttpUrl("https://api.example.com"))
+
+# ❌ Avoid: Relying on coercion with type ignore
+config = APIServiceConfig(name="test", base_url="https://...")  # type: ignore[arg-type]
+```
+
+This applies to both production code and tests. Explicit is better than implicit.
 
 ### Testing Requirements
 - [ ] New features have unit tests (90%+ coverage target)
