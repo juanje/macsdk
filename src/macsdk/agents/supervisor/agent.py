@@ -6,6 +6,7 @@ specialist agents using them as tools.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, Callable
 
 from langchain.agents import create_agent
@@ -23,6 +24,8 @@ from ...middleware import (
 )
 from ...middleware.debug_prompts import PromptDebugMiddleware
 from .prompts import SUPERVISOR_PROMPT, TODO_PLANNING_SUPERVISOR_PROMPT
+
+logger = logging.getLogger(__name__)  # noqa: E402
 
 if TYPE_CHECKING:
     from ...core.state import ChatbotState
@@ -206,10 +209,15 @@ async def supervisor_agent_node(
         # Get current stream writer and pass it through config for tools
         # Use configurable recursion limit for complex multi-agent workflows
         run_config: dict = {"recursion_limit": config.recursion_limit}
+
+        # Initialize configurable dict for tools
+        run_config["configurable"] = {}
+
+        # Add stream writer if available
         try:
             writer = get_stream_writer()
             if writer is not None:
-                run_config["configurable"] = {STREAM_WRITER_KEY: writer}
+                run_config["configurable"][STREAM_WRITER_KEY] = writer
         except (RuntimeError, Exception):
             pass
 
@@ -248,10 +256,14 @@ async def supervisor_agent_node(
         # Log the full error for debugging
         log_progress(f"\n⚠️ Error in supervisor ({error_type}): {error_msg}\n")
 
-        # Log traceback for developers
-        tb = traceback.format_exc()
-        logger = __import__("logging").getLogger(__name__)
-        logger.error(f"Supervisor error: {error_type}: {error_msg}\n{tb}")
+        # Log traceback for developers (only show in debug mode)
+        if config.debug:
+            # In debug mode, show full traceback
+            tb = traceback.format_exc()
+            logger.error(f"Supervisor error: {error_type}: {error_msg}\n{tb}")
+        else:
+            # In normal mode, just log the error without full traceback
+            logger.warning(f"Supervisor error: {error_type}: {error_msg}")
 
         # Provide more specific error messages when possible
         if "recursion" in error_msg.lower() or "maximum" in error_msg.lower():

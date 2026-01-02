@@ -12,5 +12,17 @@
 # Task Planning (optional)
 # enable_todo: true  # Enable internal task planning for complex queries
 
+# URL Security Configuration (SSRF Protection)
+# Control which URLs can be accessed by remote file tools and API tools.
+# Disabled by default. Enable when using tools that access URLs.
+#
+# url_security:
+#   enabled: true
+#   allow_domains:
+#     - "api.github.com"
+#     - "*.example.com"
+#   allow_localhost: false
+#   log_blocked_attempts: true
+
 # Add agent-specific settings below:
 # my_agent_setting: value

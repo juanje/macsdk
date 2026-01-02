@@ -49,6 +49,28 @@
 # server_port: 8000
 # message_max_length: 5000
 # warmup_timeout: 15.0
+
+# =============================================================================
+# URL Security Configuration (SSRF Protection)
+# =============================================================================
+# Control which URLs can be accessed by remote file tools and API tools.
+# Disabled by default for backward compatibility.
+#
+# url_security:
+#   enabled: true                    # Enable URL filtering
+#   allow_localhost: false           # Allow localhost/127.0.0.1 (default: false)
+#   log_blocked_attempts: true       # Log blocked URL attempts (default: true)
+#
+#   # Allow list for domains (supports wildcards)
+#   allow_domains:
+#     - "api.github.com"
+#     - "*.example.com"
+#     - "internal.corp"
+#
+#   # Allow list for IP ranges (CIDR notation)
+#   allow_ips:
+#     - "203.0.113.0/24"             # Public IP range
+#     - "192.168.1.0/24"             # Private network (if needed)
 {% if with_rag %}
 
 # =============================================================================

@@ -1,5 +1,7 @@
 # API Tools
 
+> **Security Note**: When using tools that access URLs (`fetch_file`, `api_get`, etc.), consider enabling URL Security to protect against Server-Side Request Forgery (SSRF) attacks. See [URL Security Configuration](configuration.md#url-security-configuration) for details.
+
 ## Philosophy: Fewer tools, more intelligence
 
 MACSDK adopts a minimalist approach to API tools: instead of creating a specific tool for each endpoint, we use **generic tools** and let the LLM decide which endpoints to call based on the API description in the prompt.

@@ -9,11 +9,15 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Annotated
 
 import httpx
-from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import InjectedToolArg, ToolException, tool
+from langchain_core.tools import ToolException, tool
+
+from ..core.url_security import (
+    URLSecurityError,
+    create_redirect_validator,
+    validate_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +30,6 @@ async def fetch_file(
     head_lines: int | None = None,
     timeout: int = 30,
     ssl_verify: bool = True,
-    config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Fetch a file from a URL with optional filtering.
 
@@ -50,9 +53,25 @@ async def fetch_file(
         >>> fetch_file("https://example.com/config.yml", grep_pattern="database")
         >>> fetch_file("https://internal.server/log", ssl_verify=False)
     """
+    # Validate URL against security policy (uses global config)
+    from ..core.config import config
+
+    if config.url_security.enabled:
+        try:
+            validate_url(url, config.url_security)
+        except URLSecurityError as e:
+            raise ToolException(str(e))
+
     try:
+        # Configure event hooks to validate redirects
+        validator = create_redirect_validator(config.url_security)
+        event_hooks = {"request": [validator]} if validator else {}
+
         async with httpx.AsyncClient(
-            verify=ssl_verify, timeout=timeout, follow_redirects=True
+            verify=ssl_verify,
+            timeout=timeout,
+            follow_redirects=True,
+            event_hooks=event_hooks,
         ) as client:
             response = await client.get(url)
 
@@ -103,7 +122,6 @@ async def fetch_and_save(
     save_path: str,
     timeout: int = 60,
     ssl_verify: bool = True,
-    config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Fetch a file from URL and save it locally.
 
@@ -125,9 +143,25 @@ async def fetch_and_save(
         ...     "/tmp/report.pdf"
         ... )
     """
+    # Validate URL against security policy (uses global config)
+    from ..core.config import config
+
+    if config.url_security.enabled:
+        try:
+            validate_url(url, config.url_security)
+        except URLSecurityError as e:
+            raise ToolException(str(e))
+
     try:
+        # Configure event hooks to validate redirects
+        validator = create_redirect_validator(config.url_security)
+        event_hooks = {"request": [validator]} if validator else {}
+
         async with httpx.AsyncClient(
-            verify=ssl_verify, timeout=timeout, follow_redirects=True
+            verify=ssl_verify,
+            timeout=timeout,
+            follow_redirects=True,
+            event_hooks=event_hooks,
         ) as client:
             response = await client.get(url)
 
@@ -162,7 +196,6 @@ async def fetch_json(
     extract: str | None = None,
     timeout: int = 30,
     ssl_verify: bool = True,
-    config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Fetch JSON from a URL with optional JSONPath extraction.
 
@@ -182,9 +215,25 @@ async def fetch_json(
         >>> fetch_json("https://api.example.com/data")
         >>> fetch_json("https://api.example.com/users", extract="$[*].email")
     """
+    # Validate URL against security policy (uses global config)
+    from ..core.config import config
+
+    if config.url_security.enabled:
+        try:
+            validate_url(url, config.url_security)
+        except URLSecurityError as e:
+            raise ToolException(str(e))
+
     try:
+        # Configure event hooks to validate redirects
+        validator = create_redirect_validator(config.url_security)
+        event_hooks = {"request": [validator]} if validator else {}
+
         async with httpx.AsyncClient(
-            verify=ssl_verify, timeout=timeout, follow_redirects=True
+            verify=ssl_verify,
+            timeout=timeout,
+            follow_redirects=True,
+            event_hooks=event_hooks,
         ) as client:
             response = await client.get(url, headers={"Accept": "application/json"})
 

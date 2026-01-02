@@ -13,14 +13,18 @@ import asyncio
 import json
 import logging
 import ssl
-from typing import Annotated, Any
+from typing import Any
 
 import httpx
-from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import InjectedToolArg, ToolException, tool
+from langchain_core.tools import ToolException, tool
 
 from ..core.api_registry import get_api_service
 from ..core.cert_manager import get_certificate_path
+from ..core.url_security import (
+    URLSecurityError,
+    create_redirect_validator,
+    validate_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +79,8 @@ async def _make_request(
 ) -> dict[str, Any]:
     """Internal function to make HTTP requests with retry logic.
 
+    URL security validation is performed using the global configuration.
+
     Args:
         method: HTTP method (GET, POST, PUT, DELETE, PATCH).
         service: Registered service name.
@@ -94,6 +100,15 @@ async def _make_request(
 
     # HttpUrl may add trailing slash to root domains, strip it to avoid double-slash
     url = f"{str(service_config.base_url).rstrip('/')}/{endpoint.lstrip('/')}"
+
+    # Validate URL against security policy (uses global config)
+    from ..core.config import config as app_config
+
+    if app_config.url_security.enabled:
+        try:
+            validate_url(url, app_config.url_security)
+        except URLSecurityError as e:
+            return {"success": False, "error": str(e)}
 
     # Build headers
     request_headers = dict(service_config.headers)
@@ -129,11 +144,18 @@ async def _make_request(
                 "error": f"SSL certificate error: {e}",
             }
 
+    # Configure event hooks to validate redirects
+    validator = create_redirect_validator(app_config.url_security)
+    event_hooks = {"request": [validator]} if validator else {}
+
     # Retry logic with exponential backoff
     # Create client outside retry loop for connection pooling
     last_error = None
     async with httpx.AsyncClient(
-        verify=verify, timeout=service_config.timeout
+        verify=verify,
+        timeout=service_config.timeout,
+        follow_redirects=True,
+        event_hooks=event_hooks,
     ) as client:
         for attempt in range(service_config.max_retries):
             try:
@@ -198,6 +220,9 @@ async def make_api_request(
     This is the programmatic interface for developers who need JSONPath
     extraction. For LLM-facing tools, use api_get, api_post, etc.
 
+    URL security validation is performed automatically using the global
+    configuration (macsdk.core.config.config).
+
     Args:
         method: HTTP method (GET, POST, PUT, DELETE, PATCH).
         service: Registered service name.
@@ -234,7 +259,6 @@ async def api_get(
     service: str,
     endpoint: str,
     params: dict | None = None,
-    config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Make a GET request to a registered API service.
 
@@ -272,7 +296,6 @@ async def api_post(
     endpoint: str,
     body: dict,
     params: dict | None = None,
-    config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Make a POST request to a registered API service.
 
@@ -302,7 +325,6 @@ async def api_put(
     endpoint: str,
     body: dict,
     params: dict | None = None,
-    config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Make a PUT request to replace a resource in a registered API service.
 
@@ -331,7 +353,6 @@ async def api_delete(
     service: str,
     endpoint: str,
     params: dict | None = None,
-    config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Make a DELETE request to remove a resource from a registered API service.
 
@@ -362,7 +383,6 @@ async def api_patch(
     endpoint: str,
     body: dict,
     params: dict | None = None,
-    config: Annotated[RunnableConfig | None, InjectedToolArg] = None,
 ) -> str:
     """Make a PATCH request to partially update a resource in a registered API service.
 

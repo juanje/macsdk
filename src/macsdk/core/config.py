@@ -6,12 +6,18 @@ customizing the chatbot framework.
 
 from __future__ import annotations
 
+import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
-from pydantic import Field
+from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from .url_security import URLSecurityConfig
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigurationError(Exception):
@@ -130,6 +136,7 @@ class MACSDKConfig(BaseSettings):
         server_port: Port for the web server.
         message_max_length: Maximum message length in characters.
         warmup_timeout: Timeout for graph warmup on startup.
+        url_security: URL security configuration for SSRF protection.
     """
 
     # LLM Configuration
@@ -163,6 +170,24 @@ class MACSDKConfig(BaseSettings):
 
     # Debug Configuration
     debug: bool = False  # Enable debug mode (shows prompts sent to LLM)
+
+    # URL Security Configuration
+    url_security: URLSecurityConfig = Field(default_factory=URLSecurityConfig)
+
+    @field_validator("url_security", mode="before")
+    @classmethod
+    def validate_url_security(cls, value: Any) -> Any:
+        """Convert dict from YAML to URLSecurityConfig if needed.
+
+        Args:
+            value: Raw value from YAML/config (dict or URLSecurityConfig).
+
+        Returns:
+            URLSecurityConfig instance.
+        """
+        if isinstance(value, dict):
+            return URLSecurityConfig(**value)
+        return value
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -238,7 +263,48 @@ def create_config(
 # Default configuration instance (loads config.yml from cwd if present)
 # Note: For standalone agent testing, agents should create their own config
 # using create_config() in their entry point
-config = MACSDKConfig()
+def _create_default_config() -> MACSDKConfig:
+    """Create default config instance, loading config.yml if present.
+
+    Implements "Fail Closed" security: if config.yml exists but cannot be
+    loaded or parsed, the application will exit with a clear error message
+    rather than silently falling back to insecure defaults. This ensures
+    users are never unknowingly left unprotected due to configuration errors.
+
+    Returns:
+        MACSDKConfig: Configuration instance with settings from config.yml,
+                      or defaults if config.yml doesn't exist.
+
+    Exits:
+        Exits with status code 1 if config.yml exists but fails to load,
+        displaying a user-friendly error message without full traceback.
+    """
+    try:
+        yaml_config = load_config_from_yaml()
+        return MACSDKConfig(**yaml_config)
+    except FileNotFoundError:
+        # No config file found - this is normal, use defaults silently
+        return MACSDKConfig()
+    except ValidationError as e:
+        # Pydantic validation error - show user-friendly message
+        logger.error("Configuration validation failed in config.yml:")
+        for error in e.errors():
+            field = ".".join(str(loc) for loc in error["loc"])
+            msg = error["msg"]
+            logger.error(f"  - {field}: {msg}")
+        logger.error(
+            "\nPlease fix the errors in config.yml and restart the application."
+        )
+        sys.exit(1)
+    except Exception as e:
+        # YAML parsing or other errors - show clean message
+        error_type = type(e).__name__
+        logger.error(f"Failed to load config.yml: {error_type}: {e}")
+        logger.error("Please fix the errors in config.yml and restart the application.")
+        sys.exit(1)
+
+
+config = _create_default_config()
 
 
 def validate_config() -> None:
