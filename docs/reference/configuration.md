@@ -249,6 +249,100 @@ register_api_service(
 - The certificate file must be in PEM format
 - The URL must be accessible from where your agent runs
 
+## URL Security Configuration
+
+Control which URLs can be accessed by remote file tools (`fetch_file`, `fetch_and_save`, `fetch_json`) and API tools to protect against Server-Side Request Forgery (SSRF) attacks.
+
+```yaml
+# =============================================================================
+# URL Security Configuration (SSRF Protection)
+# =============================================================================
+url_security:
+  enabled: true                      # Enable URL filtering (default: false)
+  allow_localhost: false             # Allow localhost/127.0.0.1 (default: false)
+  log_blocked_attempts: true         # Log blocked URL attempts (default: true)
+  
+  # Allow list for domains (supports wildcards)
+  allow_domains:
+    - "api.github.com"              # Exact domain
+    - "*.example.com"               # Wildcard subdomain
+    - "internal.corp"
+  
+  # Allow list for IP ranges (CIDR notation)
+  allow_ips:
+    - "203.0.113.0/24"              # Public IP range
+    - "192.168.1.0/24"              # Private network (if needed)
+```
+
+### Security Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable URL filtering (disabled by default) |
+| `allow_domains` | list | `[]` | Allowed domain patterns (supports `*` wildcards) |
+| `allow_ips` | list | `[]` | Allowed IP ranges in CIDR notation |
+| `allow_localhost` | bool | `false` | Allow localhost/127.0.0.1 access |
+| `log_blocked_attempts` | bool | `true` | Log blocked URL attempts for auditing |
+
+### How It Works
+
+1. **Disabled by default**: URL security is off for backward compatibility
+2. **Allow list approach**: Only explicitly allowed URLs can be accessed
+3. **Domain wildcards**: Use `*.example.com` to allow all subdomains
+4. **IP ranges**: Use CIDR notation like `192.168.1.0/24` for IP ranges
+5. **Private IP protection**: Private IPs (RFC1918) are blocked unless in `allow_ips`
+6. **Localhost control**: Localhost is blocked by default, enable with `allow_localhost: true`
+
+### Example Use Cases
+
+**Development Environment:**
+```yaml
+url_security:
+  enabled: true
+  allow_localhost: true              # Allow local APIs
+  allow_domains:
+    - "api.github.com"
+    - "*.test.com"
+```
+
+**Production Environment:**
+```yaml
+url_security:
+  enabled: true
+  allow_localhost: false             # Block localhost
+  log_blocked_attempts: true         # Audit blocked attempts
+  allow_domains:
+    - "api.github.com"
+    - "*.example.com"
+    - "docs.internal.corp"
+  allow_ips:
+    - "203.0.113.0/24"              # Only specific public ranges
+```
+
+**Strict Internal Environment:**
+```yaml
+url_security:
+  enabled: true
+  allow_domains:
+    - "internal-api.company.com"    # Only internal APIs
+  allow_ips:
+    - "192.168.1.0/24"              # Only internal network
+```
+
+### Security Considerations
+
+- **SSRF Protection**: Prevents agents from accessing internal services or cloud metadata endpoints
+- **No deny list**: Only allow lists are supported (more secure approach)
+- **No redirect validation**: Redirects are followed but not re-validated (future enhancement)
+- **No DNS rebinding protection**: Domain-to-IP resolution is not validated (future enhancement)
+
+**Best Practices:**
+1. Always enable URL security in production
+2. Use the most restrictive allow list possible
+3. Monitor `log_blocked_attempts` for security incidents
+4. Keep `allow_localhost: false` in production
+5. Use specific domains instead of broad wildcards when possible
+
 ## Environment Variables
 
 All configuration options can be set via environment variables:

@@ -95,8 +95,9 @@ class TestFetchFileRedirects:
             assert result == expected_content
 
             # Verify follow_redirects=True is passed
+            # (with empty event_hooks when no security)
             mock_client_cls.assert_called_once_with(
-                verify=True, timeout=30, follow_redirects=True
+                verify=True, timeout=30, follow_redirects=True, event_hooks={}
             )
 
 
@@ -157,8 +158,9 @@ class TestFetchAndSaveRedirects:
             assert str(len(content)) in result
 
             # Verify follow_redirects=True is passed
+            # (with empty event_hooks when no security)
             mock_client_cls.assert_called_once_with(
-                verify=True, timeout=60, follow_redirects=True
+                verify=True, timeout=60, follow_redirects=True, event_hooks={}
             )
 
 
@@ -192,8 +194,9 @@ class TestFetchJsonRedirects:
             assert "data" in result
 
             # Verify follow_redirects=True is passed
+            # (with empty event_hooks when no security)
             mock_client_cls.assert_called_once_with(
-                verify=True, timeout=30, follow_redirects=True
+                verify=True, timeout=30, follow_redirects=True, event_hooks={}
             )
 
 
