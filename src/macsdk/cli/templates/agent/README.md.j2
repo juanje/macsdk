@@ -98,5 +98,8 @@ Edit `src/{{ agent_slug }}/prompts.py` to change agent behavior.
 
 ### Structured Responses
 
-Edit `src/{{ agent_slug }}/models.py` to add domain-specific fields
-to the agent's response structure.
+By default, the agent uses `BaseAgentResponse` which provides `response_text`
+and `tools_used`. For most use cases, this is sufficient.
+
+If you need custom structured fields (for advanced inter-agent coordination),
+edit `src/{{ agent_slug }}/models.py` and uncomment the custom class.

@@ -132,9 +132,10 @@ devops-chatbot/
 │   │   └── api/           # API agent as internal module
 │   │       ├── __init__.py
 │   │       ├── agent.py
-│   │       ├── tools.py
+│   │       ├── config.py
 │   │       ├── models.py
-│   │       └── prompts.py
+│   │       ├── prompts.py
+│   │       └── tools.py
 │   ├── agents.py          # Agent registration (relative imports)
 │   ├── cli.py             # CLI entry point
 │   ├── config.py          # Custom configuration
