@@ -28,7 +28,8 @@ infra-agent/
 ├── src/infra_agent/
 │   ├── __init__.py          # Exports agent class
 │   ├── agent.py             # Main agent implementation
-│   ├── models.py            # Response models
+│   ├── config.py            # Agent configuration (extends MACSDKConfig)
+│   ├── models.py            # Response models (uses BaseAgentResponse by default)
 │   ├── prompts.py           # System prompts with API schema
 │   ├── tools.py             # Tool configuration
 │   └── cli.py               # Testing CLI (Rich-powered)
@@ -191,18 +192,28 @@ Available endpoints:
 
 ## Response Models
 
-Edit `models.py`:
+By default, agents use `BaseAgentResponse` from the SDK, which provides:
+- `response_text`: Human-readable response
+- `tools_used`: List of tools that were called
+
+This is sufficient for most agents since the supervisor receives `response_text` via the tool wrapper.
+For most cases, you won't need to modify this file.
+
+For advanced use cases (like inter-agent data coordination), you can extend the base model in `models.py`:
 
 ```python
 from macsdk.core import BaseAgentResponse
 from pydantic import Field
 
-class InfraResponse(BaseAgentResponse):
-    """Infrastructure agent response model."""
+class AgentResponse(BaseAgentResponse):
+    """Custom response model with additional structured data."""
     
-    service: str = Field(default="", description="Service name")
-    status: str = Field(default="", description="Service status")
+    service_name: str | None = Field(default=None, description="Service name")
+    status: str | None = Field(default=None, description="Service status")
+    error_summary: str | None = Field(default=None, description="Error details")
 ```
+
+**Note:** Custom fields are available in the result dict (`result["service_name"]`) but are not automatically passed to the supervisor. The default approach of putting all relevant information in `response_text` is simpler and works well for most cases.
 
 ## The SpecialistAgent Protocol
 
@@ -236,15 +247,15 @@ class InfraAgent:
         agent_instance = self
 
         @tool
-        async def invoke_infra_agent(
+        async def infra_agent(
             query: str,
             config: Annotated[RunnableConfig, InjectedToolArg],
         ) -> str:
-            """Monitor infrastructure services."""
+            """Query this specialist agent with a natural language request."""
             result = await agent_instance.run(query, config=config)
             return result["response"]
 
-        return invoke_infra_agent
+        return infra_agent
 ```
 
 ## Testing Your Agent
@@ -306,9 +317,10 @@ my-chatbot/
         └── weather/
             ├── __init__.py
             ├── agent.py
-            ├── tools.py
+            ├── config.py
+            ├── models.py
             ├── prompts.py
-            └── models.py
+            └── tools.py
 ```
 
 The agent is automatically registered in `agents.py` with relative imports:

@@ -422,6 +422,30 @@ Specialist agents are exposed as LangChain `BaseTool` instances via the `as_tool
 
 **Important:** The supervisor never calls agent methods directly; it always uses LangChain's tool invocation.
 
+### Tool Docstrings Are Intentionally Generic
+
+Agent tools use minimal docstrings ("Query this specialist agent..."). This is **correct by design**:
+- Routing uses `CAPABILITIES` in the supervisor prompt, not tool docstrings
+- Avoids duplication/desync between docstring and capabilities
+- Validated empirically; LLMs route correctly
+
+**Do not flag generic tool docstrings as issues.**
+
+### Response Field Mapping
+
+`BaseAgentResponse.response_text` → `result["response"]` mapping happens in `run_agent_with_tools()`. Tool wrappers correctly access `result["response"]`. **Do not flag as inconsistent.**
+
+### Agent Code Never Instantiates Response Models
+
+**Do not flag "missing AgentResponse field updates" in agent.py files.**
+
+Agents do NOT manually instantiate `AgentResponse(field=value, ...)`. The flow is:
+1. `create_agent(..., response_format=AgentResponse)` passes the class to LangChain
+2. LangChain's structured output mechanism generates and validates the response
+3. `run_agent_with_tools()` extracts fields from the model
+
+Changing `models.py` fields requires NO changes to `agent.py` because the agent code never constructs the response object directly.
+
 ### Dynamic Prompt Construction
 
 The supervisor's system prompt is built at runtime by querying the `AgentRegistry` for all registered agents' `capabilities` strings. This means:

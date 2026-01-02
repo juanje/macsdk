@@ -46,9 +46,10 @@ macsdk add-agent . --new weather --description "Weather forecasts"
 # src/my_chatbot/local_agents/weather/
 #   ├── __init__.py
 #   ├── agent.py
-#   ├── tools.py
+#   ├── config.py
+#   ├── models.py
 #   ├── prompts.py
-#   └── models.py
+#   └── tools.py
 ```
 
 ## When to Use This Approach

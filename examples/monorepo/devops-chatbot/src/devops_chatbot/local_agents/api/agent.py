@@ -175,22 +175,15 @@ class ApiAgent:
         agent_instance = self
 
         @tool
-        async def invoke_api_agent(
+        async def api_agent(
             query: str,
             config: Annotated[RunnableConfig, InjectedToolArg],
         ) -> str:
-            """Query DevOps infrastructure for pipelines, jobs, services, and alerts.
-
-            Use this tool when the user wants to:
-            - Check pipeline status (list, failed, running)
-            - Investigate failed jobs and download logs
-            - Monitor service health (healthy, degraded, warning)
-            - View alerts (unacknowledged, critical)
-            - Check deployment history
+            """Query this specialist agent with a natural language request.
 
             Args:
-                query: The query to process.
-                config: Runnable configuration (injected).
+                query: What you want this agent to do or find out.
+                config: Runnable configuration (injected automatically).
 
             Returns:
                 The agent's response text.
@@ -198,4 +191,4 @@ class ApiAgent:
             result = await agent_instance.run(query, run_config=config)
             return str(result["response"])
 
-        return invoke_api_agent
+        return api_agent
