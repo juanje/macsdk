@@ -12,13 +12,6 @@
 # llm_reasoning_effort: medium     # low, medium, high
 
 # =============================================================================
-# Classifier Configuration (for routing queries)
-# =============================================================================
-# classifier_model: gemini-2.5-flash
-# classifier_temperature: 0.0
-# classifier_reasoning_effort: low
-
-# =============================================================================
 # Middleware Configuration
 # =============================================================================
 # include_datetime: true           # Inject current datetime into prompts

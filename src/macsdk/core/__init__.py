@@ -52,7 +52,7 @@ from .config import (
     validate_config,
 )
 from .graph import create_chatbot_graph, create_web_chatbot_graph
-from .llm import get_answer_model, get_classifier_model
+from .llm import get_answer_model
 from .models import BaseAgentResponse
 from .protocol import SpecialistAgent
 from .registry import (
@@ -98,7 +98,6 @@ __all__ = [
     "CONFIG_FILE_ENV_VAR",
     # LLM (use these functions for lazy initialization)
     "get_answer_model",
-    "get_classifier_model",
     # Models
     "BaseAgentResponse",
     # Utils

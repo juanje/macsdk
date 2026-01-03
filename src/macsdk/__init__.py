@@ -56,7 +56,6 @@ from .core import (
     get_all_capabilities,
     # LLM (use these for lazy initialization)
     get_answer_model,
-    get_classifier_model,
     get_registry,
     load_config_from_yaml,
     # Utils
@@ -99,7 +98,6 @@ __all__ = [
     "CONFIG_FILE_ENV_VAR",
     # LLM (use these for lazy initialization)
     "get_answer_model",
-    "get_classifier_model",
     # Models
     "BaseAgentResponse",
     # Utils

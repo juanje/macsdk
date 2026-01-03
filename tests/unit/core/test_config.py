@@ -283,11 +283,6 @@ class TestMACSDKConfigValidators:
         assert config_min.llm_temperature == 0.0
         assert config_max.llm_temperature == 2.0
 
-    def test_classifier_temperature_too_high_raises(self) -> None:
-        """Classifier temperature above 2.0 raises ValidationError."""
-        with pytest.raises(ValidationError, match="classifier_temperature"):
-            MACSDKConfig(classifier_temperature=2.1)
-
     def test_server_port_too_high_raises(self) -> None:
         """Port above 65535 raises ValidationError."""
         with pytest.raises(ValidationError, match="server_port"):

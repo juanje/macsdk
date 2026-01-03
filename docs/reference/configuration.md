@@ -25,13 +25,6 @@ llm_temperature: 0.3
 llm_reasoning_effort: medium  # low, medium, high
 
 # =============================================================================
-# Classifier Configuration (for routing queries)
-# =============================================================================
-classifier_model: gemini-2.5-flash
-classifier_temperature: 0.0
-classifier_reasoning_effort: low
-
-# =============================================================================
 # Middleware Configuration
 # =============================================================================
 include_datetime: true  # Inject datetime context with pre-calculated dates
@@ -355,14 +348,6 @@ All configuration options can be set via environment variables:
 | `LLM_MODEL` | Model for responses | `gemini-2.5-flash` |
 | `LLM_TEMPERATURE` | Response creativity (0.0-1.0) | `0.3` |
 | `LLM_REASONING_EFFORT` | Reasoning level | `medium` |
-
-### Classifier Settings
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `CLASSIFIER_MODEL` | Model for routing | `gemini-2.5-flash` |
-| `CLASSIFIER_TEMPERATURE` | Routing precision | `0.0` |
-| `CLASSIFIER_REASONING_EFFORT` | Routing reasoning | `low` |
 
 ### Server Settings
 
