@@ -35,25 +35,16 @@ def get_answer_model() -> ChatGoogleGenerativeAI:
     )
 
 
-# Backwards compatibility - lazy properties
-# These will raise ConfigurationError when accessed if API key is missing
-class _LazyModelProxy:
-    """Proxy class for lazy model initialization with backwards compatibility."""
-
-    @property
-    def answer_model(self) -> ChatGoogleGenerativeAI:
-        """Get answer model (lazy initialization)."""
-        return get_answer_model()
-
-
-_proxy = _LazyModelProxy()
-
-# Expose as module-level for backwards compatibility
-# Access will trigger validation and potential ConfigurationError
-
-
+# Module-level attribute for backwards compatibility
+# Allows: from macsdk.core.llm import answer_model
 def __getattr__(name: str) -> ChatGoogleGenerativeAI:
-    """Module-level getattr for lazy loading of models."""
+    """Module-level getattr for lazy loading of models.
+
+    This enables importing the model as a module attribute:
+        from macsdk.core.llm import answer_model
+
+    The model is lazily initialized on first access.
+    """
     if name == "answer_model":
-        return _proxy.answer_model
+        return get_answer_model()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
