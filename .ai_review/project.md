@@ -46,10 +46,11 @@ macsdk/
 │   │   ├── registry.py      # Global agent registry
 │   │   ├── graph.py         # LangGraph workflow builder
 │   │   ├── state.py         # ChatbotState TypedDict
-│   │   ├── config.py        # Configuration management
+│   │   ├── config.py        # Configuration management (global singleton)
 │   │   ├── llm.py           # LLM initialization
 │   │   ├── api_registry.py  # API service registry
-│   │   └── cert_manager.py  # SSL certificate handling
+│   │   ├── cert_manager.py  # SSL certificate handling
+│   │   └── url_security.py  # URL filtering & SSRF protection
 │   │
 │   ├── agents/              # Built-in agents (supervisor, formatter, RAG)
 │   │   ├── supervisor/      # Supervisor agent (orchestrator)
@@ -79,8 +80,8 @@ macsdk/
 │   │   └── debug_prompts.py     # Prompt debugging
 │   │
 │   ├── tools/               # Reusable tools for agents
-│   │   ├── api.py           # API interaction tools (api_get, api_post)
-│   │   └── remote.py        # Remote agent integration
+│   │   ├── api.py           # API interaction tools with URL security
+│   │   └── remote.py        # Remote file tools with redirect support
 │   │
 │   └── cli/                 # Scaffolding CLI
 │       ├── main.py          # Entry point (macsdk command)
@@ -176,9 +177,23 @@ macsdk/
 
 - **[API Tool Security]** - In `src/macsdk/tools/api.py`, review certificate validation logic (`verify` parameter), URL construction to prevent SSRF, and JSONPath extraction for injection risks. The `APIRegistry` should validate service configurations.
 
+- **[URL Security & SSRF Protection]** - In `src/macsdk/core/url_security.py`, verify:
+  - Domain allowlist uses strict suffix matching (not fnmatch - security risk)
+  - IP allowlist accepts CIDR with `strict=False` (user-friendly)
+  - Ambiguous IP formats are blocked (127.1, 0x7f000001, decimal notation)
+  - Pydantic `AnyUrl` is used for robust URL parsing
+  - `create_redirect_validator()` returns async callable for httpx event hooks
+  - Localhost/private IP handling respects `allow_localhost` flag
+
 - **[RAG Source Validation]** - In `src/macsdk/agents/rag/config.py`, verify path traversal protection for local markdown/file sources. URL validation for remote sources should prevent access to internal networks.
 
 - **[SSL Certificate Management]** - In `src/macsdk/core/cert_manager.py`, ensure certificate downloads use proper validation (no blind SSL verification disabled). Check that `asyncio.run()` is only called from synchronous contexts (not from running event loops). Verify cache directory creation is thread-safe.
+
+- **[HTTP Redirect Validation]** - In `src/macsdk/tools/remote.py` and `api.py`, verify:
+  - `follow_redirects=True` is explicitly set on `httpx.AsyncClient`
+  - `create_redirect_validator()` is used to validate redirect targets
+  - Event hooks are properly attached (`event_hooks={"request": [validator]}`)
+  - Redirects respect URL security policy (no redirect to blocked domains/IPs)
 
 - **[Web Crawler Security]** - In `src/macsdk/agents/rag/recursive_loader.py`, verify domain validation prevents crawling external sites (strict netloc comparison). Check Content-Type filtering to prevent parsing binary files. Ensure recursion depth limits prevent infinite loops. Verify URL normalization prevents duplicate crawling.
 
@@ -250,6 +265,31 @@ class ChatbotConfig(BaseModel):
 - Field descriptions are documentation AND LLM context
 - Use `Field()` validators for runtime validation
 - Separate config classes per component (e.g., `RAGConfig`, `APIServiceConfig`)
+
+**Global Config vs RunnableConfig (Architecture Decision):**
+
+The SDK uses **two distinct configuration mechanisms** for different purposes:
+
+1. **Global Config Singleton** (`macsdk.core.config.config`)
+   - **Purpose:** Application-wide settings (security, debug mode, model defaults)
+   - **Scope:** Entire application lifetime, shared across all executions
+   - **Access:** Direct import `from macsdk.core.config import config`
+   - **Examples:** `url_security`, `debug`, `llm_model`, `api_registry`
+   - **Auto-loading:** Loads `config.yml` from CWD on import
+
+2. **RunnableConfig** (LangChain/LangGraph)
+   - **Purpose:** Execution-specific settings (callbacks, streaming, tracing)
+   - **Scope:** Single agent/graph invocation
+   - **Access:** Via `InjectedToolArg` or middleware
+   - **Examples:** `callbacks`, `run_id`, `metadata`, LangSmith tracing
+
+**Rationale (KISS Principle):**
+- **Application config should be global** - No reason to pass security settings, model defaults, or debug flags through every function call
+- **Execution config should be local** - Callbacks, streaming functions, and tracing are specific to each request
+- **Simpler architecture** - Tools don't need `InjectedToolArg`, just import global config
+- **Easier testing** - Mock the global config singleton, not propagation through RunnableConfig
+
+**For reviewers:** Do NOT suggest passing application-level config (like `url_security`) via `RunnableConfig`. That's architectural complexity without benefit.
 
 ### Generated Project Configuration (Design Decisions)
 
@@ -372,7 +412,10 @@ This applies to both production code and tests. Explicit is better than implicit
 
 ### Security Considerations
 - [ ] No path traversal vulnerabilities in file operations
-- [ ] URL validation prevents SSRF in API tools
+- [ ] URL security enabled and properly configured (allowlists for domains/IPs)
+- [ ] Domain wildcards use strict suffix matching (not fnmatch)
+- [ ] Ambiguous IP formats are blocked (decimal notation, hex, shorthands)
+- [ ] HTTP redirects validated via httpx event hooks
 - [ ] Certificate validation explicitly configured (not blindly disabled)
 - [ ] Jinja2 templates don't allow arbitrary code execution
 - [ ] User inputs validated before use in shell commands or file paths
@@ -680,10 +723,16 @@ Project scaffolding uses Jinja2 templates. Security considerations:
    - Local file sources must validate paths don't escape intended directories
    - Use `Path.resolve()` to normalize paths before file operations
 
-2. **SSRF (API Tools)**
-   - API tools can make HTTP requests to configured services
-   - Service URLs are trusted (from config), but query parameters are not
-   - Future enhancement: allowlist/blocklist for service URLs
+2. **SSRF (API Tools & Remote File Tools)**
+   - **URL Security Module** (`url_security.py`) provides configurable allowlist-based filtering
+   - **Domain Allowlist:** Supports exact matches and wildcard subdomains (*.example.com)
+   - **IP Allowlist:** Supports individual IPs and CIDR ranges (192.168.1.0/24)
+   - **Ambiguous IP Protection:** Blocks decimal notation (2130706433), hex (0x7f000001), and IP shorthands (127.1)
+   - **Redirect Validation:** HTTP redirects are validated via httpx event hooks
+   - **Deny-all Policy:** When `enabled=True` with empty allowlists, blocks all requests
+   - **Localhost Control:** Configurable via `allow_localhost` flag
+   - Tools affected: `api_get`, `api_post`, `api_put`, `api_delete`, `api_patch`, `fetch_file`, `fetch_and_save`, `fetch_json`
+   - **Configuration:** Via `url_security` section in `config.yml` (global singleton pattern)
 
 3. **Certificate Validation**
    - Custom SSL certs supported via `CertificateManager`
