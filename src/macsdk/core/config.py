@@ -174,9 +174,6 @@ class MACSDKConfig(EnvPrioritySettingsMixin, BaseSettings):
         llm_temperature: Temperature for response generation.
         llm_reasoning_effort: Reasoning effort level for supported models.
         google_api_key: API key for Google AI services.
-        classifier_model: Model to use for classification tasks.
-        classifier_temperature: Temperature for classification.
-        classifier_reasoning_effort: Reasoning effort for classification.
         server_host: Host for the web server.
         server_port: Port for the web server.
         message_max_length: Maximum message length in characters.
@@ -189,9 +186,6 @@ class MACSDKConfig(EnvPrioritySettingsMixin, BaseSettings):
     llm_temperature: float = Field(default=0.3, ge=0.0, le=2.0)
     llm_reasoning_effort: Optional[str] = "medium"
     google_api_key: Optional[str] = None
-    classifier_model: str = "gemini-2.5-flash"
-    classifier_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
-    classifier_reasoning_effort: Optional[str] = "low"
 
     # Web Server Configuration
     # Bind to all interfaces by default (users can override to localhost in production)
