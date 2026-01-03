@@ -275,7 +275,7 @@ The SDK uses **two distinct configuration mechanisms** for different purposes:
    - **Scope:** Entire application lifetime, shared across all executions
    - **Access:** Direct import `from macsdk.core.config import config`
    - **Examples:** `url_security`, `debug`, `llm_model`, `api_registry`
-   - **Auto-loading:** Loads `config.yml` from CWD on import
+   - **Lazy Loading:** Loads `config.yml` from CWD on first attribute access (prevents import-time errors)
 
 2. **RunnableConfig** (LangChain/LangGraph)
    - **Purpose:** Execution-specific settings (callbacks, streaming, tracing)
@@ -290,6 +290,68 @@ The SDK uses **two distinct configuration mechanisms** for different purposes:
 - **Easier testing** - Mock the global config singleton, not propagation through RunnableConfig
 
 **For reviewers:** Do NOT suggest passing application-level config (like `url_security`) via `RunnableConfig`. That's architectural complexity without benefit.
+
+### Configuration Error Handling ("Fail Closed" Strategy)
+
+The SDK implements a **"Fail Closed"** security strategy for configuration errors:
+
+**Behavior:**
+- **Invalid `config.yml` (syntax or validation errors):** Raises `ConfigurationError` with clean, user-friendly message (no Python traceback)
+- **Missing `config.yml`:** Silently uses default values (safe fallback)
+- **Import-time safety:** Global config uses lazy loading via `_ConfigProxy` to prevent crashes during module import
+
+**Rationale:**
+- **Security:** Invalid config could disable security features (e.g., typo in `url_security`). Crashing is safer than running with unknown state.
+- **Fail Fast:** Applications should know immediately if configuration is broken, not fail later in production.
+- **User Experience:** Clean error messages guide users to fix the problem without developer-level tracebacks.
+
+**Implementation Details:**
+```python
+# src/macsdk/core/config.py
+def _create_default_config() -> MACSDKConfig:
+    """Create default config with fail-closed error handling."""
+    try:
+        config_path = Path.cwd() / "config.yml"
+        if config_path.exists():
+            return create_config()  # Raises ConfigurationError if invalid
+        return MACSDKConfig()  # Safe defaults if no config file
+    except ConfigurationError:
+        raise  # Propagate clean error message
+```
+
+**Lazy Loading Pattern:**
+```python
+# Global config is lazy-loaded to prevent import-time errors
+class _ConfigProxy:
+    def __getattr__(self, name: str) -> Any:
+        return getattr(_get_config(), name)
+
+config = _ConfigProxy()  # Loads on first attribute access
+```
+
+**Interface Lazy Loading:**
+```python
+# src/macsdk/interfaces/__init__.py uses __getattr__ for lazy imports
+def __getattr__(name: str) -> Any:
+    if name == "run_cli_chatbot":
+        from .cli import run_cli_chatbot
+        return run_cli_chatbot
+    # ... prevents config access during import
+```
+
+**Error Message Format:**
+```
+Configuration validation failed in config.yml:
+  - url_security.enabled: Input should be a valid boolean
+  - url_security.ennabled: Extra inputs are not permitted
+
+Please fix the errors in config.yml and restart the application.
+```
+
+**For reviewers:** 
+- Do NOT suggest "fail open" (silent fallback to defaults) for invalid config files
+- Do NOT suggest showing Python tracebacks for config errors (user-facing issue)
+- The lazy loading pattern prevents import-time crashes while maintaining fail-closed semantics
 
 ### Generated Project Configuration (Design Decisions)
 
@@ -402,6 +464,7 @@ This applies to both production code and tests. Explicit is better than implicit
 - [ ] State mutations append to `messages`, never replace
 - [ ] Middleware respects execution order (Datetime→TodoList(optional)→Summarization→Supervisor→Debug)
 - [ ] Configuration uses Pydantic V2 `BaseModel` with validators
+- [ ] Configuration errors raise `ConfigurationError` (not generic exceptions or sys.exit())
 
 ### Documentation & Style
 - [ ] Docstrings use Google style (Args, Returns, Raises sections)
@@ -419,6 +482,7 @@ This applies to both production code and tests. Explicit is better than implicit
 - [ ] Certificate validation explicitly configured (not blindly disabled)
 - [ ] Jinja2 templates don't allow arbitrary code execution
 - [ ] User inputs validated before use in shell commands or file paths
+- [ ] Configuration errors fail closed (raise ConfigurationError) not fail open (silent defaults)
 
 
 

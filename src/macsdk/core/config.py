@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -257,27 +256,40 @@ def create_config(
     yaml_config = load_config_from_yaml(config_path, search_path)
     # Merge: overrides > yaml_config
     merged = {**yaml_config, **overrides}
-    return MACSDKConfig(**merged)
+    try:
+        return MACSDKConfig(**merged)
+    except ValidationError as e:
+        # Pydantic validation error - build detailed message
+        error_lines = ["Configuration validation failed in config.yml:"]
+        for error in e.errors():
+            field = ".".join(str(loc) for loc in error["loc"])
+            msg = error["msg"]
+            error_lines.append(f"  - {field}: {msg}")
+        error_lines.append(
+            "\nPlease fix the errors in config.yml and restart the application."
+        )
+        error_msg = "\n".join(error_lines)
+        logger.error(error_msg)
+        raise ConfigurationError(error_msg) from e
 
 
-# Default configuration instance (loads config.yml from cwd if present)
-# Note: For standalone agent testing, agents should create their own config
-# using create_config() in their entry point
 def _create_default_config() -> MACSDKConfig:
     """Create default config instance, loading config.yml if present.
 
     Implements "Fail Closed" security: if config.yml exists but cannot be
-    loaded or parsed, the application will exit with a clear error message
-    rather than silently falling back to insecure defaults. This ensures
-    users are never unknowingly left unprotected due to configuration errors.
+    loaded or parsed, raises ConfigurationError rather than silently falling
+    back to insecure defaults. This ensures users are never unknowingly left
+    unprotected due to configuration errors.
 
     Returns:
         MACSDKConfig: Configuration instance with settings from config.yml,
                       or defaults if config.yml doesn't exist.
 
-    Exits:
-        Exits with status code 1 if config.yml exists but fails to load,
-        displaying a user-friendly error message without full traceback.
+    Raises:
+        ConfigurationError: If config.yml exists but fails to load (YAML
+                           syntax error, validation error, etc.). The entry
+                           point (CLI/web server) should catch this and exit
+                           gracefully.
     """
     try:
         yaml_config = load_config_from_yaml()
@@ -286,25 +298,55 @@ def _create_default_config() -> MACSDKConfig:
         # No config file found - this is normal, use defaults silently
         return MACSDKConfig()
     except ValidationError as e:
-        # Pydantic validation error - show user-friendly message
-        logger.error("Configuration validation failed in config.yml:")
+        # Pydantic validation error - build detailed message
+        error_lines = ["Configuration validation failed in config.yml:"]
         for error in e.errors():
             field = ".".join(str(loc) for loc in error["loc"])
             msg = error["msg"]
-            logger.error(f"  - {field}: {msg}")
-        logger.error(
+            error_lines.append(f"  - {field}: {msg}")
+        error_lines.append(
             "\nPlease fix the errors in config.yml and restart the application."
         )
-        sys.exit(1)
+        error_msg = "\n".join(error_lines)
+        logger.error(error_msg)
+        raise ConfigurationError(error_msg) from e
     except Exception as e:
-        # YAML parsing or other errors - show clean message
+        # YAML parsing or other errors - build clean message
         error_type = type(e).__name__
-        logger.error(f"Failed to load config.yml: {error_type}: {e}")
-        logger.error("Please fix the errors in config.yml and restart the application.")
-        sys.exit(1)
+        error_msg = (
+            f"Failed to load config.yml: {error_type}: {e}\n"
+            "Please fix the errors in config.yml and restart the application."
+        )
+        logger.error(error_msg)
+        raise ConfigurationError(error_msg) from e
 
 
-config = _create_default_config()
+# Lazy-loaded configuration instance
+# The config is created on first access to avoid crashing during import
+# if config.yml has errors. This allows the CLI to show friendly error messages.
+_config: MACSDKConfig | None = None
+
+
+def _get_config() -> MACSDKConfig:
+    """Get or create the global config instance (lazy loading)."""
+    global _config
+    if _config is None:
+        _config = _create_default_config()
+    return _config
+
+
+# Property-based access for backward compatibility
+class _ConfigProxy:
+    """Proxy object that lazy-loads config on attribute access."""
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(_get_config(), name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(_get_config(), name, value)
+
+
+config = _ConfigProxy()  # type: ignore[assignment]
 
 
 def validate_config() -> None:

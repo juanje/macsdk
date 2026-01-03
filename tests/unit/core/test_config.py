@@ -312,8 +312,10 @@ class TestCreateDefaultConfig:
             # No warning should be logged for missing file
             assert "Failed to load config.yml" not in caplog.text
 
-    def test_invalid_yaml_exits_app(self, caplog: pytest.LogCaptureFixture) -> None:
-        """When config.yml is invalid, exits with error message (Fail Closed)."""
+    def test_invalid_yaml_raises_config_error(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """When config.yml is invalid, raises ConfigurationError (Fail Closed)."""
         with patch("macsdk.core.config.load_config_from_yaml") as mock_load:
             mock_load.side_effect = ValueError("Invalid YAML syntax")
 
@@ -321,18 +323,16 @@ class TestCreateDefaultConfig:
 
             caplog.set_level(logging.ERROR)
 
-            # Should exit rather than returning insecure defaults
-            with pytest.raises(SystemExit) as exc_info:
+            # Should raise ConfigurationError rather than returning insecure defaults
+            with pytest.raises(ConfigurationError, match="Failed to load config.yml"):
                 _create_default_config()
 
-            assert exc_info.value.code == 1
-            assert "Failed to load config.yml" in caplog.text
             assert "Invalid YAML syntax" in caplog.text
 
-    def test_pydantic_validation_error_exits_app(
+    def test_pydantic_validation_error_raises_config_error(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """When config values are invalid, exits with error message (Fail Closed)."""
+        """When config values are invalid, raises ConfigurationError (Fail Closed)."""
         with patch("macsdk.core.config.load_config_from_yaml") as mock_load:
             # Return invalid config that will fail Pydantic validation
             mock_load.return_value = {"llm_temperature": 999.0}  # Invalid temp
@@ -341,17 +341,16 @@ class TestCreateDefaultConfig:
 
             caplog.set_level(logging.ERROR)
 
-            # Should exit rather than returning insecure defaults
-            with pytest.raises(SystemExit) as exc_info:
+            # Should raise ConfigurationError rather than returning insecure defaults
+            with pytest.raises(
+                ConfigurationError, match="Configuration validation failed"
+            ):
                 _create_default_config()
 
-            assert exc_info.value.code == 1
-            assert "Configuration validation failed" in caplog.text
-
-    def test_typo_in_url_security_field_exits_app(
+    def test_typo_in_url_security_field_raises_config_error(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """When url_security has typo (e.g. 'ennabled'), exits with error."""
+        """When url_security has typo (e.g. 'ennabled'), raises ConfigurationError."""
         with patch("macsdk.core.config.load_config_from_yaml") as mock_load:
             # Typo: "ennabled" instead of "enabled"
             mock_load.return_value = {
@@ -362,11 +361,11 @@ class TestCreateDefaultConfig:
 
             caplog.set_level(logging.ERROR)
 
-            # Should exit due to extra field not allowed
-            with pytest.raises(SystemExit) as exc_info:
+            # Should raise ConfigurationError due to extra field not allowed
+            with pytest.raises(
+                ConfigurationError, match="Configuration validation failed"
+            ):
                 _create_default_config()
 
-            assert exc_info.value.code == 1
-            assert "Configuration validation failed" in caplog.text
             # Should mention the problematic field
             assert "url_security" in caplog.text
