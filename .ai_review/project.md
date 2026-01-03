@@ -247,24 +247,21 @@ class ChatbotState(TypedDict):
 
 ### Configuration Pattern
 
-All configuration uses **Pydantic V2 with YAML loading**:
+All configuration uses **Pydantic Settings with env var priority**:
 
 ```python
-class ChatbotConfig(BaseModel):
-    llm_model: str = "gemini-2.0-flash-exp"
-    llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    
-    @classmethod
-    def from_yaml(cls, path: str) -> "ChatbotConfig":
-        with open(path) as f:
-            data = yaml.safe_load(f)
-        return cls(**data)
+from macsdk.core import EnvPrioritySettingsMixin, MACSDKConfig
+
+class MyConfig(EnvPrioritySettingsMixin, BaseSettings):
+    # Or simply inherit from MACSDKConfig (already includes mixin)
+    api_timeout: int = Field(default=30, gt=0)
 ```
 
 **Key Points:**
-- Field descriptions are documentation AND LLM context
+- `EnvPrioritySettingsMixin`: Ensures env vars override config.yml (not vice versa)
+- `MACSDKConfig`: Base class for chatbots/agents, includes the mixin
+- `RAGConfig`: Separate config with `RAG_` prefix, also uses the mixin
 - Use `Field()` validators for runtime validation
-- Separate config classes per component (e.g., `RAGConfig`, `APIServiceConfig`)
 
 **Global Config vs RunnableConfig (Architecture Decision):**
 
@@ -692,10 +689,20 @@ ChatbotState:
 
 Configuration is loaded from multiple sources (priority order):
 1. Environment variables (highest priority)
-2. YAML files (`config.yml`)
-3. Pydantic field defaults (lowest priority)
+2. `.env` file
+3. `config.yml` (via `create_config()` or `load_rag_config()`)
+4. Pydantic field defaults (lowest priority)
 
-**Common config pattern:** `ChatbotConfig.from_yaml("config.yml")` merges all sources.
+This order is enforced by `EnvPrioritySettingsMixin`, which both `MACSDKConfig` and `RAGConfig` inherit. Env vars can always override config files, enabling easy deployment customization.
+
+**Pydantic Settings V2 Priority Order (for reviewers):**
+In `settings_customise_sources`, the **first element has highest priority** (not the last).
+This is documented in Pydantic: "Sources returned first take the most precedence."
+Our implementation is correct:
+```python
+return (env_settings, dotenv_settings, init_settings, ...)  # env wins
+```
+**Do not flag this as inverted logic.**
 
 ## Special Cases & Edge Handling
 

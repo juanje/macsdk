@@ -68,27 +68,63 @@ class TestMACSDKConfig:
         assert config.llm_temperature == TEST_TEMPERATURE
         assert config.server_port == TEST_SERVER_PORT
 
-    def test_validate_api_key_raises_when_missing(self) -> None:
+    def test_validate_api_key_raises_when_missing(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """validate_api_key raises when API key is not set."""
+        # Clear env var and prevent .env loading
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.chdir(tmp_path)  # Change to dir without .env
         config = MACSDKConfig(google_api_key=None)
         with pytest.raises(ConfigurationError, match="GOOGLE_API_KEY"):
             config.validate_api_key()
 
-    def test_validate_api_key_passes_when_set(self) -> None:
+    def test_validate_api_key_passes_when_set(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """validate_api_key passes when API key is set."""
-        config = MACSDKConfig(google_api_key=TEST_API_KEY)
+        # Set env var explicitly (env vars have priority)
+        monkeypatch.setenv("GOOGLE_API_KEY", TEST_API_KEY)
+        config = MACSDKConfig()
         config.validate_api_key()  # Should not raise
 
-    def test_get_api_key_returns_key_when_set(self) -> None:
+    def test_get_api_key_returns_key_when_set(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """get_api_key returns the key when set."""
-        config = MACSDKConfig(google_api_key=TEST_API_KEY)
+        # Set env var explicitly (env vars have priority)
+        monkeypatch.setenv("GOOGLE_API_KEY", TEST_API_KEY)
+        config = MACSDKConfig()
         assert config.get_api_key() == TEST_API_KEY
 
-    def test_get_api_key_raises_when_missing(self) -> None:
+    def test_get_api_key_raises_when_missing(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """get_api_key raises when API key is not set."""
+        # Clear env var and prevent .env loading
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.chdir(tmp_path)  # Change to dir without .env
         config = MACSDKConfig(google_api_key=None)
         with pytest.raises(ConfigurationError):
             config.get_api_key()
+
+    def test_env_var_overrides_constructor_arg(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Environment variable takes priority over constructor argument.
+
+        This simulates the case where config.yml has a value but env var
+        should override it (EnvPrioritySettingsMixin behavior).
+        """
+        env_value = "env-model-override"
+        constructor_value = "yaml-model-value"
+
+        monkeypatch.setenv("LLM_MODEL", env_value)
+        # Constructor arg simulates value loaded from config.yml
+        config = MACSDKConfig(llm_model=constructor_value)
+
+        # Env var should win over constructor arg
+        assert config.llm_model == env_value
 
 
 class TestLoadConfigFromYaml:
