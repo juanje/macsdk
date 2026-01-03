@@ -44,6 +44,7 @@ from .config import (
     CONFIG_FILE_ENV_VAR,
     DEFAULT_CONFIG_FILE,
     ConfigurationError,
+    EnvPrioritySettingsMixin,
     MACSDKConfig,
     config,
     create_config,
@@ -87,6 +88,7 @@ __all__ = [
     "supervisor_agent_node",
     # Config
     "MACSDKConfig",
+    "EnvPrioritySettingsMixin",
     "config",
     "create_config",
     "load_config_from_yaml",

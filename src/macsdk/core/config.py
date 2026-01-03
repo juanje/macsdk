@@ -12,7 +12,11 @@ from pathlib import Path
 from typing import Any, Optional
 
 from pydantic import Field, ValidationError, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 from .url_security import URLSecurityConfig
 
@@ -23,6 +27,46 @@ class ConfigurationError(Exception):
     """Raised when configuration is invalid or missing required values."""
 
     pass
+
+
+class EnvPrioritySettingsMixin:
+    """Mixin that gives environment variables priority over constructor args.
+
+    Use this mixin with BaseSettings subclasses to ensure environment variables
+    can override values from config files (like config.yml).
+
+    Priority order (highest to lowest):
+    1. Environment variables
+    2. .env file
+    3. Constructor arguments (from YAML via load functions)
+    4. Default values
+
+    Example:
+        class MyConfig(EnvPrioritySettingsMixin, BaseSettings):
+            api_key: str = "default"
+
+        # Now MY_API_KEY env var will override config.yml values
+    """
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Customize settings sources to prioritize environment variables.
+
+        Returns sources in priority order (first = highest priority).
+        """
+        return (
+            env_settings,
+            dotenv_settings,
+            init_settings,
+            file_secret_settings,
+        )
 
 
 # Default config file name
@@ -110,18 +154,20 @@ def load_config_from_yaml(
     return {}
 
 
-class MACSDKConfig(BaseSettings):
+class MACSDKConfig(EnvPrioritySettingsMixin, BaseSettings):
     """Base configuration for MACSDK chatbots.
 
     This class can be extended by custom chatbots to add
     their own configuration options.
 
     Configuration is loaded from multiple sources (in order of precedence):
-    1. Explicit values passed to constructor
-    2. Environment variables
-    3. .env file
-    4. config.yml file (if exists)
-    5. Default values
+    1. Environment variables (highest priority)
+    2. .env file
+    3. config.yml file (via create_config)
+    4. Default values (lowest priority)
+
+    This priority order allows environment variables to override config files,
+    which is useful for CI/CD environments or local development overrides.
 
     Attributes:
         llm_model: The LLM model to use for responses.

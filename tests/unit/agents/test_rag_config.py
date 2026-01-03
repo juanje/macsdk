@@ -100,3 +100,11 @@ class TestRAGConfigValidators:
         config_max = RAGConfig(temperature=2.0)
         assert config_min.temperature == 0.0
         assert config_max.temperature == 2.0
+
+    def test_env_var_overrides_constructor_with_rag_prefix(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """RAG_ prefixed env var overrides constructor argument."""
+        monkeypatch.setenv("RAG_CHUNK_SIZE", "2000")
+        config = RAGConfig(chunk_size=500)  # simulates yaml value
+        assert config.chunk_size == 2000

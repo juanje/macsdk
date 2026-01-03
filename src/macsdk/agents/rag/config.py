@@ -1,7 +1,10 @@
 """RAG-specific configuration management.
 
 This module provides configuration classes for the RAG agent,
-loaded from the `rag` section of config.yml.
+loaded from the `rag` section of config.yml and environment variables.
+
+Environment variables use the RAG_ prefix (e.g., RAG_CHROMA_DB_DIR).
+YAML config takes precedence over environment variables.
 """
 
 from __future__ import annotations
@@ -12,8 +15,9 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from macsdk.core.config import load_config_from_yaml
+from macsdk.core.config import EnvPrioritySettingsMixin, load_config_from_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -62,19 +66,33 @@ class RAGSourceConfig(BaseModel):
     )
 
 
-class RAGConfig(BaseModel):
+class RAGConfig(EnvPrioritySettingsMixin, BaseSettings):
     """Configuration for the RAG agent.
 
-    This configuration is loaded from the `rag` section of config.yml.
-    All settings have sensible defaults for out-of-the-box usage.
+    This configuration is loaded from (highest to lowest priority):
+    1. Environment variables with RAG_ prefix (e.g., RAG_CHROMA_DB_DIR)
+    2. .env file
+    3. config.yml (rag section)
+    4. Default values
+
+    This priority order allows environment variables to override config.yml,
+    which is useful for CI/CD environments or local development overrides.
     """
+
+    model_config = SettingsConfigDict(
+        env_prefix="RAG_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
     enabled: bool = Field(
         default=True,
         description="Whether RAG is enabled",
     )
 
-    # Documentation sources
+    # Documentation sources (typically set via YAML, not env vars)
     sources: list[RAGSourceConfig] = Field(
         default_factory=lambda: [RAGSourceConfig(**DEFAULT_RAG_SOURCE)],  # type: ignore[arg-type]
         description="Documentation sources to index",
@@ -129,20 +147,22 @@ class RAGConfig(BaseModel):
         description="Enable LLM response caching",
     )
 
-    # Custom glossary
+    # Custom glossary (typically set via YAML, not env vars)
     glossary: dict[str, str] = Field(
         default_factory=dict,
         description="Domain-specific glossary for technical terms",
     )
 
-    # Storage paths
+    # Storage paths - commonly overridden via environment variables
     chroma_db_dir: Path = Field(
         default=Path("./chroma_db"),
-        description="Directory for ChromaDB storage",
+        description="Directory for ChromaDB storage (env: RAG_CHROMA_DB_DIR)",
     )
+    # Use default_factory to avoid Path.home() call at import time
+    # (could fail in containers without HOME)
     cert_cache_dir: Path = Field(
-        default=Path.home() / ".cache" / "macsdk" / "certs",
-        description="Directory for cached SSL certificates",
+        default_factory=lambda: Path.home() / ".cache" / "macsdk" / "certs",
+        description="Directory for cached SSL certificates (env: RAG_CERT_CACHE_DIR)",
     )
 
     @model_validator(mode="after")
