@@ -16,7 +16,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from starlette.websockets import WebSocketState
 
 from ..._version import __version__
@@ -29,19 +29,28 @@ if TYPE_CHECKING:
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# WebSocket configuration constants
-MESSAGE_MAX_LENGTH = config.message_max_length
-
 # Warmup configuration
 WARMUP_QUERY = "Hello"
 
 
 class WebSocketMessage(BaseModel):
-    """Model for incoming WebSocket messages."""
+    """Model for incoming WebSocket messages.
 
-    message: str = Field(
-        ..., min_length=1, max_length=MESSAGE_MAX_LENGTH, description="User message"
-    )
+    The message length is validated against the configured limit at runtime.
+    """
+
+    message: str = Field(..., min_length=1, description="User message")
+
+    @field_validator("message")
+    @classmethod
+    def validate_message_length(cls, v: str) -> str:
+        """Validate message length against configured maximum."""
+        max_length = config.message_max_length
+        if len(v) > max_length:
+            raise ValueError(
+                f"Message exceeds maximum length of {max_length} characters"
+            )
+        return v
 
 
 class WebSocketResponse(BaseModel):
