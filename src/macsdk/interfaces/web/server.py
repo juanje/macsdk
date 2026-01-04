@@ -267,6 +267,9 @@ def run_web_server(
 ) -> None:
     """Run the FastAPI web server.
 
+    Note: Logging must be configured by the caller before calling this function.
+    The CLI entry point handles logging setup with proper level detection.
+
     Args:
         graph: The compiled chatbot graph to use.
         title: Title for the API.
@@ -274,12 +277,9 @@ def run_web_server(
         host: Host to bind to (defaults to config value).
         port: Port to bind to (defaults to config value).
     """
-    import uvicorn
+    import logging as stdlib_logging
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
+    import uvicorn
 
     app = create_web_app(graph, title, static_dir)
 
@@ -290,4 +290,35 @@ def run_web_server(
     logger.info(f"Server running on http://{host}:{port}")
     logger.info(f"Open your browser at http://localhost:{port}")
 
-    uvicorn.run(app, host=host, port=port)
+    # Convert Python logging level to uvicorn string format safely
+    # Use mapping to avoid issues with custom logging levels
+    root_logger = stdlib_logging.getLogger()
+
+    # Fallback for direct usage/testing where configure_cli_logging wasn't called
+    if not root_logger.handlers:
+        stdlib_logging.basicConfig(level=stdlib_logging.INFO)
+        logger.warning(
+            "No logging handlers configured. Using default basicConfig. "
+            "This may happen in direct usage or unit tests."
+        )
+
+    root_level = root_logger.level
+    level_map = {
+        stdlib_logging.DEBUG: "debug",
+        stdlib_logging.INFO: "info",
+        stdlib_logging.WARNING: "warning",
+        stdlib_logging.ERROR: "error",
+        stdlib_logging.CRITICAL: "critical",
+    }
+    level_name = level_map.get(root_level, "info")
+
+    # Ensure uvicorn loggers respect our log level and propagate to root
+    # With log_config=None, uvicorn loggers will propagate to root logger
+    # which already has the correct handlers (file/stderr) configured
+    stdlib_logging.getLogger("uvicorn").setLevel(root_level)
+    stdlib_logging.getLogger("uvicorn.access").setLevel(root_level)
+    stdlib_logging.getLogger("uvicorn.error").setLevel(root_level)
+
+    # Prevent uvicorn from overriding our custom logging setup
+    # Setting log_config=None disables uvicorn's default LOGGING_CONFIG
+    uvicorn.run(app, host=host, port=port, log_level=level_name, log_config=None)

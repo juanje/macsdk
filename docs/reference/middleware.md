@@ -261,31 +261,53 @@ summarization_keep_messages: 6       # recent messages to preserve
 
 ## PromptDebugMiddleware
 
-Displays the actual prompts sent to the LLM, useful for debugging agent behavior and prompt engineering.
+Logs prompts sent to the LLM to the application log file (not stdout), useful for debugging agent behavior and prompt engineering.
+
+**Important:** Debug prompts are written to the log file, NOT to stdout. This keeps the user interface clean while still providing full debugging information.
+
+**⚠️ Security Warning:** This middleware logs full conversation content including all user inputs (may contain PII), complete system prompts (may expose business logic), and model responses. **Use only for development/debugging. Never enable in production with real user data.**
 
 ### Configuration
 
 ```yaml
 # config.yml
 debug: true  # default: false
+
+# Optional: Configure debug output
+debug_prompt_max_length: 10000  # Max chars per prompt (default: 10000)
+debug_show_response: true       # Show model responses (default: true)
 ```
 
 Or via CLI flag:
 
 ```bash
 # Chatbots
-my-chatbot chat --debug
-my-chatbot web --debug
+my-chatbot chat --debug              # Enables debug mode
+my-chatbot chat -vv                  # Same as --debug
+my-chatbot chat --log-level DEBUG    # Sets log level to DEBUG
 
 # Agents
 my-agent chat --debug
+my-agent chat -vv
 ```
 
-### Output Example
+### Where Debug Output Goes
 
-When enabled, you'll see output like:
+**CLI Chat Mode:**
+- Debug prompts written to `./logs/{app}-{date}.log`
+- stdout remains clean for user interaction
+- Log file path shown at startup: `📋 Logs: ./logs/chatbot-2026-01-04.log`
+
+**Web Mode:**
+- Debug prompts written to stderr
+- Optionally also to file if `--log-file` is specified
+
+### Log File Example
+
+When enabled, your log file will contain:
 
 ```
+2026-01-04 10:30:16 - macsdk.middleware.debug_prompts - DEBUG - 
 ================================================================================
 🔍 [PROMPT DEBUG] Before Model Call
 ================================================================================
@@ -307,7 +329,19 @@ Show me failed pipelines from last week
 
 ### Options
 
-The middleware supports additional options when used programmatically:
+The middleware supports these options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | bool | `True` | Whether middleware is active |
+| `show_system` | bool | `True` | Show system prompts |
+| `show_user` | bool | `True` | Show user messages |
+| `show_response` | bool | `True` | Show model responses |
+| `max_length` | int | from config | Max chars per message (reads `debug_prompt_max_length` from config) |
+
+**Breaking Change:** The `use_logger` parameter has been removed. Debug output now always goes to the logger (never to print/stdout).
+
+### Programmatic Usage
 
 ```python
 from macsdk.middleware import PromptDebugMiddleware
@@ -317,9 +351,19 @@ middleware = PromptDebugMiddleware(
     show_system=True,     # Show system prompts
     show_user=True,       # Show user messages
     show_response=True,   # Show model responses
-    max_length=2000,      # Truncate long content
-    use_logger=False,     # Use print (False) or logger (True)
+    max_length=10000,     # Override config value
 )
+```
+
+### Configuration in config.yml
+
+```yaml
+# Enable debug mode globally
+debug: true
+
+# Configure debug output detail
+debug_prompt_max_length: 10000   # Increase if prompts are cut off
+debug_show_response: true        # Include model responses in debug
 ```
 
 ## Using Middleware in Custom Agents

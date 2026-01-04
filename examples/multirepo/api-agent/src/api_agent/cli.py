@@ -109,14 +109,43 @@ def info() -> None:
 
 
 @cli.command()
-@click.option("--debug", "-d", is_flag=True, help="Enable debug mode (show prompts)")
-def chat(debug: bool) -> None:
+@click.option(
+    "--show-llm-calls",
+    is_flag=True,
+    help="Show LLM prompts and responses in logs",
+)
+@click.option(
+    "--verbose",
+    "-v",
+    count=True,
+    help="Increase verbosity (-v=INFO, -vv=DEBUG)",
+)
+@click.option("--quiet", "-q", is_flag=True, help="Quiet mode (ERROR level)")
+@click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]),
+    help="Set log level explicitly",
+)
+@click.option("--log-file", type=click.Path(), help="Custom log file path")
+def chat(
+    show_llm_calls: bool,
+    verbose: int,
+    quiet: bool,
+    log_level: str | None,
+    log_file: str | None,
+) -> None:
     """Start interactive chat with the agent."""
     # Lazy import heavy dependencies
     import asyncio
     from pathlib import Path
 
-    from macsdk.core import ConfigurationError, create_config, create_config_with_writer
+    from macsdk.core import (
+        ConfigurationError,
+        create_config,
+        create_config_with_writer,
+        determine_log_level,
+        setup_logging,
+    )
 
     from .agent import run_api_agent
 
@@ -128,11 +157,28 @@ def chat(debug: bool) -> None:
         error_console.print(f"[red]✗ Configuration Error:[/] {e}")
         sys.exit(1)
 
-    # Debug can be enabled via flag or config.yml
-    debug_enabled = debug or _config.debug
+    # Setup logging (encapsulated helper)
+    from macsdk.core import configure_cli_logging
+
+    try:
+        actual_log, debug_enabled = configure_cli_logging(
+            show_llm_calls=show_llm_calls,
+            verbose=verbose,
+            quiet=quiet,
+            log_level=log_level,
+            log_file=log_file,
+            config=_config,
+            app_name="api_agent",
+            log_to_stderr=False,
+        )
+        if actual_log:
+            console.print(f"[dim]📋 Logs: {actual_log}[/]\n")
+    except OSError as e:
+        error_console.print(f"[red]✗ Failed to setup logging:[/] {e}")
+        sys.exit(1)
 
     console.print()
-    debug_msg = " [yellow](debug mode)[/]" if debug_enabled else ""
+    debug_msg = " [yellow](LLM calls logging)[/]" if debug_enabled else ""
     console.print(
         Panel(
             f"[dim]Type [white]exit[/] or press [white]Ctrl+C[/] to quit[/]{debug_msg}",
@@ -143,7 +189,7 @@ def chat(debug: bool) -> None:
     console.print()
 
     if debug_enabled:
-        console.print("[yellow]🔍 Debug mode enabled[/]\n")
+        console.print("[yellow]🔍 LLM calls will be logged[/]\n")
 
     # Create config with writer for real-time tool progress
     def progress_writer(msg: str) -> None:

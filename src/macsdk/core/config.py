@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import (
@@ -210,8 +210,40 @@ class MACSDKConfig(EnvPrioritySettingsMixin, BaseSettings):
     # Debug Configuration
     debug: bool = False  # Enable debug mode (shows prompts sent to LLM)
 
+    # Logging Configuration
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    log_dir: Path = Field(default_factory=lambda: Path("./logs"))
+    log_filename: Optional[str] = None  # None = auto-generate with date
+
+    # Debug Middleware Configuration (improved)
+    debug_prompt_max_length: int = Field(
+        default=10000, gt=0, description="Max characters per prompt in debug logs"
+    )
+    debug_show_response: bool = True  # Changed from False
+
     # URL Security Configuration
     url_security: URLSecurityConfig = Field(default_factory=URLSecurityConfig)
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def uppercase_log_level(cls, v: Any) -> Any:
+        """Normalize log level to uppercase for case-insensitive input."""
+        if isinstance(v, str):
+            return v.upper()
+        return v
+
+    @field_validator("log_dir", mode="before")
+    @classmethod
+    def expand_log_dir_path(cls, v: Any) -> Any:
+        """Expand user paths like ~/logs to absolute paths.
+
+        Resolves symlinks and relative paths for consistent log locations.
+        """
+        if isinstance(v, str):
+            return Path(v).expanduser().resolve()
+        elif isinstance(v, Path):
+            return v.expanduser().resolve()
+        return v
 
     @field_validator("url_security", mode="before")
     @classmethod

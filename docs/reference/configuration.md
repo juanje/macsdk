@@ -336,6 +336,82 @@ url_security:
 4. Keep `allow_localhost: false` in production
 5. Use specific domains instead of broad wildcards when possible
 
+## Logging Configuration
+
+MACSDK uses a two-channel output system: user feedback (stdout) and application logs (file).
+
+```yaml
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+log_level: INFO              # DEBUG, INFO, WARNING, ERROR
+log_dir: ./logs              # Directory for log files
+log_filename:                # Custom filename (default: auto with timestamp)
+
+# Debug middleware settings (when --debug or debug: true)
+debug_prompt_max_length: 10000   # Max chars per prompt in logs
+debug_show_response: true        # Show model responses in debug
+```
+
+### Logging Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `log_level` | string | `INFO` | Minimum log level to capture |
+| `log_dir` | path | `./logs` | Directory for log files |
+| `log_filename` | string | auto | Custom filename (default: `{app}-YYYY-MM-DD-HH-MM-SS.log`) |
+| `debug_prompt_max_length` | int | `10000` | Max characters per prompt in debug logs |
+| `debug_show_response` | bool | `true` | Show model responses in debug mode |
+
+### Logging Behavior
+
+**CLI Chat Mode:**
+- Logs written to `./logs/{app}-YYYY-MM-DD-HH-MM-SS.log` by default (one file per execution)
+- stdout remains clean for user interaction
+- Log file path displayed at startup
+
+**Web Mode (Containers/K8s):**
+- Logs written to stderr ONLY (12-factor app pattern)
+- No file logging by default (better for container environments)
+- File logging can be enabled explicitly if needed for VM deployments
+
+### CLI Logging Options
+
+```bash
+# Verbose mode (DEBUG level)
+my-chatbot chat -v
+
+# Very verbose (DEBUG + show prompts in logs)
+my-chatbot chat -vv
+
+# Quiet mode (only warnings and errors)
+my-chatbot chat -q
+
+# Custom log file
+my-chatbot chat --log-file ./debug.log
+
+# Explicit log level
+my-chatbot chat --log-level DEBUG
+```
+
+### Environment Variables for Logging
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LOG_LEVEL` | Minimum log level | `INFO` |
+| `LOG_DIR` | Log file directory | `./logs` |
+| `LOG_FILENAME` | Custom log filename | auto-generated |
+| `DEBUG_PROMPT_MAX_LENGTH` | Max chars in debug prompts | `10000` |
+| `DEBUG_SHOW_RESPONSE` | Show LLM responses in debug | `true` |
+
+### Best Practices
+
+1. **Always log to file in CLI mode** - Keeps stdout clean for user interaction
+2. **Use `-v` for debugging** - Shows detailed logs without polluting the UI
+3. **Check logs for errors** - Application errors are logged to file, not stdout
+4. **Increase `debug_prompt_max_length`** - Default 10000 chars, increase if prompts are cut off
+5. **Use `--log-file` in production** - Specify explicit log location for monitoring
+
 ## Environment Variables
 
 All configuration options can be set via environment variables:

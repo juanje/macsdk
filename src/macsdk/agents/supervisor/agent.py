@@ -87,7 +87,13 @@ def create_supervisor_agent(
     # Add debug middleware if enabled (via parameter or config)
     debug_enabled = debug if debug is not None else config.debug
     if debug_enabled:
-        middleware.append(PromptDebugMiddleware(enabled=True, show_response=True))
+        middleware.append(
+            PromptDebugMiddleware(
+                enabled=True,
+                show_response=True,
+                max_length=int(config.debug_prompt_max_length),
+            )
+        )
 
     # Add datetime middleware if enabled
     datetime_enabled = (
