@@ -265,11 +265,39 @@ def index(force: bool) -> None:
 
 {% endif %}
 @cli.command()
-@click.option("--debug", "-d", is_flag=True, help="Enable debug mode (show prompts)")
-def chat(debug: bool) -> None:
+@click.option(
+    "--show-llm-calls",
+    is_flag=True,
+    help="Show LLM prompts and responses in logs",
+)
+@click.option(
+    "--verbose",
+    "-v",
+    count=True,
+    help="Increase verbosity (-v=INFO, -vv=DEBUG)",
+)
+@click.option("--quiet", "-q", is_flag=True, help="Quiet mode (ERROR level)")
+@click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]),
+    help="Set log level explicitly",
+)
+@click.option("--log-file", type=click.Path(), help="Custom log file path")
+def chat(
+    show_llm_calls: bool,
+    verbose: int,
+    quiet: bool,
+    log_level: str | None,
+    log_file: str | None,
+) -> None:
     """Start interactive chat with the chatbot."""
     # Lazy import heavy dependencies
-    from macsdk.core import ConfigurationError, create_chatbot_graph, create_config
+    from macsdk.core import (
+        ConfigurationError,
+        configure_cli_logging,
+        create_chatbot_graph,
+        create_config,
+    )
     from macsdk.interfaces import run_cli_chatbot
 
     from . import agents
@@ -279,11 +307,26 @@ def chat(debug: bool) -> None:
         _config = create_config(search_path=Path.cwd())
         _config.validate_api_key()
 
-        # Debug can be enabled via flag or config.yml
-        debug_enabled = debug or _config.debug
+        # Setup logging (encapsulated helper)
+        try:
+            actual_log, debug_enabled = configure_cli_logging(
+                show_llm_calls=show_llm_calls,
+                verbose=verbose,
+                quiet=quiet,
+                log_level=log_level,
+                log_file=log_file,
+                config=_config,
+                app_name="{{ project_slug }}",
+                log_to_stderr=False,
+            )
+            if actual_log:
+                console.print(f"[dim]📋 Logs: {actual_log}[/]\n")
+        except OSError as e:
+            error_console.print(f"[red]✗ Failed to setup logging:[/] {e}")
+            sys.exit(1)
 
         if debug_enabled:
-            console.print("[yellow]🔍 Debug mode enabled[/]\n")
+            console.print("[yellow]🔍 LLM calls will be logged[/]\n")
 
         graph = create_chatbot_graph(agents.register_all_agents, debug=debug_enabled)
         run_cli_chatbot(
@@ -298,15 +341,45 @@ def chat(debug: bool) -> None:
 @cli.command()
 @click.option("--host", "-h", default="0.0.0.0", help="Host to bind to")
 @click.option("--port", "-p", default=8000, help="Port to bind to")
-@click.option("--debug", "-d", is_flag=True, help="Enable debug mode (show prompts)")
-def web(host: str, port: int, debug: bool) -> None:
+@click.option(
+    "--show-llm-calls",
+    is_flag=True,
+    help="Show LLM prompts and responses in logs",
+)
+@click.option(
+    "--verbose",
+    "-v",
+    count=True,
+    help="Increase verbosity (-v=INFO, -vv=DEBUG)",
+)
+@click.option("--quiet", "-q", is_flag=True, help="Quiet mode (ERROR level)")
+@click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]),
+    help="Set log level explicitly",
+)
+@click.option("--log-file", type=click.Path(), help="Custom log file path")
+def web(
+    host: str,
+    port: int,
+    show_llm_calls: bool,
+    verbose: int,
+    quiet: bool,
+    log_level: str | None,
+    log_file: str | None,
+) -> None:
     """Start the web interface.
 
     Launches a FastAPI server with WebSocket support for real-time chat.
     Open your browser at http://localhost:PORT after starting.
     """
     # Lazy import heavy dependencies
-    from macsdk.core import ConfigurationError, create_chatbot_graph, create_config
+    from macsdk.core import (
+        ConfigurationError,
+        configure_cli_logging,
+        create_chatbot_graph,
+        create_config,
+    )
     from macsdk.interfaces import run_web_server
 
     from . import agents
@@ -315,15 +388,28 @@ def web(host: str, port: int, debug: bool) -> None:
         _config = create_config(search_path=Path.cwd())
         _config.validate_api_key()
 
-        # Debug can be enabled via flag or config.yml
-        debug_enabled = debug or _config.debug
+        # Setup logging (encapsulated helper)
+        try:
+            actual_log, debug_enabled = configure_cli_logging(
+                show_llm_calls=show_llm_calls,
+                verbose=verbose,
+                quiet=quiet,
+                log_level=log_level,
+                log_file=log_file,
+                config=_config,
+                app_name="{{ project_slug }}",
+                log_to_stderr=True,  # Web mode logs to stderr
+            )
+        except OSError as e:
+            error_console.print(f"[red]✗ Failed to setup logging:[/] {e}")
+            sys.exit(1)
 
         # Look for static files in project root
         static_path = Path.cwd() / "static"
         static_dir: Path | None = static_path if static_path.exists() else None
 
         console.print()
-        debug_msg = " [yellow](debug mode)[/]" if debug_enabled else ""
+        debug_msg = " [yellow](LLM calls logging)[/]" if debug_enabled else ""
         console.print(
             Panel(
                 f"[dim]Starting server at[/] [cyan]http://{host}:{port}[/]{debug_msg}\n"

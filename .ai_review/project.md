@@ -161,7 +161,52 @@ macsdk/
 - **Templates:** Jinja2 templates in `src/macsdk/cli/templates/` generate complete project structures with proper imports and type hints.
 - **Template Code Formatting:** Templates must generate code that passes ruff linting (88 char line limit). Long function calls should be split across multiple lines in the template itself.
 
+### Logging Architecture
+
+MACSDK uses a **two-channel output system**:
+
+1. **User Channel** (stdout/WebSocket): Progress messages, chatbot responses
+   - Use `log_progress()` from `macsdk.core.utils`
+   - NEVER use `print()` or `logging.*` for user-facing output
+   
+2. **App Channel** (file/stderr): Technical logs, debug info
+   - Use `logging.getLogger(__name__)`
+   - CLI mode: logs to `./logs/*.log` (NEVER stdout)
+   - Web mode: logs to stderr ONLY (no files in containers)
+
+**Key Design Decisions:**
+- `log_progress()` is for user feedback, NOT technical logging
+- Debug prompts go to log file (not stdout) to preserve UX
+- Default log directory is `./logs/` (CWD, not `~/.macsdk/`)
+- Log level configurable via `config.yml`, ENV, or CLI flags (`-v`, `-vv`, `-q`, `--log-level`)
+- `PromptDebugMiddleware` uses `logger.info()` (for user-requested visibility), never `print()`
+- **Web mode disables file logging by default** (`log_to_file=False`) for 12-factor app compliance
+- File logging in containers is discouraged; use stderr for log aggregation (K8s/OpenShift)
+
+**Configuration:**
+- `log_level`: Minimum level (DEBUG/INFO/WARNING/ERROR), default INFO
+- `log_dir`: Directory for log files, default `./logs`
+- `log_filename`: Custom filename (default auto-generated with date)
+- `debug_prompt_max_length`: Max chars in debug prompts, default 10000
+- `debug_show_response`: Show LLM responses in debug, default true
+
+**CLI Options:**
+- `-v`: DEBUG level
+- `-vv`: DEBUG level + enable debug middleware (prompts to log)
+- `-q`: WARNING level (quiet)
+- `--debug`: Enable debug middleware
+- `--log-level X`: Explicit level override
+- `--log-file PATH`: Custom log file path
+
 ## Code Review Focus Areas
+
+- **[Logging Channel Separation]** - Verify new code uses `log_progress()` for user feedback and `logging.*` for technical logs. NEVER use `print()` for either purpose. In CLI mode, check that stdout is reserved exclusively for user interaction (prompts and responses).
+
+- **[Debug Middleware Output]** - In middleware that generates debugging information, ensure all output goes to `logger.debug()` or `logger.info()` - never to `print()` or `sys.stdout.write()`. Debug information should not pollute the user interface.
+
+- **[CLI Startup Logging]** - Verify CLI commands call `setup_logging()` early in execution and display the log file path to the user (in CLI mode). The path should be shown in a subtle way (dimmed text) that doesn't disrupt the UI.
+
+- **[Log Level Respect]** - Check that code respects `config.log_level` and doesn't hardcode log levels or bypass the configuration. CLI flags (`-v`, `-vv`, `-q`, `--log-level`) should properly override config values.
 
 - **[SpecialistAgent Protocol Compliance]** - Verify all agent implementations correctly implement the `SpecialistAgent` protocol (name, capabilities, async run(), as_tool()). Check that `capabilities` descriptions are verbose and LLM-friendly for accurate routing.
 

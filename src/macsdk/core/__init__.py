@@ -53,6 +53,12 @@ from .config import (
 )
 from .graph import create_chatbot_graph, create_web_chatbot_graph
 from .llm import get_answer_model
+from .logging import (
+    DEFAULT_QUIET_LOGGERS,
+    configure_cli_logging,
+    determine_log_level,
+    setup_logging,
+)
 from .models import BaseAgentResponse
 from .protocol import SpecialistAgent
 from .registry import (
@@ -96,6 +102,11 @@ __all__ = [
     "ConfigurationError",
     "DEFAULT_CONFIG_FILE",
     "CONFIG_FILE_ENV_VAR",
+    # Logging
+    "configure_cli_logging",
+    "determine_log_level",
+    "setup_logging",
+    "DEFAULT_QUIET_LOGGERS",
     # LLM (use these functions for lazy initialization)
     "get_answer_model",
     # Models

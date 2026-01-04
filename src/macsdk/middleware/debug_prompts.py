@@ -46,9 +46,8 @@ class PromptDebugMiddleware(AgentMiddleware):  # type: ignore[type-arg]
         enabled: bool = True,
         show_system: bool = True,
         show_user: bool = True,
-        show_response: bool = False,
-        max_length: int = 2000,
-        use_logger: bool = False,
+        show_response: bool = True,
+        max_length: int | None = None,
     ) -> None:
         """Initialize the middleware.
 
@@ -58,22 +57,35 @@ class PromptDebugMiddleware(AgentMiddleware):  # type: ignore[type-arg]
             show_user: Whether to show user messages.
             show_response: Whether to show model responses (after_model).
             max_length: Maximum characters to show per message.
-            use_logger: If True, use logger instead of print.
+                       If None, reads from config.debug_prompt_max_length at runtime.
         """
         self.enabled = enabled
         self.show_system = show_system
         self.show_user = show_user
         self.show_response = show_response
-        self.max_length = max_length
-        self.use_logger = use_logger
+        self._max_length_override = max_length
+        self._cached_max_length: int | None = None
         logger.debug(f"PromptDebugMiddleware initialized (enabled={enabled})")
 
+    @property
+    def max_length(self) -> int:
+        """Get max_length, lazily loading from config if not overridden."""
+        if self._max_length_override is not None:
+            return self._max_length_override
+
+        # Return cached value if available
+        if self._cached_max_length is not None:
+            return self._cached_max_length
+
+        # Lazy load from config at runtime and cache it
+        from ..core.config import config
+
+        self._cached_max_length = int(config.debug_prompt_max_length)
+        return self._cached_max_length
+
     def _output(self, text: str) -> None:
-        """Output text to logger or print."""
-        if self.use_logger:
-            logger.info(text)
-        else:
-            print(text)
+        """Output LLM call info to application log (not stdout)."""
+        logger.info(text)
 
     def _truncate(self, text: str) -> str:
         """Truncate text if too long."""
