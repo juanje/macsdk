@@ -310,6 +310,7 @@ def chat(
         # Update global config singleton so nested agents also see debug flag
         if debug_enabled:
             from macsdk.core import config as global_config
+
             global_config.debug = True
             console.print("[yellow]🔍 LLM calls will be logged[/]\n")
 
@@ -392,6 +393,7 @@ def web(
         # Update global config singleton so nested agents also see debug flag
         if debug_enabled:
             from macsdk.core import config as global_config
+
             global_config.debug = True
 
         # Look for static files in project root

@@ -349,47 +349,7 @@ def register_all_agents():
 
 ## Task Planning with TodoListMiddleware
 
-For complex multi-step queries that require coordination between multiple agents, you can enable task planning middleware:
-
-### Configuration
-
-**Important:** The global `enable_todo` setting applies **only to the supervisor**, not to specialist agents.
-
-**Supervisor (enabled by default):**
-
-```yaml
-# Task Planning for supervisor (coordinates multiple agents)
-enable_todo: true  # Default: true
-```
-
-**Agent-specific setting (disabled by default):**
-
-Agents don't inherit the global setting. Enable explicitly for agents that need it:
-
-```yaml
-# Supervisor uses global setting
-enable_todo: true
-
-# Enable for specific agents that need task planning
-diagnostic_agent:
-  enable_todo: true   # Complex multi-step diagnostics
-
-investigation_agent:
-  enable_todo: true   # Deep investigations
-
-# Simple agents don't need it (default: false)
-# api_lookup_agent: no config needed, uses default (false)
-```
-
-**Priority order for specialist agents:**
-1. Parameter passed to agent's `run()` method
-2. Agent-specific config (`api_agent.enable_todo`)
-3. Default value (`False` for agents)
-
-**Priority order for supervisor:**
-1. Parameter passed to `create_supervisor_agent()`
-2. Global config (`enable_todo`)
-3. Default value (`True` for supervisor)
+The TodoListMiddleware is always enabled for all agents (as of version 0.3.0), providing consistent task planning capabilities across the system.
 
 ### How It Works
 
@@ -399,12 +359,14 @@ When enabled, the TodoListMiddleware equips agents with an internal to-do list f
 - **Tracks progress** as the agent gathers information
 - **Ensures completeness** by reviewing remaining tasks before responding
 
-### When to Use
+### When It Helps Most
 
-Enable task planning for agents that handle:
+Task planning is particularly valuable for:
 - Multi-step investigations ("Why did the deployment fail?")
 - Queries requiring multiple tool calls with dependencies
 - Complex diagnostic workflows
+
+For simple queries, the middleware adds minimal overhead and agents naturally skip planning when not needed.
 
 ### Example
 
@@ -421,8 +383,11 @@ With task planning enabled:
 Specialist agents use `TODO_PLANNING_SPECIALIST_PROMPT`, which includes examples tailored for tool-based workflows:
 
 ```python
-# The SDK automatically imports this in generated agents
+# Generated agents include this import
 from macsdk.agents.supervisor import TODO_PLANNING_SPECIALIST_PROMPT
+
+# And append it to the system prompt
+system_prompt = SYSTEM_PROMPT + "\n\n" + TODO_PLANNING_SPECIALIST_PROMPT
 ```
 
 This prompt differs from `TODO_PLANNING_SUPERVISOR_PROMPT` (used by supervisors) because:
@@ -453,7 +418,7 @@ TODO_PLANNING_SPECIALIST_PROMPT = (
 from macsdk.prompts import TODO_PLANNING_SPECIALIST_PROMPT  # Still works
 ```
 
-The SDK automatically injects this prompt when `enable_todo=True`.
+**Important:** When using `macsdk new agent`, the generated code includes this prompt setup automatically. You must include it in your `create_agent()` call's `system_prompt` parameter for the task planning features to work.
 
 ## Advanced: Using Subgraphs
 

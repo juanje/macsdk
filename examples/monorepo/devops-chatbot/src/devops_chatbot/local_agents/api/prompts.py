@@ -58,9 +58,4 @@ You have access to a DevOps monitoring API with these endpoints:
 5. Always provide actionable insights based on the data
 """
 
-# Task Planning Prompt (used when enable_todo=True)
-# Import from SDK or define custom version
-try:
-    from macsdk.agents.supervisor import TODO_PLANNING_SPECIALIST_PROMPT
-except ImportError:
-    TODO_PLANNING_SPECIALIST_PROMPT = ""
+# Task Planning Prompt (always used - TODO middleware is always enabled)

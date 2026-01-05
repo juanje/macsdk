@@ -28,13 +28,8 @@ llm_reasoning_effort: medium  # low, medium, high
 # Middleware Configuration
 # =============================================================================
 include_datetime: true  # Inject datetime context with pre-calculated dates
-enable_todo: true       # Enable task planning for SUPERVISOR (default: true)
 debug: false            # Show prompts sent to LLM (for debugging)
-
-# Agent-specific middleware (specialist agents are disabled by default)
-# Enable only for agents that need complex task planning
-# diagnostic_agent:
-#   enable_todo: true   # Enable task planning for this specific agent
+# Note: Task planning (TODO middleware) is always enabled for all agents
 
 # Context summarization (for long conversations)
 summarization_enabled: false
@@ -439,11 +434,13 @@ All configuration options can be set via environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `INCLUDE_DATETIME` | Include datetime context | `true` |
-| `ENABLE_TODO` | Enable task planning middleware | `true` |
+| `ENABLE_TODO` | **DEPRECATED** (always enabled) | `true` |
 | `DEBUG` | Show prompts sent to LLM | `false` |
 | `SUMMARIZATION_ENABLED` | Enable context summarization | `false` |
 | `SUMMARIZATION_TRIGGER_TOKENS` | Token threshold for summarization | `100000` |
 | `SUMMARIZATION_KEEP_MESSAGES` | Recent messages to preserve | `6` |
+
+**Note:** Task planning middleware (`TodoListMiddleware`) is always enabled in v0.6.0+. The `ENABLE_TODO` setting is deprecated and has no effect.
 
 ### Agent Execution
 

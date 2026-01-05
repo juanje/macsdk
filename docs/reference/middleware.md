@@ -52,12 +52,20 @@ When enabled, agents receive this context automatically:
 - "last month" (calendar) → use 2025-11-01T00:00:00Z
 ```
 
+### How It Works
+
+The datetime context is injected **at the end** of the system prompt before each LLM call. This placement:
+- Enables optimal LLM caching (Gemini caches system message prefixes)
+- Refreshes timestamps automatically in multi-turn conversations
+- Ensures agents always have current time information
+
 ### Benefits
 
 - **No prompt boilerplate**: Agents don't need to explain date calculations
 - **Consistent format**: All dates in ISO 8601, ready for API queries
 - **Accurate context**: Current time is refreshed on each LLM call
 - **Pre-calculated ranges**: Common date ranges ready to use
+- **Optimized for caching**: Placement maximizes LLM provider caching efficiency
 
 ### Example Use Case
 
@@ -69,29 +77,13 @@ Equips agents with an internal to-do list for tracking complex multi-step invest
 
 ### Configuration
 
-**For Supervisor (enabled by default):**
+**Always Enabled:**
 
-```yaml
-# config.yml
-enable_todo: true  # Default: true (supervisor only)
-```
-
-**For Specialist Agents (disabled by default):**
-
-Specialist agents don't inherit the global setting. Enable explicitly when needed:
-
-```yaml
-# Supervisor uses global setting
-enable_todo: true
-
-# Enable for specific agents that need task planning
-diagnostic_agent:
-  enable_todo: true   # Explicitly enable for complex agents
-```
+The TodoListMiddleware is always enabled for all agents (both supervisor and specialists) as of v0.6.0. This ensures consistent task planning capabilities across the system without requiring configuration.
 
 ### What It Provides
 
-When enabled, agents can:
+Agents can:
 - Break down complex queries into manageable tasks
 - Track progress on multi-step investigations
 - Mark tasks as complete
@@ -99,11 +91,11 @@ When enabled, agents can:
 
 ### How It Works
 
-The middleware automatically provides:
+The middleware provides:
 1. An internal to-do list managed by the agent
-2. Context-specific system prompts for task planning guidance:
-   - `TODO_PLANNING_SUPERVISOR_PROMPT`: For supervisors coordinating specialist agents
-   - `TODO_PLANNING_SPECIALIST_PROMPT`: For specialist agents using tools
+2. Task planning guidance integrated into system prompts:
+   - Supervisor: Planning capabilities built into `SUPERVISOR_PROMPT`
+   - Specialists: Use `TODO_PLANNING_SPECIALIST_PROMPT` (appended to system prompt)
 3. Natural language task tracking (no explicit tool calls needed)
 
 The agent naturally plans and tracks tasks in its reasoning:
@@ -119,17 +111,14 @@ Agent internal reasoning:
 Starting with step 1..."
 ```
 
-### When to Use
+### When It Helps Most
 
-Enable for agents that handle:
+The middleware is particularly valuable for:
 - **Complex diagnostics**: "Why did the deployment fail?"
 - **Multi-step investigations**: Queries requiring multiple dependent tool calls
 - **Comprehensive analysis**: Tasks needing information from multiple sources
 
-Disable for agents that:
-- Handle simple lookups
-- Use single tool calls
-- Don't require planning
+For simple queries, the middleware adds minimal overhead and the agent naturally skips planning when not needed.
 
 ### Benefits
 
@@ -167,7 +156,7 @@ middleware.append(SummarizationMiddleware()) # ✗ After TodoList
 
 ### Task Planning Prompts
 
-The SDK provides two specialized prompts that are automatically injected when `enable_todo=True`:
+The SDK provides specialized prompts that are automatically integrated into agent system prompts:
 
 #### For Supervisor Agents
 

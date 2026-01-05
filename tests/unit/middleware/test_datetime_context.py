@@ -139,22 +139,39 @@ class TestDatetimeContextMiddleware:
         assert result["messages"][1].content == "User 1"
         assert result["messages"][2].content == "User 2"
 
-    def test_does_not_duplicate_datetime_context(self) -> None:
-        """Test that datetime context is not duplicated on repeated calls."""
+    def test_refreshes_stale_datetime_context(self) -> None:
+        """Test that datetime context is refreshed on repeated calls (multi-turn)."""
         middleware = DatetimeContextMiddleware()
         runtime = MagicMock()
 
         # Simulate a system message that already has datetime context
-        existing_context = format_datetime_context()
+        # Use a fixed old timestamp to ensure it's clearly stale
+        old_timestamp = "2024-01-01 00:00:00 UTC"
+        old_context = (
+            f"## Current DateTime Context\n\nCurrent UTC time: {old_timestamp}"
+        )
         state: AgentStateDict = {
             "messages": [
-                SystemMessage(content=f"{existing_context}\nOriginal system prompt")
+                SystemMessage(content=f"Original system prompt\n\n{old_context}")
             ]
         }
 
-        # Should return None because context already present
+        # Should refresh the datetime context (not skip it)
         result = middleware.before_model(cast(Any, state), runtime)
-        assert result is None
+        assert result is not None
+        assert "messages" in result
+
+        # Should preserve original content but have fresh timestamp
+        updated_message = result["messages"][0]
+        assert isinstance(updated_message, SystemMessage)
+        assert "Original system prompt" in updated_message.content
+        assert "## Current DateTime Context" in updated_message.content
+
+        # The old timestamp should be gone (replaced with fresh one)
+        assert old_timestamp not in updated_message.content
+
+        # The datetime context should only appear once (no duplication)
+        assert updated_message.content.count("## Current DateTime Context") == 1
 
     def test_missing_messages_key_returns_none(self) -> None:
         """Test that missing messages key returns None."""

@@ -463,13 +463,15 @@ from macsdk.middleware import TodoListMiddleware
 middleware = [TodoListMiddleware(enabled=True)]
 ```
 
-**Configuration:**
-- Global: `enable_todo: true` (supervisor default: `True`, specialists: `False`)
-- Agent-specific: `api_agent.enable_todo: true` (hierarchical override)
+**Configuration (v0.6.0+):**
+- `enable_todo` is deprecated (always `True` for all agents)
+- `TodoListMiddleware` always included in middleware stack
+- System prompts include `TODO_PLANNING_SPECIALIST_PROMPT` automatically
 
 **Important for review:**
 - Middleware source: `langchain.agents.middleware` (LangChain 1.0.0+)
-- Agent functions return `tuple[Any, str]` (agent, system_prompt) for dynamic prompt injection
+- Agent creation functions return `Any` (agent only), not tuples
+- System prompt passed to `create_agent(system_prompt=...)`, not `run_agent_with_tools()`
 - `type: ignore[misc]` on wrapper expected (LangChain base may lack types)
 
 ## Code Review Checklist
@@ -535,6 +537,138 @@ This applies to both production code and tests. Explicit is better than implicit
 ---
 <!-- MANUAL SECTIONS - DO NOT MODIFY THIS LINE -->
 <!-- The sections below will be preserved during updates -->
+
+## Common Review False Positives (Do NOT Flag These)
+
+### Middleware Request Modification (v0.6.0+)
+
+**Pattern:**
+```python
+# In DatetimeContextMiddleware
+def _inject_datetime_context(self, request: "ModelRequest") -> None:
+    request.system_message = SystemMessage(content=new_content)
+```
+
+**False Positive:** "Modifying `request.system_message` might not work if it's immutable/frozen"
+
+**Reality:** 
+- Uses LangChain 1.0+ official API: `wrap_model_call(request, handler)` and `awrap_model_call(request, handler)`
+- These hooks are specifically designed for request modification
+- Verified working in production with 325+ passing tests
+- Alternative (`before_model`) doesn't have access to configured system_message
+
+**Evidence:** `src/macsdk/middleware/datetime_context.py`
+
+---
+
+### DateTime Context Caching Without Lock
+
+**Pattern:**
+```python
+def _get_cached_context(self) -> str:
+    # Race condition possible: _cached_context and _cache_time updated non-atomically
+    if self._cached_context is None or (now - self._cache_time).total_seconds() > self._cache_ttl:
+        self._cached_context = format_datetime_context(now)
+        self._cache_time = now
+    return self._cached_context
+```
+
+**False Positive:** "Should use `threading.Lock` to prevent race conditions"
+
+**Reality:**
+- **Intentional design** - Race condition is acknowledged and documented in code comments
+- Operation is **idempotent** (same input = same output)
+- `format_datetime_context()` is **cheap** (simple string formatting, ~1ms)
+- Worst case: redundant string generation (not corruption)
+- Adding lock would add complexity without measurable benefit
+
+**When to add lock:** Only if `format_datetime_context()` becomes expensive (e.g., external API call)
+
+**Evidence:** `src/macsdk/middleware/datetime_context.py` (documented rationale in code comments)
+
+---
+
+### Timestamp Refresh in Multi-Turn Conversations
+
+**Pattern:**
+```python
+# In _inject_datetime_context and before_model
+if DATETIME_CONTEXT_HEADER in content:
+    # Strip old context and inject fresh
+    content = content.split(DATETIME_CONTEXT_HEADER)[0].strip()
+```
+
+**False Positive:** "Datetime context is duplicated / should skip if already present"
+
+**Reality:**
+- **Intentional behavior change** (v0.6.0)
+- Old behavior: Skip injection if header present → stale timestamps in long conversations
+- New behavior: Remove old context, inject fresh → always current timestamp
+- Critical for chatbots with persistent state (LangGraph multi-turn conversations)
+
+**Evidence:** `src/macsdk/middleware/datetime_context.py`, test: `test_datetime_context.py::test_refreshes_stale_datetime_context`
+
+---
+
+### Internal vs Public APIs
+
+**Pattern:**
+```python
+# src/macsdk/agents/supervisor/agent.py
+def create_supervisor_agent(include_datetime=None, debug=None):
+    # No enable_todo parameter
+```
+
+**False Positive:** "Removing `enable_todo` parameter is a breaking change"
+
+**Reality:**
+- `create_supervisor_agent()` is an **internal SDK function**
+- Users don't call it directly - it's called by `create_graph()` internally
+- Public API for users: `macsdk new chatbot` (CLI scaffolding)
+- No external consumers exist
+
+**Evidence:** 
+- No usage in `examples/` directory
+- Function not exported in public `__init__.py`
+- Only called from `src/macsdk/core/graph.py` (internal)
+
+---
+
+### Deprecated Config Fields
+
+**Pattern:**
+```python
+# src/macsdk/core/config.py
+enable_todo: bool = Field(
+    default=True,
+    deprecated=True,
+    description="DEPRECATED: TODO middleware is always enabled."
+)
+```
+
+**False Positive:** "Removing `enable_todo` breaks backward compatibility"
+
+**Reality:**
+- Field is **NOT removed**, it's **deprecated** with `Field(deprecated=True)`
+- Old YAML files with `enable_todo: true` still load without error
+- Pydantic's `extra='allow'` ensures no crashes
+- Migration guide (`docs/guides/migration-v0.6.md`) documents the change
+
+**Evidence:** `src/macsdk/core/config.py`
+
+---
+
+### DatetimeContextMiddleware Content Stripping
+
+**False Positive:** "Using `split(HEADER)[0]` loses content if middleware appends after datetime context"
+
+**Reality:** Safe with current middleware. No existing middleware modifies system message after `DatetimeContextMiddleware` (PromptDebug=read-only, TodoList=manages context not system message, Summarization=trims history not system message).
+
+**Theoretical risk only:** Custom middleware that appends to system message END after DatetimeContextMiddleware and expects persistence across turns. Simple solution if needed: use regex instead of split.
+
+**Evidence:** `src/macsdk/middleware/datetime_context.py`, `src/macsdk/cli/templates/agent/agent.py.j2`
+
+---
 
 ## Business Logic & Implementation Decisions
 
@@ -642,34 +776,27 @@ Middleware wraps the supervisor invocation (formatter runs after supervisor in g
 - Summarization MUST run before supervisor to prevent context window overflow
 - TodoList default: `True` for supervisor, `False` for specialists
 
-### Task Planning Design Decisions (TodoListMiddleware)
+### Task Planning Design Decisions (TodoListMiddleware - v0.6.0+)
 
-**Supervisor-first pattern:**
-- Supervisor: enabled by default (coordinates multi-step investigations)
-- Specialists: disabled by default (single-domain queries, opt-in via agent-specific config)
+**Always-on pattern:**
+- TodoListMiddleware enabled for all agents (supervisor and specialists)
+- No configuration required - simplifies agent creation
+- Task planning capabilities universally available
 
-**Conditional prompt injection:**
-- Task planning prompts only injected when `enable_todo=True` for that agent
-- Prevents confusing agents without middleware
+**System prompt integration:**
+- Supervisor: Planning integrated into `SUPERVISOR_PROMPT` 
+- Specialists: `TODO_PLANNING_SPECIALIST_PROMPT` appended to system prompt
+- System prompt passed to `create_agent(system_prompt=...)` at creation time
 
 **Separate prompts by role:**
-- `TODO_PLANNING_SUPERVISOR_PROMPT`: agent-coordination examples (e.g., "call deployment_agent")
+- Supervisor planning built into `SUPERVISOR_PROMPT`
 - `TODO_PLANNING_SPECIALIST_PROMPT`: tool-based examples (e.g., "get_deployment_details()")
 - Prevents confusion between orchestration patterns and direct tool usage
 
-**Return type change:**
-- Agent creation functions return `tuple[Any, str]` (agent, system_prompt) not just `Any`
-- Required for dynamic prompt injection
-- Scope limited to internal module functions
-
-**Supervisor vs Specialist prompt handling:**
-- **Supervisor** (`create_supervisor_agent`): Binds system_prompt internally during `create_agent()` call
-  - Used directly by LangGraph as a node
-  - Prompt construction happens once per request
-- **Specialists** (`create_*_agent`): Return `(agent, system_prompt)` tuple
-  - Consumed by `run_agent_with_tools()` wrapper
-  - Allows for additional processing before agent invocation
-- This difference is intentional, driven by different execution contexts
+**Function signatures (v0.6.0+):**
+- Agent creation functions return `Any` (agent only)
+- System prompt passed to `create_agent()`, not `run_agent_with_tools()`
+- Backward compatibility: `run_agent_with_tools()` accepts deprecated `system_prompt` param with warning
 
 ### Lazy Model Initialization
 
