@@ -23,7 +23,7 @@ from ...middleware import (
     TodoListMiddleware,
 )
 from ...middleware.debug_prompts import PromptDebugMiddleware
-from .prompts import SUPERVISOR_PROMPT, TODO_PLANNING_SUPERVISOR_PROMPT
+from .prompts import SUPERVISOR_PROMPT
 
 logger = logging.getLogger(__name__)  # noqa: E402
 
@@ -51,7 +51,6 @@ def _build_supervisor_prompt() -> str:
 
 def create_supervisor_agent(
     include_datetime: bool | None = None,
-    enable_todo: bool | None = None,
     debug: bool | None = None,
 ) -> Any:
     """Create the intelligent supervisor agent.
@@ -61,8 +60,6 @@ def create_supervisor_agent(
 
     Args:
         include_datetime: Whether to include datetime context middleware.
-            If None, uses the config value (default: True).
-        enable_todo: Whether to enable task planning middleware.
             If None, uses the config value (default: True).
         debug: Whether to enable debug middleware that shows prompts.
             If None, uses the config value (default: False).
@@ -74,12 +71,8 @@ def create_supervisor_agent(
     agent_tools = get_all_agent_tools()
 
     # Build dynamic prompt with capabilities
+    # TODO middleware is always enabled, so planning is integrated into the prompt
     system_prompt = _build_supervisor_prompt()
-
-    # Inject task planning prompt if todo middleware is enabled
-    todo_enabled = enable_todo if enable_todo is not None else config.enable_todo
-    if todo_enabled:
-        system_prompt = system_prompt + "\n\n" + TODO_PLANNING_SUPERVISOR_PROMPT
 
     # Build middleware list
     middleware: list[Any] = []
@@ -102,9 +95,8 @@ def create_supervisor_agent(
     if datetime_enabled:
         middleware.append(DatetimeContextMiddleware(enabled=True))
 
-    # Add todo middleware if enabled (before summarization to see full context)
-    if todo_enabled:
-        middleware.append(TodoListMiddleware(enabled=True))
+    # Add todo middleware (always enabled for task planning)
+    middleware.append(TodoListMiddleware(enabled=True))
 
     # Add summarization middleware if enabled
     if config.summarization_enabled:

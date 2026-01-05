@@ -7,6 +7,7 @@ including logging, agent execution helpers, and streaming utilities.
 from __future__ import annotations
 
 import sys
+import warnings
 from typing import TYPE_CHECKING, Any, Callable
 
 from langchain_core.messages import HumanMessage
@@ -74,22 +75,29 @@ def create_config_with_writer(writer: Callable[[str], None]) -> "RunnableConfig"
 async def run_agent_with_tools(
     agent: Any,
     query: str,
-    system_prompt: str,
-    agent_name: str,
+    system_prompt: str | None = None,
+    agent_name: str | None = None,
     context: dict | None = None,
     config: "RunnableConfig | None" = None,
 ) -> dict:
     """Run a specialist agent with tools and return structured results.
 
     This is the generic function used to execute specialist agents.
-    It handles prompt construction, agent invocation, and result extraction.
+    The agent must be created with its system_prompt already configured
+    via create_agent(system_prompt=...).
 
     Args:
         agent: The agent instance to run (must have ainvoke method).
         query: User query string.
-        system_prompt: System prompt for the agent.
-        agent_name: Name identifier for the agent.
-        context: Optional context dict to include in the prompt.
+        system_prompt: **DEPRECATED**. System prompt should be configured when
+                      creating the agent via create_agent(system_prompt=...).
+                      For backwards compatibility, if provided, it will be prepended
+                      to the query as a HumanMessage. This parameter will be removed
+                      in v1.0.0.
+        agent_name: Name identifier for the agent. **Required** despite the
+                   type hint (type hint is `str | None` only to accommodate
+                   deprecated optional parameters before it).
+        context: Optional context dict to include in the query.
         config: Optional RunnableConfig for streaming support.
 
     Returns:
@@ -100,15 +108,37 @@ async def run_agent_with_tools(
     """
     from .callbacks import ToolProgressCallback
 
+    # Validate agent_name is provided
+    if agent_name is None:
+        raise TypeError(
+            "run_agent_with_tools() missing required argument: 'agent_name'. "
+            "Please provide agent_name as a keyword argument."
+        )
+
+    # Emit deprecation warning if system_prompt is provided
+    if system_prompt is not None:
+        warnings.warn(
+            "Passing 'system_prompt' to run_agent_with_tools() is deprecated. "
+            "Configure the system_prompt when creating the agent with "
+            "create_agent(system_prompt=...). "
+            "This parameter will be removed in v1.0.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
     log_progress(f"[{agent_name}] Processing query...\n", config)
 
-    messages = [HumanMessage(content=query)]
-
+    # Build query with optional context
+    query_content = query
     if context:
-        system_context = f"\nContext: {context}"
-        messages[0].content = system_prompt + system_context + "\n\n" + query
-    else:
-        messages[0].content = system_prompt + "\n\n" + query
+        query_content = f"Context: {context}\n\n{query}"
+
+    # BACKWARDS COMPATIBILITY: If system_prompt is provided (deprecated pattern),
+    # prepend it to the query. This maintains old behavior until v1.0.0.
+    if system_prompt:
+        query_content = f"{system_prompt}\n\n{query_content}"
+
+    messages = [HumanMessage(content=query_content)]
 
     # Create callback for real-time tool progress
     tool_callback = ToolProgressCallback(agent_name=agent_name, config=config)

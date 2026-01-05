@@ -42,7 +42,7 @@ def test_todo_middleware_is_langchain_subclass() -> None:
 
 @pytest.mark.asyncio
 async def test_todo_middleware_with_supervisor() -> None:
-    """Test that TodoListMiddleware can be integrated with supervisor agent."""
+    """Test that TodoListMiddleware is always integrated with supervisor agent."""
     from macsdk.agents.supervisor import create_supervisor_agent
 
     # Mock the LLM model to avoid requiring API key
@@ -50,21 +50,6 @@ async def test_todo_middleware_with_supervisor() -> None:
     with patch(
         "macsdk.agents.supervisor.agent.get_answer_model", return_value=mock_model
     ):
-        # Should not raise any errors
-        agent = create_supervisor_agent(enable_todo=True)
-        assert agent is not None
-
-
-@pytest.mark.asyncio
-async def test_supervisor_without_todo_middleware() -> None:
-    """Test that supervisor can be created without TodoListMiddleware."""
-    from macsdk.agents.supervisor import create_supervisor_agent
-
-    # Mock the LLM model to avoid requiring API key
-    mock_model = MagicMock()
-    with patch(
-        "macsdk.agents.supervisor.agent.get_answer_model", return_value=mock_model
-    ):
-        # Should not raise any errors
-        agent = create_supervisor_agent(enable_todo=False)
+        # Should not raise any errors - TODO is always enabled
+        agent = create_supervisor_agent()
         assert agent is not None

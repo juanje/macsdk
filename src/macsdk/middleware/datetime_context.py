@@ -8,16 +8,21 @@ timestamps, and relative dates in user queries.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware
 
 if TYPE_CHECKING:
-    from langchain.agents.middleware import AgentState
+    from langchain.agents.middleware import AgentState, ModelRequest
+    from langchain.agents.middleware.types import ModelResponse
     from langgraph.runtime import Runtime
 
 logger = logging.getLogger(__name__)
+
+# Header used to identify datetime context in prompts
+DATETIME_CONTEXT_HEADER = "## Current DateTime Context"
 
 
 def _calculate_date_references(now: datetime) -> dict[str, str]:
@@ -104,7 +109,7 @@ def format_datetime_context(now: datetime | None = None) -> str:
     refs = _calculate_date_references(now)
 
     return f"""
-## Current DateTime Context
+{DATETIME_CONTEXT_HEADER}
 
 **Now:**
 - Current UTC time: {now.strftime("%Y-%m-%d %H:%M:%S UTC")}
@@ -157,25 +162,161 @@ class DatetimeContextMiddleware(AgentMiddleware):  # type: ignore[type-arg]
         ... )
     """
 
-    def __init__(self, enabled: bool = True) -> None:
+    def __init__(self, enabled: bool = True, cache_ttl_seconds: int = 60) -> None:
         """Initialize the middleware.
 
         Args:
             enabled: Whether the middleware is active. If False,
                      the middleware passes through without modification.
+            cache_ttl_seconds: Time-to-live for cached datetime context in
+                              seconds. Default is 60 seconds to balance
+                              freshness with performance.
         """
         self.enabled = enabled
-        logger.debug(f"DatetimeContextMiddleware initialized (enabled={enabled})")
+        self._cache_ttl = cache_ttl_seconds
+        self._cached_context: str | None = None
+        self._cache_time: datetime | None = None
+        logger.debug(
+            f"DatetimeContextMiddleware initialized "
+            f"(enabled={enabled}, cache_ttl={cache_ttl_seconds}s)"
+        )
+
+    def _get_cached_context(self) -> str:
+        """Get datetime context from cache or generate new one if expired.
+
+        Note: This method has a minor race condition in multi-threaded
+        environments where multiple threads might regenerate the context
+        simultaneously. This is acceptable because:
+        1. The operation is idempotent (same input = same output)
+        2. format_datetime_context() is cheap (simple string formatting)
+        3. The worst case is redundant string generation, not corruption
+
+        If format_datetime_context() becomes expensive in the future,
+        consider adding a threading.Lock.
+
+        Returns:
+            Formatted datetime context string.
+        """
+        now = datetime.now(timezone.utc)
+        if (
+            self._cached_context is None
+            or self._cache_time is None
+            or (now - self._cache_time).total_seconds() > self._cache_ttl
+        ):
+            self._cached_context = format_datetime_context(now)
+            self._cache_time = now
+            logger.debug("Generated new datetime context (cache miss or expired)")
+        else:
+            logger.debug("Using cached datetime context")
+        return self._cached_context
+
+    def _remove_stale_context(self, content: str) -> str:
+        """Remove old datetime context from content if present.
+
+        This ensures we can refresh the datetime context with a current
+        timestamp in multi-turn conversations.
+
+        Args:
+            content: The content string to clean.
+
+        Returns:
+            Content with datetime context removed (if it was present).
+        """
+        if DATETIME_CONTEXT_HEADER in content:
+            # Strip everything from the header onwards to refresh timestamp
+            content = content.split(DATETIME_CONTEXT_HEADER)[0].strip()
+            logger.debug("Removed stale datetime context for refresh")
+        return content
+
+    def _inject_datetime_context(self, request: "ModelRequest") -> None:
+        """Inject datetime context into request.system_message.
+
+        This method modifies the system_message in the request to append
+        datetime context at the end, which is optimal for LLM caching.
+
+        Args:
+            request: The model request containing the system_message to modify.
+        """
+        from langchain_core.messages import SystemMessage
+
+        # Check if there's a system_message to modify
+        if not (hasattr(request, "system_message") and request.system_message):
+            logger.debug("No system_message in request, skipping injection")
+            return
+
+        content = str(request.system_message.content)
+
+        # Remove old datetime context if present (for multi-turn conversations)
+        content = self._remove_stale_context(content)
+
+        datetime_context = self._get_cached_context()
+
+        # Inject at the END of the system prompt for better caching
+        new_content = f"{content}\n\n{datetime_context}"
+        request.system_message = SystemMessage(content=new_content)
+        logger.debug("Injected datetime context into system_message (at end)")
+
+    def wrap_model_call(
+        self,
+        request: "ModelRequest",
+        handler: Callable[["ModelRequest"], "ModelResponse"],
+    ) -> "ModelResponse":
+        """Inject datetime context into the system message (sync).
+
+        This hook is called before each model invocation and has access
+        to the full request including the system_message configured when
+        creating the agent.
+
+        Args:
+            request: The model request containing system_message and messages.
+            handler: The next handler in the middleware chain.
+
+        Returns:
+            The model response from the handler.
+        """
+        if not self.enabled:
+            return handler(request)
+
+        self._inject_datetime_context(request)
+        return handler(request)
+
+    async def awrap_model_call(
+        self,
+        request: "ModelRequest",
+        handler: Callable[["ModelRequest"], Awaitable["ModelResponse"]],
+    ) -> "ModelResponse":
+        """Inject datetime context into the system message (async).
+
+        This hook is called before each model invocation and has access
+        to the full request including the system_message configured when
+        creating the agent.
+
+        Args:
+            request: The model request containing system_message and messages.
+            handler: The next async handler in the middleware chain.
+
+        Returns:
+            The model response from the handler.
+        """
+        if not self.enabled:
+            return await handler(request)
+
+        self._inject_datetime_context(request)
+        return await handler(request)
 
     def before_model(
         self,
         state: "AgentState",
         runtime: "Runtime",
     ) -> dict[str, Any] | None:
-        """Inject datetime context before each model call.
+        """Fallback hook for injecting datetime context.
 
-        This hook is called before each LLM invocation. It modifies
-        the messages to include current datetime context.
+        This hook is kept for backwards compatibility with agents that don't
+        use wrap_model_call. It modifies the messages list to include datetime
+        context, but cannot access the system_message configured in create_agent.
+
+        Prefer using wrap_model_call/awrap_model_call which has access to the
+        full request including system_message.
 
         Args:
             state: Current agent state with messages.
@@ -198,20 +339,21 @@ class DatetimeContextMiddleware(AgentMiddleware):  # type: ignore[type-arg]
 
         # Check if first message is a system message
         if modified_messages and isinstance(modified_messages[0], SystemMessage):
-            # Only inject if not already present
-            if "## Current DateTime Context" in str(modified_messages[0].content):
-                logger.debug("Datetime context already present, skipping")
-                return None
+            original_content = str(modified_messages[0].content)
 
-            datetime_context = format_datetime_context()
-            original_content = modified_messages[0].content
+            # Remove old datetime context if present (for multi-turn conversations)
+            original_content = self._remove_stale_context(original_content)
+
+            # Inject fresh datetime context
+            datetime_context = self._get_cached_context()
+            # Place datetime context at END for better LLM caching
             modified_messages[0] = SystemMessage(
-                content=f"{datetime_context}\n{original_content}"
+                content=f"{original_content}\n\n{datetime_context}"
             )
-            logger.debug("Injected datetime context into system message")
+            logger.debug("Injected datetime context into system message (at end)")
         else:
             # Insert new system message with datetime context
-            datetime_context = format_datetime_context()
+            datetime_context = self._get_cached_context()
             modified_messages.insert(0, SystemMessage(content=datetime_context))
             logger.debug("Added new system message with datetime context")
 

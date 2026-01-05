@@ -84,7 +84,6 @@ class TestRunAgentWithTools:
             result = await run_agent_with_tools(
                 agent=mock_agent,
                 query=TEST_QUERY,
-                system_prompt=TEST_SYSTEM_PROMPT,
                 agent_name=TEST_AGENT_NAME,
             )
 
@@ -111,9 +110,83 @@ class TestRunAgentWithTools:
             result = await run_agent_with_tools(
                 agent=mock_agent,
                 query=TEST_QUERY,
-                system_prompt=TEST_SYSTEM_PROMPT,
                 agent_name=TEST_AGENT_NAME,
             )
 
         assert result["response"] == plain_response
+        assert result["agent_name"] == TEST_AGENT_NAME
+
+    @pytest.mark.asyncio
+    async def test_run_agent_with_deprecated_system_prompt(self) -> None:
+        """Emits deprecation warning when system_prompt is passed and prepends it."""
+        from langchain_core.messages import HumanMessage
+
+        from macsdk.core import run_agent_with_tools
+
+        mock_message = MagicMock()
+        mock_message.content = TEST_RESPONSE
+        mock_message.tool_calls = None
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke.return_value = {
+            "messages": [mock_message],
+        }
+
+        with patch("macsdk.core.utils.log_progress"):
+            with pytest.warns(
+                DeprecationWarning,
+                match=(
+                    "Passing 'system_prompt' to run_agent_with_tools\\(\\) "
+                    "is deprecated"
+                ),
+            ):
+                result = await run_agent_with_tools(
+                    agent=mock_agent,
+                    query=TEST_QUERY,
+                    system_prompt=TEST_SYSTEM_PROMPT,  # Deprecated parameter
+                    agent_name=TEST_AGENT_NAME,
+                )
+
+        # Should still work despite deprecation
+        assert result["response"] == TEST_RESPONSE
+        assert result["agent_name"] == TEST_AGENT_NAME
+
+        # Verify system_prompt was prepended to query in HumanMessage
+        call_args = mock_agent.ainvoke.call_args
+        messages = call_args[0][0]["messages"]
+        assert len(messages) == 1
+        assert isinstance(messages[0], HumanMessage)
+        # System prompt should be prepended
+        assert TEST_SYSTEM_PROMPT in messages[0].content
+        assert TEST_QUERY in messages[0].content
+        assert messages[0].content.index(TEST_SYSTEM_PROMPT) < messages[
+            0
+        ].content.index(TEST_QUERY)
+
+    @pytest.mark.asyncio
+    async def test_run_agent_with_positional_args(self) -> None:
+        """Ensures positional argument compatibility is maintained."""
+        from macsdk.core import run_agent_with_tools
+
+        mock_message = MagicMock()
+        mock_message.content = TEST_RESPONSE
+        mock_message.tool_calls = None
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke.return_value = {
+            "messages": [mock_message],
+        }
+
+        with patch("macsdk.core.utils.log_progress"):
+            with pytest.warns(DeprecationWarning):
+                # Old-style positional call (maintains backward compatibility)
+                result = await run_agent_with_tools(
+                    mock_agent,  # agent (pos 0)
+                    TEST_QUERY,  # query (pos 1)
+                    TEST_SYSTEM_PROMPT,  # system_prompt (pos 2) - deprecated
+                    TEST_AGENT_NAME,  # agent_name (pos 3)
+                )
+
+        # Should work correctly despite being deprecated
+        assert result["response"] == TEST_RESPONSE
         assert result["agent_name"] == TEST_AGENT_NAME

@@ -178,6 +178,7 @@ class MACSDKConfig(EnvPrioritySettingsMixin, BaseSettings):
         server_port: Port for the web server.
         message_max_length: Maximum message length in characters.
         warmup_timeout: Timeout for graph warmup on startup.
+        enable_todo: (DEPRECATED) TODO middleware is always enabled.
         url_security: URL security configuration for SSRF protection.
     """
 
@@ -196,7 +197,13 @@ class MACSDKConfig(EnvPrioritySettingsMixin, BaseSettings):
 
     # Middleware Configuration
     include_datetime: bool = True  # Inject datetime context into prompts
-    enable_todo: bool = True  # Enable ToDo middleware for task planning
+    enable_todo: bool = Field(
+        default=True,
+        deprecated=True,
+        description=(
+            "DEPRECATED: TODO middleware is always enabled. This setting has no effect."
+        ),
+    )
 
     # Summarization Configuration
     summarization_enabled: bool = False  # Enable context summarization

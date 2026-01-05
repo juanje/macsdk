@@ -8,11 +8,7 @@
 # llm_model: gemini-2.5-flash
 # llm_temperature: 0.3
 # llm_reasoning_effort: medium
-
-# Task Planning (for complex multi-step queries)
-# Note: When running standalone, this enables task planning for this agent
-# When registered in a chatbot, use agent-specific config in chatbot's config.yml
-# enable_todo: true  # Enable internal task planning for complex queries
+# Note: Task planning (TODO middleware) is always enabled
 
 # Add agent-specific settings below:
 # my_agent_setting: value
