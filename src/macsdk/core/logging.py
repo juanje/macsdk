@@ -209,6 +209,7 @@ def configure_cli_logging(
             log_to_file=log_to_file_enabled,
             app_name=app_name,
             loggers_config=loggers_override,
+            clean_llm_format=debug_middleware_enabled,
         )
     except OSError as e:
         # Let caller handle the error display
@@ -226,6 +227,7 @@ def setup_logging(
     log_to_file: bool = True,
     app_name: str = "macsdk",
     loggers_config: dict[str, str] | None = None,
+    clean_llm_format: bool = False,
 ) -> Path | None:
     """Configure logging for the application.
 
@@ -253,6 +255,8 @@ def setup_logging(
                        Example: {"httpcore": "WARNING", "macsdk.middleware": "DEBUG"}
                        Useful for silencing noisy third-party loggers while
                        enabling debug output for specific modules.
+        clean_llm_format: If True, the LLM debug middleware logger will use a clean
+                         format without timestamp/logger name for better readability.
 
     Returns:
         Path to the log file if file logging is enabled, None otherwise.
@@ -359,5 +363,43 @@ def setup_logging(
             specific_logger = logging.getLogger(logger_name)
             specific_level = level_map.get(logger_level.upper(), logging.INFO)
             specific_logger.setLevel(specific_level)
+
+    # Configure clean format for LLM debug middleware if requested
+    # This removes timestamp/logger name for better readability of LLM calls
+    if clean_llm_format:
+        debug_logger = logging.getLogger("macsdk.middleware.debug_prompts")
+
+        # Clear any existing handlers (including inherited ones)
+        # Note: This is intentional - this logger is exclusively managed by this
+        # configuration. If setup_logging is called multiple times (e.g., in tests),
+        # handlers are reset to ensure consistent behavior.
+        for handler in debug_logger.handlers[:]:
+            debug_logger.removeHandler(handler)
+
+        # CRITICAL: Set propagate to False FIRST to prevent logs from
+        # going to root logger. This must be done before adding new handlers.
+        debug_logger.propagate = False
+
+        # Set the logger level
+        debug_logger.setLevel(log_level_int)
+
+        # Create a clean formatter that only shows the message
+        clean_formatter = logging.Formatter("%(message)s")
+
+        # Add file handler with clean format if file logging is enabled
+        if actual_log_file:
+            clean_file_handler = logging.FileHandler(
+                actual_log_file, mode="a", encoding="utf-8"
+            )
+            clean_file_handler.setLevel(log_level_int)
+            clean_file_handler.setFormatter(clean_formatter)
+            debug_logger.addHandler(clean_file_handler)
+
+        # Add stderr handler with clean format if stderr logging is enabled
+        if log_to_stderr:
+            clean_stderr_handler = logging.StreamHandler(sys.stderr)
+            clean_stderr_handler.setLevel(log_level_int)
+            clean_stderr_handler.setFormatter(clean_formatter)
+            debug_logger.addHandler(clean_stderr_handler)
 
     return actual_log_file

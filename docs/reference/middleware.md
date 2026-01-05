@@ -265,7 +265,13 @@ Logs prompts sent to the LLM to the application log file (not stdout), useful fo
 
 **Important:** Debug prompts are written to the log file, NOT to stdout. This keeps the user interface clean while still providing full debugging information.
 
-**⚠️ Security Warning:** This middleware logs full conversation content including all user inputs (may contain PII), complete system prompts (may expose business logic), and model responses. **Use only for development/debugging. Never enable in production with real user data.**
+**⚠️ Security Warning - Development Only:** This middleware logs **complete, unredacted content** including:
+- User inputs and conversation history (may contain PII)
+- Complete system prompts (may expose business logic)
+- Model responses
+- **Tool call arguments with ALL sensitive data (API keys, tokens, passwords, credentials)**
+
+**This middleware is EXCLUSIVELY for local development debugging. NEVER enable in production, staging, or any environment with real user data or real credentials.**
 
 ### Configuration
 
@@ -340,6 +346,8 @@ The middleware supports these options:
 | `max_length` | int | from config | Max chars per message (reads `debug_prompt_max_length` from config) |
 
 **Breaking Change:** The `use_logger` parameter has been removed. Debug output now always goes to the logger (never to print/stdout).
+
+**Output Format:** When `--show-llm-calls` is enabled, the logging system automatically configures a clean format without logger prefixes. The output includes agent context (e.g., `[LLM [supervisor]]`, `[LLM [toolbox]]`) to help track which agent is making each LLM call. This is controlled by the logging configuration, not by middleware parameters.
 
 ### Programmatic Usage
 

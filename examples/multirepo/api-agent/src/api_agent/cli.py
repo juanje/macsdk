@@ -143,8 +143,6 @@ def chat(
         ConfigurationError,
         create_config,
         create_config_with_writer,
-        determine_log_level,
-        setup_logging,
     )
 
     from .agent import run_api_agent
@@ -176,6 +174,11 @@ def chat(
     except OSError as e:
         error_console.print(f"[red]✗ Failed to setup logging:[/] {e}")
         sys.exit(1)
+
+    # Update global config singleton so nested agents also see debug flag
+    if debug_enabled:
+        from macsdk.core import config as global_config
+        global_config.debug = True
 
     console.print()
     debug_msg = " [yellow](LLM calls logging)[/]" if debug_enabled else ""

@@ -325,7 +325,10 @@ def chat(
             error_console.print(f"[red]✗ Failed to setup logging:[/] {e}")
             sys.exit(1)
 
+        # Update global config singleton so nested agents also see debug flag
         if debug_enabled:
+            from macsdk.core import config as global_config
+            global_config.debug = True
             console.print("[yellow]🔍 LLM calls will be logged[/]\n")
 
         graph = create_chatbot_graph(agents.register_all_agents, debug=debug_enabled)
@@ -403,6 +406,11 @@ def web(
         except OSError as e:
             error_console.print(f"[red]✗ Failed to setup logging:[/] {e}")
             sys.exit(1)
+
+        # Update global config singleton so nested agents also see debug flag
+        if debug_enabled:
+            from macsdk.core import config as global_config
+            global_config.debug = True
 
         # Look for static files in project root
         static_path = Path.cwd() / "static"

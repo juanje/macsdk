@@ -180,6 +180,8 @@ MACSDK uses a **two-channel output system**:
 - Default log directory is `./logs/` (CWD, not `~/.macsdk/`)
 - Log level configurable via `config.yml`, ENV, or CLI flags (`-v`, `-vv`, `-q`, `--log-level`)
 - `PromptDebugMiddleware` uses `logger.info()` (for user-requested visibility), never `print()`
+- **Clean format for LLM logs**: `setup_logging(clean_llm_format=True)` configures the `macsdk.middleware.debug_prompts` logger with a clean formatter (`%(message)s`) and `propagate=False`
+- **Agent context tracking**: Debug logs show which agent is making LLM calls (e.g., `[LLM [supervisor]]`, `[LLM [api-agent]]`)
 - **Web mode disables file logging by default** (`log_to_file=False`) for 12-factor app compliance
 - File logging in containers is discouraged; use stderr for log aggregation (K8s/OpenShift)
 
@@ -202,7 +204,9 @@ MACSDK uses a **two-channel output system**:
 
 - **[Logging Channel Separation]** - Verify new code uses `log_progress()` for user feedback and `logging.*` for technical logs. NEVER use `print()` for either purpose. In CLI mode, check that stdout is reserved exclusively for user interaction (prompts and responses).
 
-- **[Debug Middleware Output]** - In middleware that generates debugging information, ensure all output goes to `logger.debug()` or `logger.info()` - never to `print()` or `sys.stdout.write()`. Debug information should not pollute the user interface.
+- **[Debug Middleware Output]** - In middleware that generates debugging information, ensure all output goes to `logger.debug()` or `logger.info()` - never to `print()` or `sys.stdout.write()`. Debug information should not pollute the user interface. The `PromptDebugMiddleware` uses `logger.info()` and relies on the logger configuration (set in `setup_logging`) for formatting. Never write directly to handler streams to avoid thread-safety issues.
+
+- **[PromptDebugMiddleware - Development Only]** - The `PromptDebugMiddleware` logs **complete, unredacted content** including tool call arguments with sensitive data (API keys, tokens, passwords). This is intentional for debugging effectiveness. The middleware is **exclusively for local development** and should never be enabled in production, staging, or any environment with real credentials. Do NOT add sanitization logic - it adds complexity and false sense of security. If someone enables `--show-llm-calls` in production, that's a deployment/configuration error, not a code issue.
 
 - **[CLI Startup Logging]** - Verify CLI commands call `setup_logging()` early in execution and display the log file path to the user (in CLI mode). The path should be shown in a subtle way (dimmed text) that doesn't disrupt the UI.
 
