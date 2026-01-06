@@ -662,11 +662,21 @@ enable_todo: bool = Field(
 
 **False Positive:** "Using `split(HEADER)[0]` loses content if middleware appends after datetime context"
 
-**Reality:** Safe with current middleware. No existing middleware modifies system message after `DatetimeContextMiddleware` (PromptDebug=read-only, TodoList=manages context not system message, Summarization=trims history not system message).
+**Reality:** Safe with current middleware. Uses HTML comment delimiters (`<!-- macsdk:datetime:start/end -->`) with regex for robust block detection.
 
-**Theoretical risk only:** Custom middleware that appends to system message END after DatetimeContextMiddleware and expects persistence across turns. Simple solution if needed: use regex instead of split.
+**Evidence:** `src/macsdk/middleware/datetime_context.py`
 
-**Evidence:** `src/macsdk/middleware/datetime_context.py`, `src/macsdk/cli/templates/agent/agent.py.j2`
+---
+
+### XML Tags in Prompts - Gemini Behavior
+
+**False Positive:** "Should use XML tags like `<datetime>` for better structure"
+
+**Reality:** XML tags cause Gemini to be more "planful" — adding extra `write_todos` calls and consulting more skills/facts before acting. This increases step count and can hit recursion limits.
+
+HTML comments (`<!-- -->`) are ignored by LLMs, providing robust delimiters for code without affecting agent behavior.
+
+**Evidence:** Empirical testing with same queries: XML=fail (50+ steps), HTML=pass (~10 steps)
 
 ---
 
@@ -906,6 +916,13 @@ The supervisor can recursively call tools (agents), which can themselves use too
 - Default recursion limit: configured via `config.recursion_limit` (typical: 50)
 - LangGraph raises `RecursionError` when limit exceeded
 - Supervisor catches and returns user-friendly error: "The request required too many steps..."
+
+**Isolated Counters (v0.6.0+):**
+Specialist agents have independent recursion limits. In `run_agent_with_tools()`:
+- `recursion_limit` is reset to `config.recursion_limit` (not inherited from supervisor)
+- `metadata.langgraph_step` is cleared (counter starts at 0)
+
+Without this, specialist steps would count against the supervisor's limit, causing premature errors.
 
 **Review focus:** Changes that add tool-calling logic should consider recursion depth.
 

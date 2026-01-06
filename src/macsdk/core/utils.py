@@ -145,6 +145,23 @@ async def run_agent_with_tools(
 
     # Merge callbacks with existing config
     invoke_config: dict = dict(config) if config else {}
+
+    # IMPORTANT: Use independent recursion_limit for specialist agents
+    # The supervisor passes its config (with recursion_limit and step counter) to
+    # agents as tools. If we share these, internal agent steps count against the
+    # supervisor's limit, causing premature GraphRecursionError.
+    # Each specialist agent should have its own independent limit and counter.
+    from .config import config as macsdk_config
+
+    invoke_config.pop("recursion_limit", None)  # Remove supervisor's limit
+    invoke_config["recursion_limit"] = macsdk_config.recursion_limit  # Fresh limit
+
+    # Also clear the step counter from metadata so specialist starts fresh
+    if "metadata" in invoke_config and isinstance(invoke_config["metadata"], dict):
+        invoke_config["metadata"] = {
+            k: v for k, v in invoke_config["metadata"].items() if k != "langgraph_step"
+        }
+
     existing_callbacks = invoke_config.get("callbacks")
     if existing_callbacks is None:
         invoke_config["callbacks"] = [tool_callback]

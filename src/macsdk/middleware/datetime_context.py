@@ -21,7 +21,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Header used to identify datetime context in prompts
+# Delimiters for datetime context block (robust parsing)
+# Note: XML tags like <datetime> cause Gemini to be more "planful" - adding
+# extra write_todos calls and consulting more skills/facts before acting.
+# HTML comments are ignored by LLMs, providing robust delimiters without
+# affecting agent behavior.
+DATETIME_CONTEXT_START = "<!-- macsdk:datetime:start -->"
+DATETIME_CONTEXT_END = "<!-- macsdk:datetime:end -->"
+# Header for human readability inside the block
 DATETIME_CONTEXT_HEADER = "## Current DateTime Context"
 
 
@@ -109,6 +116,7 @@ def format_datetime_context(now: datetime | None = None) -> str:
     refs = _calculate_date_references(now)
 
     return f"""
+{DATETIME_CONTEXT_START}
 {DATETIME_CONTEXT_HEADER}
 
 **Now:**
@@ -135,6 +143,7 @@ like `updated_after`, `created_after`, `since`, etc.
 - "this week" → use {refs["start_of_week"]}
 - "last month" (relative) → use {refs["last_30_days"]}
 - "last month" (calendar) → use {refs["start_of_prev_month"]}
+{DATETIME_CONTEXT_END}
 """
 
 
@@ -172,10 +181,21 @@ class DatetimeContextMiddleware(AgentMiddleware):  # type: ignore[type-arg]
                               seconds. Default is 60 seconds to balance
                               freshness with performance.
         """
+        import re
+
         self.enabled = enabled
         self._cache_ttl = cache_ttl_seconds
         self._cached_context: str | None = None
         self._cache_time: datetime | None = None
+
+        # Pre-compile regex for datetime context removal (performance optimization)
+        pattern_str = (
+            re.escape(DATETIME_CONTEXT_START) + r".*?" + re.escape(DATETIME_CONTEXT_END)
+        )
+        self._cleanup_pattern: re.Pattern[str] = re.compile(
+            pattern_str, flags=re.DOTALL
+        )
+
         logger.debug(
             f"DatetimeContextMiddleware initialized "
             f"(enabled={enabled}, cache_ttl={cache_ttl_seconds}s)"
@@ -213,8 +233,8 @@ class DatetimeContextMiddleware(AgentMiddleware):  # type: ignore[type-arg]
     def _remove_stale_context(self, content: str) -> str:
         """Remove old datetime context from content if present.
 
-        This ensures we can refresh the datetime context with a current
-        timestamp in multi-turn conversations.
+        Uses pre-compiled regex with delimiters for robust parsing,
+        with fallback for legacy format.
 
         Args:
             content: The content string to clean.
@@ -222,10 +242,17 @@ class DatetimeContextMiddleware(AgentMiddleware):  # type: ignore[type-arg]
         Returns:
             Content with datetime context removed (if it was present).
         """
+        # Try delimiters first (new format - robust, uses pre-compiled regex)
+        if DATETIME_CONTEXT_START in content and DATETIME_CONTEXT_END in content:
+            content = self._cleanup_pattern.sub("", content).strip()
+            logger.debug("Removed stale datetime context (delimited format)")
+            return content
+
+        # Fallback for legacy format without delimiters (backward compatibility)
         if DATETIME_CONTEXT_HEADER in content:
-            # Strip everything from the header onwards to refresh timestamp
             content = content.split(DATETIME_CONTEXT_HEADER)[0].strip()
-            logger.debug("Removed stale datetime context for refresh")
+            logger.debug("Removed stale datetime context (legacy format)")
+
         return content
 
     def _inject_datetime_context(self, request: "ModelRequest") -> None:
