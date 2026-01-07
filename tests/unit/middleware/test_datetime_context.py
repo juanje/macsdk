@@ -44,7 +44,7 @@ class TestFormatDatetimeContext:
         test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
         result = format_datetime_context(test_dt)
 
-        assert "2024-06-15 10:30:00 UTC" in result
+        assert "2024-06-15 10:30 UTC" in result
         assert "Saturday, June 15, 2024" in result
         assert "2024-06-15T10:30:00+00:00" in result
 

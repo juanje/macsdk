@@ -79,7 +79,7 @@ def _calculate_date_references(now: datetime) -> dict[str, str]:
 
     return {
         "yesterday": yesterday.strftime("%Y-%m-%dT00:00:00Z"),
-        "last_24h": last_24h.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "last_24h": last_24h.strftime("%Y-%m-%dT%H:%M:00Z"),
         "last_7_days": last_7_days.strftime("%Y-%m-%dT00:00:00Z"),
         "last_30_days": last_30_days.strftime("%Y-%m-%dT00:00:00Z"),
         "start_of_week": start_of_week.strftime("%Y-%m-%dT00:00:00Z"),
@@ -105,7 +105,7 @@ def format_datetime_context(now: datetime | None = None) -> str:
         >>> context = format_datetime_context()
         >>> print(context)
         ## Current DateTime Context
-        - **Current UTC time**: 2024-01-15 14:30:00 UTC
+        - **Current UTC time**: 2024-01-15 14:30 UTC
         - **Current date**: Monday, January 15, 2024
         - **ISO format**: 2024-01-15T14:30:00+00:00
         ...
@@ -120,9 +120,9 @@ def format_datetime_context(now: datetime | None = None) -> str:
 {DATETIME_CONTEXT_HEADER}
 
 **Now:**
-- Current UTC time: {now.strftime("%Y-%m-%d %H:%M:%S UTC")}
+- Current UTC time: {now.strftime("%Y-%m-%d %H:%M UTC")}
 - Current date: {now.strftime("%A, %B %d, %Y")}
-- ISO format: {now.isoformat()}
+- ISO format: {now.strftime("%Y-%m-%dT%H:%M:00+00:00")}
 
 **Pre-calculated dates for API queries (ISO 8601 format):**
 | Reference | Date | Use for |
