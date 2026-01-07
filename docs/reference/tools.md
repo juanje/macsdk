@@ -288,11 +288,190 @@ register_api_service(
 | `ssl_cert` | Path or URL to SSL certificate (URLs are auto-cached) |
 | `ssl_verify` | Verify SSL (default: True) |
 
+## Calculate Tool
+
+The `calculate` tool provides safe mathematical expression evaluation. LLMs are notoriously unreliable at arithmetic, so this tool ensures accurate calculations.
+
+### Why Calculate?
+
+```python
+# ❌ Without calculate tool
+User: "What's 15% of 237?"
+Agent: "That's about 35.5"  # WRONG (correct: 35.55)
+
+# ✅ With calculate tool
+User: "What's 15% of 237?"
+Agent: calculate("(237 * 15) / 100")
+Result: "35.55"  # CORRECT
+```
+
+### Usage
+
+The `calculate` tool is **included by default** in all agent templates. It should not be removed.
+
+```python
+from macsdk.tools import api_get, fetch_file, calculate
+
+def get_tools():
+    return [
+        api_get,
+        fetch_file,
+        calculate,  # Required - LLMs cannot do math reliably
+    ]
+```
+
+### Supported Operations
+
+- **Arithmetic**: `+`, `-`, `*`, `/`, `//`, `%`, `**`
+- **Functions**: `sqrt`, `sin`, `cos`, `tan`, `log`, `log10`, `log2`, `exp`, `abs`, `round`, `min`, `max`, `sum`, `pow`, `floor`, `ceil`, `factorial`, `gcd`
+- **Constants**: `pi`, `e`, `tau`, `inf`
+- **Comparisons**: `<`, `>`, `<=`, `>=`, `==`, `!=`
+
+### Examples
+
+```python
+calculate("2 + 2")                    # "4"
+calculate("sqrt(16) * 2")             # "8.0"
+calculate("sin(pi/2)")                # "1.0"
+calculate("(1000 * 0.15) + 500")      # "650.0"
+calculate("factorial(5)")             # "120"
+calculate("round(3.14159, 2)")        # "3.14"
+```
+
+### Safety
+
+The tool uses `simpleeval` for safe expression evaluation - no access to file system, imports, or dangerous operations.
+
+## Knowledge Tools
+
+Knowledge tools enable agents to access task instructions (skills) and contextual information (facts) packaged with the agent.
+
+### Overview
+
+- **Skills**: Step-by-step instructions for tasks (e.g., "how to deploy a service")
+- **Facts**: Contextual information (e.g., "service catalog with IDs and configurations")
+- **Tools**: `list_skills`, `read_skill`, `list_facts`, `read_fact`
+- **Middleware**: Auto-injects usage instructions
+
+### Quick Start
+
+```bash
+# Create agent with knowledge tools
+macsdk new agent my-agent --with-knowledge
+```
+
+This generates:
+
+```
+my-agent/
+└── src/
+    └── my_agent/
+        ├── agent.py          # Pre-configured
+        ├── skills/           # Task instructions
+        │   └── example-skill.md
+        └── facts/            # Contextual info
+            └── example-fact.md
+```
+
+### Using the Bundle
+
+The recommended pattern uses lazy initialization in `get_tools()`:
+
+**`tools.py`** - Single source of truth:
+
+```python
+from macsdk.tools import api_get, calculate, fetch_file
+
+def get_tools() -> list:
+    """Get all tools for this agent."""
+    from macsdk.tools.knowledge import get_knowledge_bundle
+    
+    _ensure_api_registered()
+    knowledge_tools, _ = get_knowledge_bundle(__package__)
+    
+    return [
+        api_get,
+        fetch_file,
+        calculate,
+        *knowledge_tools,  # list_skills, read_skill, list_facts, read_fact
+    ]
+```
+
+**`agent.py`** - Direct middleware setup:
+
+```python
+from macsdk.tools.knowledge import get_knowledge_bundle
+
+def create_agent_name():
+    tools = get_tools()  # Already includes knowledge tools
+    
+    middleware = [
+        DatetimeContextMiddleware(),
+        TodoListMiddleware(enabled=True),
+    ]
+    
+    _, knowledge_middleware = get_knowledge_bundle(__package__)
+    middleware.extend(knowledge_middleware)
+    
+    return create_agent(tools=tools, middleware=middleware)
+```
+
+This pattern ensures:
+- ✅ Tools visible in CLI `tools` command
+- ✅ Zero duplication
+- ✅ No middleware/tools mismatch
+
+### File Format
+
+All knowledge files use YAML frontmatter:
+
+```markdown
+---
+name: deploy-service
+description: How to deploy a service safely
+---
+
+# Deploy Service
+
+## Steps
+
+1. Check service health
+2. Review alerts
+3. Deploy using API
+4. Monitor deployment
+```
+
+### Agent Workflow
+
+When a user asks to perform a task:
+
+1. Agent calls `list_skills()` to see available instructions
+2. Agent calls `read_skill("deploy-service.md")` to get the steps
+3. Agent follows the instructions systematically
+4. Agent uses `list_facts()` / `read_fact()` for accurate data
+
+### Why Knowledge Tools?
+
+- **Consistency**: Same procedure every time
+- **Accuracy**: Correct service names and IDs from facts
+- **Maintainability**: Update knowledge files, not prompts
+- **Portability**: Knowledge travels with the agent package
+
+### Complete Guide
+
+See [Using Knowledge Tools Guide](../guides/using-knowledge-tools.md) for:
+- Advanced usage patterns
+- Best practices for writing skills/facts
+- Package distribution
+- Troubleshooting
+
 ## Summary
 
 | Approach | When to use |
 |----------|-------------|
 | **Generic tools** | For most cases. Describe the API in the prompt. |
 | **Custom tools** | When you need JSONPath, business logic, or combining calls. |
+| **Calculate tool** | Always include by default. LLMs are bad at math. |
+| **Knowledge tools** | Package task instructions and contextual info with your agent. |
 
 The key is trusting the LLM's ability to understand API descriptions and choose the right endpoints. Fewer tools = less complexity = fewer errors.

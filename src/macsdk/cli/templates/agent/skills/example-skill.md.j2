@@ -1,0 +1,46 @@
+---
+name: example-skill
+description: Example skill showing how to structure task instructions
+---
+
+# Example Skill
+
+This is an example skill that demonstrates how to structure step-by-step task instructions.
+
+## Purpose
+
+Skills provide guidance on how to perform specific tasks. The agent should consult relevant skills before attempting complex operations.
+
+## Steps
+
+1. **Identify the task**: Understand what the user is asking for.
+
+2. **Gather requirements**: Determine what information or resources are needed.
+
+3. **Execute systematically**: Follow the documented procedure step by step.
+
+4. **Verify results**: Check that the task completed successfully.
+
+5. **Report back**: Provide clear feedback to the user.
+
+## Guidelines
+
+- Always check for relevant skills using `list_skills()` before attempting unfamiliar tasks
+- Read the full skill content with `read_skill(path)` before starting
+- Follow the steps in order
+- Document any deviations or issues
+
+## Related
+
+- Check facts for contextual information (service names, configurations, etc.)
+- Use appropriate tools for each step
+
+## Notes
+
+Replace this example with your own task-specific instructions. Structure them clearly with:
+- Purpose/overview
+- Prerequisites
+- Step-by-step instructions
+- Common pitfalls to avoid
+- Related skills or facts
+

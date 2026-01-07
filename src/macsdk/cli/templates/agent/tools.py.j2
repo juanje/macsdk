@@ -3,6 +3,10 @@
 This agent uses MACSDK's generic tools directly:
 - api_get: For REST API calls
 - fetch_file: For downloading files (logs, configs, etc.)
+- calculate: For mathematical calculations (LLMs are unreliable at math)
+{% if with_knowledge %}
+- Knowledge tools: list_skills, read_skill, list_facts, read_fact
+{% endif %}
 
 The API schema is described in the system prompt, letting the LLM
 decide which endpoints to call based on user queries.
@@ -10,8 +14,7 @@ decide which endpoints to call based on user queries.
 
 from __future__ import annotations
 
-# Import generic tools from MACSDK
-from macsdk.tools import api_get, fetch_file
+from macsdk.tools import api_get, calculate, fetch_file
 
 # =============================================================================
 # SERVICE REGISTRATION
@@ -38,13 +41,37 @@ def _ensure_api_registered() -> None:
 
 
 def get_tools() -> list:
-    """Get the tools for this agent, ensuring API is registered.
+    """Get all tools for this agent, ensuring API is registered.
+
+    Includes:
+    - Generic SDK tools (api_get, fetch_file, calculate)
+{% if with_knowledge %}
+    - Knowledge tools (list_skills, read_skill, list_facts, read_fact)
+{% endif %}
+
+    Note: calculate is included by default. LLMs are unreliable at math,
+    so always keep this tool available. Do not remove it.
 
     Returns:
-        List of generic tools from this agent.
+        List of all tools for this agent.
     """
     _ensure_api_registered()
-    return [api_get, fetch_file]
+{% if with_knowledge %}
+
+    # Get knowledge tools configured for this package
+    from macsdk.tools.knowledge import get_knowledge_bundle
+
+    knowledge_tools, _ = get_knowledge_bundle(__package__)
+{% endif %}
+
+    return [
+        api_get,
+        fetch_file,
+        calculate,  # Required - LLMs cannot do math reliably
+{% if with_knowledge %}
+        *knowledge_tools,  # Skills and facts tools
+{% endif %}
+    ]
 
 
 # Tools exposed for CLI inspection

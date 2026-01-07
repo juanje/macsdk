@@ -1,0 +1,56 @@
+---
+name: example-fact
+description: Example fact showing how to structure contextual information
+---
+
+# Example Fact
+
+This is an example fact that demonstrates how to structure contextual information and reference data.
+
+## Purpose
+
+Facts provide accurate background information that the agent needs to work correctly. Unlike skills (which explain *how* to do things), facts explain *what* things are.
+
+## Example Information
+
+### Service Names
+
+- **{{ name }}**: The main service for this agent
+- **api-gateway**: Entry point for all requests
+- **database**: PostgreSQL instance on port 5432
+
+### Configuration Values
+
+- Default timeout: 30 seconds
+- Max retries: 3
+- Rate limit: 100 requests/minute
+
+### Important URLs
+
+- Production API: https://api.example.com
+- Staging API: https://staging-api.example.com
+- Documentation: https://docs.example.com
+
+## How to Use
+
+1. Use `list_facts()` to discover available information
+2. Use `read_fact(path)` to get specific details
+3. Reference facts when you need accurate names, IDs, or configurations
+
+## Guidelines
+
+- Facts should contain **accurate, up-to-date information**
+- Update facts when configurations change
+- Keep facts concise and well-organized
+- Use clear headings and formatting
+
+## Notes
+
+Replace this example with your own domain-specific information:
+- Service names and endpoints
+- Configuration settings
+- Policy rules
+- Team contacts
+- Common identifiers
+- Business-specific terminology
+

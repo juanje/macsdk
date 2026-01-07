@@ -1,0 +1,253 @@
+"""CLI for DevOps Specialist.
+
+This provides commands for testing and inspecting the agent.
+"""
+
+from __future__ import annotations
+
+import sys
+
+import click
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
+console = Console()
+error_console = Console(stderr=True)
+
+
+@click.group(invoke_without_command=True)
+@click.pass_context
+@click.option("--version", "-v", is_flag=True, help="Show version and exit")
+def cli(ctx: click.Context, version: bool) -> None:
+    """DevOps Specialist - Agent for DevOps operations with knowledge tools"""
+    if version:
+        console.print("[bold cyan]DevOps Specialist[/] [dim]v0.1.0[/]")
+        return
+
+    # Show help if no subcommand
+    if ctx.invoked_subcommand is None:
+        _show_welcome()
+
+
+def _show_welcome() -> None:
+    """Show a welcome panel with available commands."""
+    title = Text("DevOps Specialist", style="bold cyan")
+    subtitle = Text("Agent for DevOps operations with knowledge tools", style="dim")
+
+    commands_table = Table(show_header=False, box=None, padding=(0, 2))
+    commands_table.add_column("Command", style="green")
+    commands_table.add_column("Description", style="dim")
+
+    commands_table.add_row("chat", "Start interactive chat")
+    commands_table.add_row("tools", "List available tools")
+    commands_table.add_row("info", "Show agent information")
+
+    content = Text()
+    content.append("\n")
+
+    panel = Panel(
+        commands_table,
+        title=title,
+        subtitle=subtitle,
+        border_style="cyan",
+        padding=(1, 2),
+    )
+    console.print(panel)
+
+    console.print("\n[dim]Examples:[/]")
+    console.print("  [green]devops-specialist chat[/]   Start interactive chat")
+    console.print("  [green]devops-specialist tools[/]  List available tools")
+    console.print("  [green]devops-specialist --help[/] Show all options\n")
+
+
+@cli.command()
+def tools() -> None:
+    """List available tools and their descriptions."""
+    # Lazy import to avoid loading heavy dependencies
+    from .tools import get_tools
+
+    agent_tools = get_tools()
+
+    console.print()
+    table = Table(
+        title="[bold]🔧 Available Tools (Generic SDK)[/]",
+        show_header=True,
+        header_style="bold magenta",
+        border_style="dim",
+        title_justify="left",
+    )
+    table.add_column("Tool", style="cyan", no_wrap=True)
+    table.add_column("Description", style="white")
+
+    for t in agent_tools:
+        name = t.name
+        description = t.description or "No description"
+        # Get first line of description
+        first_line = description.split("\n")[0].strip()
+        table.add_row(name, first_line)
+
+    console.print(table)
+    console.print(f"\n[dim]Total: {len(agent_tools)} generic tools[/]\n")
+
+
+@cli.command()
+def info() -> None:
+    """Show agent information and capabilities."""
+    # Lazy import
+    from .agent import CAPABILITIES
+    from .tools import get_tools
+
+    agent_tools = get_tools()
+
+    console.print()
+    panel = Panel(
+        f"[white]{CAPABILITIES}[/]",
+        title="[bold cyan]DevOps Specialist[/]",
+        subtitle=f"[dim]{len(agent_tools)} tools available[/]",
+        border_style="cyan",
+        padding=(1, 2),
+    )
+    console.print(panel)
+    console.print(
+        "\n[dim]Use[/] [green]devops-specialist tools[/] [dim]to see tool details.[/]\n"
+    )
+
+
+@cli.command()
+@click.option(
+    "--show-llm-calls",
+    is_flag=True,
+    help="Show LLM prompts and responses in logs",
+)
+@click.option(
+    "--verbose",
+    "-v",
+    count=True,
+    help="Increase verbosity (-v=INFO, -vv=DEBUG)",
+)
+@click.option("--quiet", "-q", is_flag=True, help="Quiet mode (ERROR level)")
+@click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]),
+    help="Set log level explicitly",
+)
+@click.option("--log-file", type=click.Path(), help="Custom log file path")
+def chat(
+    show_llm_calls: bool,
+    verbose: int,
+    quiet: bool,
+    log_level: str | None,
+    log_file: str | None,
+) -> None:
+    """Start interactive chat with the agent."""
+    # Lazy import heavy dependencies
+    import asyncio
+    from pathlib import Path
+
+    from macsdk.core import (
+        ConfigurationError,
+        configure_cli_logging,
+        create_config,
+        create_config_with_writer,
+    )
+
+    from .agent import run_devops_specialist
+
+    # Load config from current directory (standalone mode)
+    try:
+        _config = create_config(search_path=Path.cwd())
+        _config.validate_api_key()
+    except ConfigurationError as e:
+        error_console.print(f"[red]✗ Configuration Error:[/] {e}")
+        sys.exit(1)
+
+    # Setup logging (encapsulated helper)
+    try:
+        actual_log, debug_enabled = configure_cli_logging(
+            show_llm_calls=show_llm_calls,
+            verbose=verbose,
+            quiet=quiet,
+            log_level=log_level,
+            log_file=log_file,
+            config=_config,
+            app_name="devops_specialist",
+            log_to_stderr=False,
+        )
+        if actual_log:
+            console.print(f"[dim]📋 Logs: {actual_log}[/]\n")
+    except OSError as e:
+        error_console.print(f"[red]✗ Failed to setup logging:[/] {e}")
+        sys.exit(1)
+
+    # Update global config singleton so nested agents also see debug flag
+    if debug_enabled:
+        from macsdk.core import config as global_config
+
+        global_config.debug = True
+
+    console.print()
+    debug_msg = " [yellow](LLM calls logging)[/]" if debug_enabled else ""
+    console.print(
+        Panel(
+            f"[dim]Type [white]exit[/] or press [white]Ctrl+C[/] to quit[/]{debug_msg}",
+            title="[bold cyan]DevOps Specialist Chat[/]",
+            border_style="cyan",
+        )
+    )
+    console.print()
+
+    if debug_enabled:
+        console.print("[yellow]🔍 LLM calls will be logged[/]\n")
+
+    # Create config with writer for real-time tool progress
+    def progress_writer(msg: str) -> None:
+        console.print(f"[dim]{msg.strip()}[/]")
+
+    run_config = create_config_with_writer(progress_writer)
+
+    async def run() -> None:
+        while True:
+            try:
+                query = console.input("[bold green]>> [/]")
+            except (EOFError, KeyboardInterrupt):
+                console.print("\n[dim]Goodbye![/]")
+                break
+
+            if query.strip().lower() in ("exit", "quit"):
+                console.print("[dim]Goodbye![/]")
+                break
+            if not query.strip():
+                continue
+
+            try:
+                result = await run_devops_specialist(
+                    query, run_config=run_config, debug=debug_enabled
+                )
+                console.print()
+                console.print(
+                    Panel(
+                        result["response"],
+                        title="[bold blue]Response[/]",
+                        border_style="blue",
+                        padding=(1, 2),
+                    )
+                )
+                console.print()
+            except ConfigurationError as e:
+                error_console.print(f"\n[red]✗ Configuration Error:[/] {e}")
+                sys.exit(1)
+            except Exception as e:
+                error_console.print(f"\n[red]✗ Error:[/] {e}")
+
+    asyncio.run(run())
+
+
+def main() -> None:
+    """Entry point for the CLI."""
+    cli()
+
+
+if __name__ == "__main__":
+    main()

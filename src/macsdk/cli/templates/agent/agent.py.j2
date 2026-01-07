@@ -20,6 +20,9 @@ from macsdk.middleware import (
     PromptDebugMiddleware,
     TodoListMiddleware,
 )
+{% if with_knowledge %}
+from macsdk.tools.knowledge import get_knowledge_bundle
+{% endif %}
 
 from .models import AgentResponse
 from .prompts import SYSTEM_PROMPT, TODO_PLANNING_SPECIALIST_PROMPT
@@ -53,7 +56,7 @@ def create_{{ agent_slug }}(
     Returns:
         Configured agent instance.
     """
-    # Get tools with lazy API registration
+    # Get all tools (includes knowledge tools if enabled)
     tools = get_tools()
 
     # Build system prompt with task planning integrated
@@ -79,6 +82,12 @@ def create_{{ agent_slug }}(
 
     # Add todo middleware (always enabled for task planning)
     middleware.append(TodoListMiddleware(enabled=True))
+{% if with_knowledge %}
+
+    # Add knowledge middleware (auto-injects usage instructions)
+    _, knowledge_middleware = get_knowledge_bundle(__package__)
+    middleware.extend(knowledge_middleware)
+{% endif %}
 
     agent = create_agent(
         model=get_answer_model(),
@@ -135,7 +144,7 @@ class {{ agent_class }}:
     tools: list = []  # Loaded lazily
 
     def __init__(self) -> None:
-        """Initialize the agent with tools."""
+        """Initialize the agent with tools{% if with_knowledge %} (includes knowledge tools){% endif %}."""
         self.tools = get_tools()
 
     async def run(
