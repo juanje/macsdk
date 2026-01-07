@@ -147,6 +147,7 @@ def create_agent_project(
     description: str | None,
     output_dir: str,
     macsdk_source: dict[str, str] | None = None,
+    with_knowledge: bool = False,
 ) -> None:
     """Create a new agent project using Jinja2 templates.
 
@@ -155,6 +156,7 @@ def create_agent_project(
         description: Agent description.
         output_dir: Output directory path.
         macsdk_source: Optional dict with 'type' (pip/git/path) and 'value'.
+        with_knowledge: Include knowledge tools (skills/facts) in the agent.
     """
     agent_slug = slugify(name)
     description = description or "A specialist agent for MACSDK chatbots"
@@ -167,15 +169,18 @@ def create_agent_project(
 
     # Prepare template context
     agent_class = derive_class_name(name)
+    package_name = agent_slug  # For use in templates
     context = {
         "name": name,
         "agent_slug": agent_slug,
         "agent_class": agent_class,
+        "package_name": package_name,
         "description": description,
         "description_lower": description.lower(),
         "script_name": agent_slug.replace("_", "-"),
         "uv_sources": _generate_uv_sources(macsdk_source),
         "with_rag": False,  # Agents don't have RAG by default
+        "with_knowledge": with_knowledge,
     }
 
     # Create directory structure
@@ -207,10 +212,33 @@ def create_agent_project(
         content = render_template(template_name, context)
         output_file.write_text(content)
 
+    # Create knowledge directories and examples if requested
+    if with_knowledge:
+        skills_dir = src_dir / "skills"
+        facts_dir = src_dir / "facts"
+        skills_dir.mkdir(parents=True)
+        facts_dir.mkdir(parents=True)
+
+        # Render and write example skill
+        skill_content = render_template("agent/skills/example-skill.md.j2", context)
+        (skills_dir / "example-skill.md").write_text(skill_content)
+
+        # Render and write example fact
+        fact_content = render_template("agent/facts/example-fact.md.j2", context)
+        (facts_dir / "example-fact.md").write_text(fact_content)
+
     # Output success message
     console.print(f"\n[green]✓[/green] Created agent: [bold]{name}[/bold]")
+    if with_knowledge:
+        console.print("  [green]✓[/green] Included knowledge tools (skills/facts)")
     console.print("\n[dim]Next steps:[/dim]")
     console.print(f"  cd {name}")
     console.print("  # Implement your tools in tools.py")
+    if with_knowledge:
+        console.print(
+            "  # Add your skills and facts in src/{}/skills/ and src/{}/facts/".format(
+                agent_slug, agent_slug
+            )
+        )
     console.print("  uv sync")
     console.print("  uv run pytest")

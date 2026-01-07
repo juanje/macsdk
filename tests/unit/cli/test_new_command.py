@@ -118,8 +118,8 @@ class TestNewAgentCommand:
             agent_dir = Path(TEST_AGENT_NAME) / "src" / TEST_AGENT_SLUG
             assert agent_dir.exists()
             assert (agent_dir / "agent.py").exists()
-            assert (agent_dir / "tools.py").exists()
             assert (agent_dir / "models.py").exists()
+            assert (agent_dir / "tools.py").exists()
             assert (agent_dir / "prompts.py").exists()
 
     def test_creates_tests_directory(self) -> None:

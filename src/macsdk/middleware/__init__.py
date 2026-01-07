@@ -6,6 +6,8 @@ to enhance their capabilities:
 - DatetimeContextMiddleware: Injects current datetime into prompts
 - SummarizationMiddleware: Summarizes long conversations
 - PromptDebugMiddleware: Displays prompts sent to the LLM for debugging
+- ToolInstructionsMiddleware: Injects usage instructions for tool sets
+- TodoListMiddleware: Task planning capabilities
 
 Example:
     >>> from macsdk.middleware import DatetimeContextMiddleware, SummarizationMiddleware
@@ -24,11 +26,13 @@ from .datetime_context import (
 from .debug_prompts import PromptDebugMiddleware
 from .summarization import SummarizationMiddleware
 from .todo import TodoListMiddleware
+from .tool_instructions import ToolInstructionsMiddleware
 
 __all__ = [
     "DatetimeContextMiddleware",
     "PromptDebugMiddleware",
     "SummarizationMiddleware",
     "TodoListMiddleware",
+    "ToolInstructionsMiddleware",
     "format_datetime_context",
 ]

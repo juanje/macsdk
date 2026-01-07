@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "devops-specialist"
+version = "0.1.0"
+description = "DevOps specialist agent with knowledge tools"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "macsdk>=0.6.0",
+]
+
+[project.scripts]
+devops-specialist = "devops_specialist.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/devops_specialist"]
+

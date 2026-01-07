@@ -380,10 +380,10 @@ def _create_local_agent(
     templates = [
         ("agent/__init__.py.j2", agent_dir / "__init__.py"),
         ("agent/config.py.j2", agent_dir / "config.py"),
+        ("agent/models.py.j2", agent_dir / "models.py"),
         ("agent/agent.py.j2", agent_dir / "agent.py"),
         ("agent/tools.py.j2", agent_dir / "tools.py"),
         ("agent/prompts.py.j2", agent_dir / "prompts.py"),
-        ("agent/models.py.j2", agent_dir / "models.py"),
     ]
 
     for template_name, output_file in templates:

@@ -1,4 +1,4 @@
-"""Response models for {{ name }}.
+"""Response models for DevOps Specialist.
 
 This module defines the response format for the agent.
 You can extend BaseAgentResponse with additional fields if needed.
@@ -10,7 +10,7 @@ from macsdk.core.models import BaseAgentResponse
 
 
 class AgentResponse(BaseAgentResponse):
-    """Response model for {{ name }}.
+    """Response model for DevOps Specialist.
 
     Inherits from BaseAgentResponse and can be extended with additional fields.
 
@@ -25,4 +25,3 @@ class AgentResponse(BaseAgentResponse):
     """
 
     pass
-

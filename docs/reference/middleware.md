@@ -8,6 +8,7 @@ MACSDK includes middleware components that enhance agent capabilities automatica
 |------------|---------|---------|
 | `DatetimeContextMiddleware` | Injects current date/time and pre-calculated date references | Enabled |
 | `TodoListMiddleware` | Enables task planning for complex multi-step queries | Enabled |
+| `ToolInstructionsMiddleware` | Auto-injects usage instructions for knowledge tools | Optional |
 | `SummarizationMiddleware` | Summarizes long conversations to stay within token limits | Disabled |
 | `PromptDebugMiddleware` | Displays prompts sent to the LLM for debugging | Disabled |
 
@@ -362,6 +363,152 @@ debug: true
 debug_prompt_max_length: 10000   # Increase if prompts are cut off
 debug_show_response: true        # Include model responses in debug
 ```
+
+## ToolInstructionsMiddleware
+
+Automatically injects usage instructions for knowledge tools (skills/facts) into the system prompt.
+
+### Purpose
+
+When agents have access to knowledge tools (`list_skills`, `read_skill`, `list_facts`, `read_fact`), this middleware detects them and adds usage instructions so the agent knows how to use them effectively.
+
+### How It Works
+
+The middleware:
+1. Inspects the agent's tools on initialization
+2. Detects knowledge tool patterns (skills, facts, or both)
+3. Generates appropriate usage instructions
+4. Injects instructions into the system prompt before each model call
+5. Caches instructions for efficiency
+
+### Automatic Usage
+
+When you use `get_knowledge_bundle()`, the middleware is automatically included:
+
+**`tools.py`** - Tools with lazy initialization:
+```python
+from macsdk.tools import api_get, calculate, fetch_file
+
+def get_tools() -> list:
+    from macsdk.tools.knowledge import get_knowledge_bundle
+    
+    _ensure_api_registered()
+    knowledge_tools, _ = get_knowledge_bundle(__package__)
+    
+    return [api_get, fetch_file, calculate, *knowledge_tools]
+```
+
+**`agent.py`** - Middleware setup:
+```python
+from macsdk.tools.knowledge import get_knowledge_bundle
+
+def create_agent_name():
+    tools = get_tools()
+    
+    middleware = [
+        DatetimeContextMiddleware(),
+        TodoListMiddleware(enabled=True),
+    ]
+    
+    _, knowledge_middleware = get_knowledge_bundle(__package__)
+    middleware.extend(knowledge_middleware)  # ToolInstructionsMiddleware is here
+    
+    return create_agent(tools=tools, middleware=middleware)
+```
+
+### Manual Usage
+
+You can also create the middleware manually:
+
+```python
+from macsdk.middleware import ToolInstructionsMiddleware
+from macsdk.tools.knowledge import create_skills_tools, create_facts_tools
+
+# Create tools
+skills_tools = create_skills_tools(skills_path)
+facts_tools = create_facts_tools(facts_path)
+all_tools = [*my_tools, *skills_tools, *facts_tools]
+
+# Create middleware
+middleware = [
+    DatetimeContextMiddleware(),
+    ToolInstructionsMiddleware(tools=all_tools),
+]
+
+agent = create_agent(
+    tools=all_tools,
+    middleware=middleware,
+)
+```
+
+### What Gets Injected
+
+**Skills only**:
+```markdown
+## Skills System
+Use skills to discover how to perform tasks correctly:
+- list_skills(): Get available task instructions
+- read_skill(name): Get detailed steps for a specific task
+```
+
+**Facts only**:
+```markdown
+## Facts System
+Use facts to get accurate contextual information:
+- list_facts(): Get available information categories
+- read_fact(name): Get specific details
+```
+
+**Both skills and facts**:
+```markdown
+## Knowledge System
+You have access to skills (how-to instructions) and facts (contextual information):
+
+**Skills** - Task instructions:
+- list_skills() → read_skill(name) to learn how to do something
+
+**Facts** - Contextual data:
+- list_facts() → read_fact(name) to get accurate information
+```
+
+### Detection Logic
+
+The middleware uses pattern matching to detect tools:
+
+```python
+TOOL_PATTERNS = {
+    frozenset({"list_skills", "read_skill"}): SKILLS_INSTRUCTIONS,
+    frozenset({"list_facts", "read_fact"}): FACTS_INSTRUCTIONS,
+}
+
+COMBINED_PATTERNS = {
+    frozenset({"list_skills", "read_skill", "list_facts", "read_fact"}):
+        KNOWLEDGE_SYSTEM_INSTRUCTIONS,
+}
+```
+
+Combined patterns (both skills and facts) take priority over individual patterns for more concise instructions.
+
+### Performance
+
+- **Caching**: Instructions are generated once and cached
+- **Efficient**: Only inspects tools on initialization
+- **Minimal overhead**: Pattern matching is O(1) with frozensets
+
+### Disabling
+
+To temporarily disable (for testing or debugging):
+
+```python
+middleware = ToolInstructionsMiddleware(tools=tools, enabled=False)
+```
+
+### Complete Guide
+
+See [Using Knowledge Tools Guide](../guides/using-knowledge-tools.md) for:
+- Complete workflow examples
+- Best practices
+- Troubleshooting
 
 ## Using Middleware in Custom Agents
 

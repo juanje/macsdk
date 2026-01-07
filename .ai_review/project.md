@@ -77,11 +77,14 @@ macsdk/
 │   │   ├── datetime_context.py  # Inject current datetime
 │   │   ├── todo.py              # Task planning (LangChain 1.0+)
 │   │   ├── summarization.py     # Context compression
-│   │   └── debug_prompts.py     # Prompt debugging
+│   │   ├── debug_prompts.py     # Prompt debugging
+│   │   └── tool_instructions.py # Auto-inject tool usage instructions
 │   │
 │   ├── tools/               # Reusable tools for agents
 │   │   ├── api.py           # API interaction tools with URL security
-│   │   └── remote.py        # Remote file tools with redirect support
+│   │   ├── remote.py        # Remote file tools with redirect support
+│   │   ├── calculate.py     # Safe math evaluation
+│   │   └── knowledge/       # Skills & facts document tools
 │   │
 │   └── cli/                 # Scaffolding CLI
 │       ├── main.py          # Entry point (macsdk command)
@@ -146,9 +149,12 @@ macsdk/
 - **src/macsdk/agents/rag/recursive_loader.py** - Custom httpx-based web crawler with connection pooling, progress callbacks, and SSL certificate support for RAG document ingestion.
 - **src/macsdk/core/cert_manager.py** - SSL certificate management with download/caching of remote certificates and local path validation. Used by both API tools and RAG crawler.
 - **src/macsdk/middleware/todo.py** - TodoListMiddleware wrapper for LangChain 1.0+ task planning; demonstrates protocol compliance and conditional prompt injection.
+- **src/macsdk/middleware/tool_instructions.py** - Auto-injects tool usage instructions based on detected tool patterns.
 - **src/macsdk/prompts.py** - Re-exports supervisor prompts for backward compatibility. Actual prompts now in `agents/supervisor/prompts.py`.
 - **src/macsdk/agents/__init__.py** - Implements lazy loading for RAGAgent using `__getattr__` with `TYPE_CHECKING` block for static analysis.
 - **src/macsdk/tools/api.py** - API tools (`api_get`, `api_post`) with retry logic, JSONPath extraction, and certificate management.
+- **src/macsdk/tools/calculate.py** - Safe math evaluator with DoS protection (factorial/pow limits, expression length).
+- **src/macsdk/tools/knowledge/** - Skills/facts document tools with frontmatter parsing and path security.
 - **src/macsdk/cli/commands/new.py** - Project scaffolding logic; generates chatbots/agents from Jinja2 templates.
 
 ### Development Conventions
@@ -677,6 +683,54 @@ enable_todo: bool = Field(
 HTML comments (`<!-- -->`) are ignored by LLMs, providing robust delimiters for code without affecting agent behavior.
 
 **Evidence:** Empirical testing with same queries: XML=fail (50+ steps), HTML=pass (~10 steps)
+
+---
+
+### Tool Name Matching in ToolInstructionsMiddleware
+
+**False Positive:** "Hardcoded tool names are tightly coupled. Use metadata/attributes instead."
+
+**Reality:** Tool names (`list_skills`, `read_skill`) are public API contract. Name matching is intentional KISS design. Do NOT suggest metadata approach.
+
+**Evidence:** `src/macsdk/middleware/tool_instructions.py`
+
+---
+
+### Package Resources Without as_file()
+
+**False Positive:** "Should use `importlib.resources.as_file()` for zip-safe compatibility"
+
+**Reality:** Tools create closures needing persistent paths. `as_file()` context exits before tool use. Documented limitation. Do NOT suggest `as_file()`.
+
+**Evidence:** `src/macsdk/tools/knowledge/__init__.py`
+
+---
+
+### Knowledge Bundle Dual Calls
+
+**False Positive:** "Calling `get_knowledge_bundle()` twice is inefficient/duplicative"
+
+**Reality:** Intentional. `get_knowledge_bundle(__package__)` called separately in `tools.py` (for tools) and `agent.py` (for middleware). Enables lazy initialization and CLI visibility. Lightweight operation (just creates instances). Do NOT suggest caching in global variable or wrapper functions.
+
+---
+
+### Calculate Tool DoS Limits
+
+**False Positive:** "Limits too restrictive (factorial max 100, pow max ±1000)"
+
+**Reality:** Security boundaries. `factorial(100)` = 9.3e157 already. Legitimate use fits. Do NOT suggest increasing without justification.
+
+**Evidence:** `src/macsdk/tools/calculate.py`
+
+---
+
+### Path Traversal with is_relative_to()
+
+**False Positive:** "Use `str.startswith()` for path validation instead of `is_relative_to()`"
+
+**Reality:** `is_relative_to()` prevents bypass attacks (e.g., symlinks). `str.startswith()` is vulnerable. Always use `Path.is_relative_to()`.
+
+**Evidence:** `src/macsdk/tools/knowledge/helpers.py`
 
 ---
 
