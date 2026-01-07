@@ -3,28 +3,42 @@
 The supervisor orchestrates specialist agents to answer user queries.
 """
 
+from macsdk.middleware.todo import (
+    TAG_PLAN_END,
+    TAG_PLAN_START,
+    TAG_TASK_COMPLETE_END,
+    TAG_TASK_COMPLETE_START,
+)
+
 # Dynamic placeholder for agent capabilities - will be filled at runtime
 AGENT_CAPABILITIES_PLACEHOLDER = "{agent_capabilities}"
 
 # Task Planning Prompt for specialist agents
 # The TODO middleware is always enabled, providing agents with task planning capabilities.
 # This prompt provides guidance on how to use those capabilities effectively.
-TODO_PLANNING_SPECIALIST_PROMPT = """
+# NOTE: Tags must match constants in middleware/todo.py
+TODO_PLANNING_SPECIALIST_PROMPT = f"""
 ## Task Planning
 
-You have access to an internal task list for complex investigations. Use it to:
-- Break down multi-step queries into discrete tasks
-- Track progress through complex investigations
-- Ensure all necessary information is gathered before responding
+For complex multi-step queries, create a plan to organize your work:
 
-For complex queries, plan your approach step by step before executing.
+**Create a plan:**
+{TAG_PLAN_START}First task
+Second task
+Third task{TAG_PLAN_END}
+
+**Mark tasks complete:**
+{TAG_TASK_COMPLETE_START}First task{TAG_TASK_COMPLETE_END}
+
+The plan will appear in your context showing progress (✓=done, →=in progress, ○=pending).
+Use this for investigations requiring 3+ distinct steps. For simple queries, respond directly.
 """
 
-SUPERVISOR_PROMPT = """You are an intelligent supervisor that orchestrates specialist agents to fully answer user questions.
+SUPERVISOR_PROMPT = f"""You are an intelligent supervisor that orchestrates specialist agents to fully answer user questions.
 
 ## Your Workflow
 
-1. **Plan**: For complex queries, break them into steps using your internal task list.
+1. **Plan**: For complex queries needing 3+ steps, create a plan: {TAG_PLAN_START}Step 1\\nStep 2\\nStep 3{TAG_PLAN_END}
 2. **Route**: Call the most relevant specialist agent(s) for the question.
 3. **Iterate**: Analyze each response. If incomplete or contains IDs/references, make follow-up calls.
 4. **Investigate fully**: Never stop at partial information. If an agent returns IDs or says "for details see...", investigate them.
@@ -40,5 +54,5 @@ SUPERVISOR_PROMPT = """You are an intelligent supervisor that orchestrates speci
 
 ## Available Specialist Agents
 
-{agent_capabilities}
+{{agent_capabilities}}
 """

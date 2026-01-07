@@ -74,7 +74,7 @@ When a user asks "Show me failed pipelines from last week", the agent can immedi
 
 ## TodoListMiddleware
 
-Equips agents with an internal to-do list for tracking complex multi-step investigations.
+Equips agents with task planning capabilities for complex multi-step investigations without requiring explicit tool calls.
 
 ### Configuration
 
@@ -89,28 +89,52 @@ Agents can:
 - Track progress on multi-step investigations
 - Mark tasks as complete
 - Review remaining work before responding
+- All without explicit tool calls (no write_todos/read_todos)
 
 ### How It Works
 
-The middleware provides:
-1. An internal to-do list managed by the agent
-2. Task planning guidance integrated into system prompts:
-   - Supervisor: Planning capabilities built into `SUPERVISOR_PROMPT`
-   - Specialists: Use `TODO_PLANNING_SPECIALIST_PROMPT` (appended to system prompt)
-3. Natural language task tracking (no explicit tool calls needed)
+The middleware manages task planning internally by:
 
-The agent naturally plans and tracks tasks in its reasoning:
+1. **Plan Creation**: Agent uses `<plan>Task 1\nTask 2\nTask 3</plan>` tags in its response
+2. **State Tracking**: Middleware parses tags and reconstructs plan from conversation history (stateless design)
+3. **Prompt Injection**: Current plan with status indicators (✓/→/○) injected into system prompt
+4. **Task Completion**: Agent uses `<task_complete>Task name</task_complete>` to mark tasks done
+
+**Example Agent Response:**
 
 ```
-Agent internal reasoning:
-"Let me break this down:
-1. Check deployment status
-2. Get pipeline details
-3. Fetch error logs
-4. Analyze root cause
+Let me break this down into steps:
 
-Starting with step 1..."
+<plan>Check deployment status
+Get pipeline details
+Fetch error logs
+Analyze root cause</plan>
+
+I'll start by checking the deployment status...
+[performs action]
+<task_complete>Check deployment status</task_complete>
+
+Now getting pipeline details...
 ```
+
+**What the Agent Sees (Next Call):**
+
+```
+## Current Task Plan
+
+✓ Check deployment status
+→ Get pipeline details
+○ Fetch error logs
+○ Analyze root cause
+
+**To update:** <task_complete>task name</task_complete>
+**To create plan:** <plan>Task 1\nTask 2\nTask 3</plan>
+```
+
+**Key Architecture:**
+- **Stateless**: Plan reconstructed from message history on each call
+- **No tool calls**: Eliminates 4-5 extra LLM calls per complex query
+- **Compatible**: Works with LangGraph persistence and multi-turn conversations
 
 ### When It Helps Most
 

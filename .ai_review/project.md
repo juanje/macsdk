@@ -17,7 +17,7 @@
 ### Key Dependencies (for Context7 & API Understanding)
 - **langchain>=1.0.1 / langgraph>=1.0.0** - Critical for reviewing AI agent orchestration, state graphs, and LLM interaction logic. The supervisor uses LangGraph for workflow orchestration.
   - **IMPORTANT:** LangChain released version 1.0.0 in **October 2025**, moving from 0.3.x series. Current version in use: **1.1.2**
-  - **NEW in 1.0+:** `langchain.agents.middleware.TodoListMiddleware` - Native middleware for agent task planning, part of the new middleware system introduced in 1.0
+  - **NEW in 1.0+:** Middleware system (AgentMiddleware base class) - Framework for custom middleware like task planning, summarization, etc.
   - LangChain 1.0 includes: `create_agent` abstraction, middleware system (built-in: human-in-the-loop, summarization, PII redaction), and support for custom middleware
   - If reviewing against older LangChain docs (0.3.x or earlier), note that middleware patterns and `create_agent()` signatures have changed significantly
 - **langchain-google-genai>=2.0.0** - Default LLM provider integration with Google's Gemini models.
@@ -75,7 +75,7 @@ macsdk/
 │   │
 │   ├── middleware/          # Cross-cutting concerns
 │   │   ├── datetime_context.py  # Inject current datetime
-│   │   ├── todo.py              # Task planning (LangChain 1.0+)
+│   │   ├── todo.py              # Task planning (stateless, tag-based)
 │   │   ├── summarization.py     # Context compression
 │   │   ├── debug_prompts.py     # Prompt debugging
 │   │   └── tool_instructions.py # Auto-inject tool usage instructions
@@ -129,7 +129,7 @@ macsdk/
 - **SpecialistAgent Protocol:** Defines the contract all agents must implement (`name`, `capabilities`, `run()`, `as_tool()`). Enables type-safe agent registration.
 - **AgentRegistry:** Singleton registry for dynamic agent discovery and tool conversion. Agents are registered at runtime and exposed as LangChain tools.
 - **Supervisor Agent:** Central orchestrator using LangGraph to route queries. Dynamically builds prompts from registered agent capabilities.
-- **Middleware Pipeline:** Wraps supervisor execution for datetime injection, task planning (LangChain 1.0+), context summarization, and prompt debugging.
+- **Middleware Pipeline:** Wraps supervisor execution for datetime injection, task planning (stateless, tag-based), context summarization, and prompt debugging.
 - **State Management:** Uses `ChatbotState` (TypedDict) to track messages and workflow steps across LangGraph nodes.
 
 **Entry Points:** 
@@ -148,7 +148,7 @@ macsdk/
 - **src/macsdk/agents/rag/indexer.py** - Document loading and indexing with parallel processing, supports HTML (web crawling) and Markdown sources.
 - **src/macsdk/agents/rag/recursive_loader.py** - Custom httpx-based web crawler with connection pooling, progress callbacks, and SSL certificate support for RAG document ingestion.
 - **src/macsdk/core/cert_manager.py** - SSL certificate management with download/caching of remote certificates and local path validation. Used by both API tools and RAG crawler.
-- **src/macsdk/middleware/todo.py** - TodoListMiddleware wrapper for LangChain 1.0+ task planning; demonstrates protocol compliance and conditional prompt injection.
+- **src/macsdk/middleware/todo.py** - TodoListMiddleware implementation for stateless task planning; parses LLM tags, reconstructs plan from history, no tool calls required.
 - **src/macsdk/middleware/tool_instructions.py** - Auto-injects tool usage instructions based on detected tool patterns.
 - **src/macsdk/prompts.py** - Re-exports supervisor prompts for backward compatibility. Actual prompts now in `agents/supervisor/prompts.py`.
 - **src/macsdk/agents/__init__.py** - Implements lazy loading for RAGAgent using `__getattr__` with `TYPE_CHECKING` block for static analysis.
@@ -460,25 +460,20 @@ class DatetimeContextMiddleware(AgentMiddleware):
 
 **Note**: Order matters. Summarization MUST run before supervisor to prevent context window overflow.
 
-### Task Planning Middleware (LangChain 1.0+)
+### Task Planning Middleware
 
-`TodoListMiddleware` from LangChain 1.0+ enables task breakdown for complex queries:
+MACSDK uses **custom TodoListMiddleware** (not LangChain's). Key differences:
 
-```python
-from macsdk.middleware import TodoListMiddleware
-middleware = [TodoListMiddleware(enabled=True)]
-```
+**Stateless Design:**
+- Plan reconstructed from `request.messages` on each call
+- No `self.current_plan` instance variable (would break LangGraph persistence)
+- Uses `<plan>` and `<task_complete>` tags parsed from LLM responses
+- No write_todos/read_todos tool calls
 
-**Configuration (v0.6.0+):**
-- `enable_todo` is deprecated (always `True` for all agents)
-- `TodoListMiddleware` always included in middleware stack
-- System prompts include `TODO_PLANNING_SPECIALIST_PROMPT` automatically
-
-**Important for review:**
-- Middleware source: `langchain.agents.middleware` (LangChain 1.0.0+)
-- Agent creation functions return `Any` (agent only), not tuples
-- System prompt passed to `create_agent(system_prompt=...)`, not `run_agent_with_tools()`
-- `type: ignore[misc]` on wrapper expected (LangChain base may lack types)
+**For Review - Do NOT Flag:**
+- Missing `self.current_plan` - intentionally stateless
+- "Should use LangChain's TodoListMiddleware" - we use custom implementation
+- Parsing tags from text - eliminates 4-5 extra LLM calls per query
 
 ## Code Review Checklist
 
@@ -831,7 +826,7 @@ The `ChatbotState.messages` list follows an **append-only** pattern:
 
 Middleware wraps the supervisor invocation (formatter runs after supervisor in graph):
 1. **DatetimeContext** - injects current datetime
-2. **TodoList** (if `enable_todo=True`) - adds task planning (LangChain 1.0+)
+2. **TodoList** (if `enable_todo=True`) - adds task planning (stateless, tag-based)
 3. **Summarization** - compresses old messages if too large
 4. **Supervisor** - LLM invocation with tools
 5. **DebugPrompts** (if enabled) - logs final prompt
@@ -840,27 +835,23 @@ Middleware wraps the supervisor invocation (formatter runs after supervisor in g
 - Summarization MUST run before supervisor to prevent context window overflow
 - TodoList default: `True` for supervisor, `False` for specialists
 
-### Task Planning Design Decisions (TodoListMiddleware - v0.6.0+)
+### Task Planning Design Decisions (TodoListMiddleware - v0.7.0+)
 
-**Always-on pattern:**
-- TodoListMiddleware enabled for all agents (supervisor and specialists)
-- No configuration required - simplifies agent creation
-- Task planning capabilities universally available
+**Stateless architecture:**
+- No `self.current_plan` - plan reconstructed from `request.messages` each call
+- Compatible with LangGraph persistence (state in messages, not instance variables)
 
-**System prompt integration:**
-- Supervisor: Planning integrated into `SUPERVISOR_PROMPT` 
-- Specialists: `TODO_PLANNING_SPECIALIST_PROMPT` appended to system prompt
-- System prompt passed to `create_agent(system_prompt=...)` at creation time
+**Tag-based (no tool calls):**
+- Parse `<plan>Task 1\nTask 2\nTask 3</plan>` and `<task_complete>Task</task_complete>` from LLM text
+- Eliminates write_todos/read_todos tools (saves 4-5 LLM calls per query)
 
-**Separate prompts by role:**
-- Supervisor planning built into `SUPERVISOR_PROMPT`
-- `TODO_PLANNING_SPECIALIST_PROMPT`: tool-based examples (e.g., "get_deployment_details()")
-- Prevents confusion between orchestration patterns and direct tool usage
+**Always enabled:**
+- TodoListMiddleware included for all agents (no configuration needed)
+- System prompts include planning instructions automatically
 
 **Function signatures (v0.6.0+):**
 - Agent creation functions return `Any` (agent only)
 - System prompt passed to `create_agent()`, not `run_agent_with_tools()`
-- Backward compatibility: `run_agent_with_tools()` accepts deprecated `system_prompt` param with warning
 
 ### Lazy Model Initialization
 
@@ -1168,15 +1159,16 @@ LangChain/LangGraph are rapidly evolving:
 **IMPORTANT - LangChain 1.0+ Breaking Changes (October 2025):**
 - LangChain moved from 0.3.x to 1.0.0 with significant API changes
 - New middleware system: `langchain.agents.middleware` module introduced in 1.0.0
-- Built-in middleware: human-in-the-loop, summarization, PII redaction, and support for custom middleware (including `TodoListMiddleware`)
-- `TodoListMiddleware` is a 1.0+ feature - does NOT exist in 0.3.x or earlier
+- Built-in middleware: human-in-the-loop, summarization, PII redaction, and support for custom middleware
+- `AgentMiddleware` base class enables custom middleware like MACSDK's `TodoListMiddleware`
 - Agent creation with `create_agent()` now supports middleware parameter natively
 
 **IMPORTANT - LangChain Version Context:**
 - Current version in use: **1.1.2** (stable, Oct-Nov 2025)
-- **NEW in 1.0+:** Native middleware system including `TodoListMiddleware` for task planning
+- **NEW in 1.0+:** Native middleware system (`AgentMiddleware` base class) for custom middleware
 - **NEW in 1.1+:** Model profiles (`.profile` attribute), `ModelRetryMiddleware`, smarter summarization
 - `langchain-google-genai`: Currently `>=2.0.0` (v4.0.0 available with breaking changes)
+- **Note:** MACSDK uses custom `TodoListMiddleware` (not LangChain's), optimized for stateless operation
 
 **Review focus:**
 - New LangChain usage should follow 1.0+ patterns, not 0.3.x patterns
