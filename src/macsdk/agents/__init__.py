@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 from .formatter import formatter_node
 from .supervisor import (
     AGENT_CAPABILITIES_PLACEHOLDER,
+    SPECIALIST_PLANNING_PROMPT,
     SUPERVISOR_PROMPT,
     TODO_PLANNING_SPECIALIST_PROMPT,
     create_supervisor_agent,
@@ -34,6 +35,7 @@ __all__ = [
     "supervisor_agent_node",
     "AGENT_CAPABILITIES_PLACEHOLDER",
     "SUPERVISOR_PROMPT",
+    "SPECIALIST_PLANNING_PROMPT",
     "TODO_PLANNING_SPECIALIST_PROMPT",
     # Formatter Agent
     "formatter_node",

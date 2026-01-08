@@ -16,6 +16,7 @@ from .agents.formatter.prompts import (
 )
 from .agents.supervisor.prompts import (
     AGENT_CAPABILITIES_PLACEHOLDER,
+    SPECIALIST_PLANNING_PROMPT,
     SUPERVISOR_PROMPT,
     TODO_PLANNING_SPECIALIST_PROMPT,
 )
@@ -24,7 +25,8 @@ __all__ = [
     # Supervisor prompts
     "AGENT_CAPABILITIES_PLACEHOLDER",
     "SUPERVISOR_PROMPT",
-    "TODO_PLANNING_SPECIALIST_PROMPT",
+    "SPECIALIST_PLANNING_PROMPT",
+    "TODO_PLANNING_SPECIALIST_PROMPT",  # Backward compatibility
     # Formatter prompts
     "FORMATTER_CORE_PROMPT",
     "FORMATTER_TONE_PROMPT",

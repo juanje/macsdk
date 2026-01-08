@@ -29,7 +29,7 @@ llm_reasoning_effort: medium  # low, medium, high
 # =============================================================================
 include_datetime: true  # Inject datetime context with pre-calculated dates
 debug: false            # Show prompts sent to LLM (for debugging)
-# Note: Task planning (TODO middleware) is always enabled for all agents
+# Note: Task planning now via CoT prompts (TodoListMiddleware deprecated)
 
 # Context summarization (for long conversations)
 summarization_enabled: false
@@ -440,7 +440,7 @@ All configuration options can be set via environment variables:
 | `SUMMARIZATION_TRIGGER_TOKENS` | Token threshold for summarization | `100000` |
 | `SUMMARIZATION_KEEP_MESSAGES` | Recent messages to preserve | `6` |
 
-**Note:** Task planning middleware (`TodoListMiddleware`) is always enabled in v0.6.0+. The `ENABLE_TODO` setting is deprecated and has no effect.
+**Note:** `TodoListMiddleware` is deprecated in v0.6.0+. Task planning is now handled via Chain-of-Thought prompts. The `ENABLE_TODO` setting is deprecated and has no effect.
 
 ### Agent Execution
 

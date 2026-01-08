@@ -7,7 +7,7 @@ MACSDK includes middleware components that enhance agent capabilities automatica
 | Middleware | Purpose | Default |
 |------------|---------|---------|
 | `DatetimeContextMiddleware` | Injects current date/time and pre-calculated date references | Enabled |
-| `TodoListMiddleware` | Enables task planning for complex multi-step queries | Enabled |
+| `TodoListMiddleware` | **DEPRECATED** - Task planning now via CoT prompts | N/A |
 | `ToolInstructionsMiddleware` | Auto-injects usage instructions for knowledge tools | Optional |
 | `SummarizationMiddleware` | Summarizes long conversations to stay within token limits | Disabled |
 | `PromptDebugMiddleware` | Displays prompts sent to the LLM for debugging | Disabled |
@@ -72,155 +72,100 @@ The datetime context is injected **at the end** of the system prompt before each
 
 When a user asks "Show me failed pipelines from last week", the agent can immediately use the pre-calculated `Last 7 days` date in its API call without needing custom date logic in the prompt.
 
-## TodoListMiddleware
+## TodoListMiddleware (DEPRECATED)
 
-Equips agents with an internal to-do list for tracking complex multi-step investigations.
+**⚠️ DEPRECATED in v0.6.0+**: This middleware is now a no-op and issues a deprecation warning. Task planning is now handled via Chain-of-Thought (CoT) prompts integrated directly into agent system messages.
 
-### Configuration
+### Migration
 
-**Always Enabled:**
-
-The TodoListMiddleware is always enabled for all agents (both supervisor and specialists) as of v0.6.0. This ensures consistent task planning capabilities across the system without requiring configuration.
-
-### What It Provides
-
-Agents can:
-- Break down complex queries into manageable tasks
-- Track progress on multi-step investigations
-- Mark tasks as complete
-- Review remaining work before responding
-
-### How It Works
-
-The middleware provides:
-1. An internal to-do list managed by the agent
-2. Task planning guidance integrated into system prompts:
-   - Supervisor: Planning capabilities built into `SUPERVISOR_PROMPT`
-   - Specialists: Use `TODO_PLANNING_SPECIALIST_PROMPT` (appended to system prompt)
-3. Natural language task tracking (no explicit tool calls needed)
-
-The agent naturally plans and tracks tasks in its reasoning:
-
-```
-Agent internal reasoning:
-"Let me break this down:
-1. Check deployment status
-2. Get pipeline details
-3. Fetch error logs
-4. Analyze root cause
-
-Starting with step 1..."
-```
-
-### When It Helps Most
-
-The middleware is particularly valuable for:
-- **Complex diagnostics**: "Why did the deployment fail?"
-- **Multi-step investigations**: Queries requiring multiple dependent tool calls
-- **Comprehensive analysis**: Tasks needing information from multiple sources
-
-For simple queries, the middleware adds minimal overhead and the agent naturally skips planning when not needed.
-
-### Benefits
-
-- **Ensures completeness**: Agents follow through on all investigation paths
-- **Better coordination**: Tracks dependencies between steps
-- **Improved reliability**: Reduces premature responses with incomplete information
-
-### Middleware Ordering
-
-When using multiple middleware, order matters. TodoListMiddleware should be placed **before** SummarizationMiddleware:
-
+**Old approach (deprecated):**
 ```python
-middleware = []
-middleware.append(DatetimeContextMiddleware())
-middleware.append(TodoListMiddleware())      # ✓ Before Summarization
-middleware.append(SummarizationMiddleware()) # ✗ After TodoList
-```
-
-**Rationale**: The task planner needs access to full conversation context to make informed planning decisions. If summarization runs first, the planner sees compressed context and may miss important details.
-
-### Example Use Case
-
-**User query**: "Why did deployment #5 fail and what services are affected?"
-
-**With TodoListMiddleware enabled**:
-1. Agent creates internal plan: Check deployment → Get pipeline → Find failed jobs → Get logs → Check affected services
-2. Tracks progress through each step
-3. Ensures all questions are answered before responding
-4. Returns complete answer with root cause and impact
-
-**Without middleware**:
-- May stop after first finding ("Deployment #5 failed")
-- Might miss investigating affected services
-- Less systematic investigation
-
-### Task Planning Prompts
-
-The SDK provides specialized prompts that are automatically integrated into agent system prompts:
-
-#### For Supervisor Agents
-
-The supervisor uses `TODO_PLANNING_SUPERVISOR_PROMPT`, which includes examples of coordinating specialist agents:
-
-```python
-from macsdk.agents.supervisor import TODO_PLANNING_SUPERVISOR_PROMPT
-
-# Examples use agent calls:
-# 1. Call deployment_agent("recent deployments")
-# 2. Call pipeline_agent("pipeline #3 failed jobs")
-# ...
-```
-
-#### For Specialist Agents
-
-Specialist agents use `TODO_PLANNING_SPECIALIST_PROMPT`, which includes examples of using tools:
-
-```python
-from macsdk.agents.supervisor import TODO_PLANNING_SPECIALIST_PROMPT
-
-# Examples use tool calls:
-# 1. Call get_recent_deployments()
-# 2. Call get_deployment_details(deployment_id=7)
-# ...
-```
-
-#### Customizing Prompts
-
-You can override the default prompts in your agent's `prompts.py`:
-
-```python
-from macsdk.agents.supervisor import TODO_PLANNING_COMMON
-
-# Define your own specialized version
-TODO_PLANNING_SPECIALIST_PROMPT = (
-    TODO_PLANNING_COMMON + """
-**Custom Investigation Flow:**
-... your specific examples ...
-"""
-)
-```
-
-**Note:** You can also import from `macsdk.prompts` for backward compatibility:
-```python
-from macsdk.prompts import TODO_PLANNING_SUPERVISOR_PROMPT  # Still works
-```
-
-The SDK automatically injects the appropriate prompt based on the agent type.
-
-### Programmatic Usage
-
-```python
-from langchain.agents import create_agent
 from macsdk.middleware import TodoListMiddleware
 
-middleware = [TodoListMiddleware(enabled=True)]
+middleware = [TodoListMiddleware(enabled=True)]  # Now deprecated
+```
 
-agent = create_agent(
-    model=get_answer_model(),
-    tools=get_tools(),
-    middleware=middleware,
-)
+**New approach (recommended):**
+
+Task planning is now automatic via specialized prompts:
+
+**For Supervisor Agents:**
+- Planning principles are integrated into `SUPERVISOR_PROMPT`
+- No separate planning prompt needed
+- Focuses on tool routing and parallel execution
+
+**For Specialist Agents:**
+```python
+from macsdk.agents.supervisor import SPECIALIST_PLANNING_PROMPT
+
+system_prompt = BASE_PROMPT + "\n\n" + SPECIALIST_PLANNING_PROMPT
+```
+
+### Why the Change?
+
+The tag-based middleware approach had several issues:
+- Added complexity to the agent's reasoning
+- LLMs (especially Gemini) often ignored the explicit tags
+- Extra overhead for planning that could be done naturally
+- Internal planning is more efficient than visible tag-based planning
+
+### Chain-of-Thought Planning
+
+Agents now use internal Chain-of-Thought planning guided by prompt instructions:
+
+**Supervisor** (`SUPERVISOR_PROMPT`):
+- Emphasizes parallel tool calls
+- Guides multi-step workflows
+- Ensures complete investigations
+- Uses direct, imperative language
+
+**Specialists** (`SPECIALIST_PLANNING_PROMPT`):
+- Promotes efficient task execution
+- Minimizes LLM calls
+- Encourages parallelization
+- Guides complex task breakdown
+
+### Example Behavior
+
+Agents now plan internally without explicit tags:
+
+```
+User: "Why did deployment #5 fail and what services are affected?"
+
+Agent's internal reasoning (not visible):
+- Need deployment details
+- Need pipeline logs
+- Need affected services info
+→ Call all three in parallel
+
+Agent's visible response:
+[Makes 3 tool calls in parallel]
+[Synthesizes results]
+"Deployment #5 failed due to..."
+```
+
+### Backward Compatibility
+
+The `TodoListMiddleware` class still exists but does nothing:
+```python
+middleware = [TodoListMiddleware()]  # Issues DeprecationWarning, then passes through
+```
+
+**Recommendation**: Remove `TodoListMiddleware` from your middleware lists. It has no effect and only adds a deprecation warning to your logs.
+
+### Planning Prompts Reference
+
+| Prompt Constant | Status | Usage |
+|-----------------|--------|-------|
+| `SUPERVISOR_PROMPT` | ✅ Active | Includes planning principles for supervisor |
+| `SPECIALIST_PLANNING_PROMPT` | ✅ Active | Append to specialist system prompts |
+| `TODO_PLANNING_SPECIALIST_PROMPT` | ⚠️ Alias | Backward compatibility alias for `SPECIALIST_PLANNING_PROMPT` |
+
+**Import:**
+```python
+from macsdk.agents.supervisor import SPECIALIST_PLANNING_PROMPT
+# or for backward compatibility:
+from macsdk.prompts import TODO_PLANNING_SPECIALIST_PROMPT
 ```
 
 ## SummarizationMiddleware

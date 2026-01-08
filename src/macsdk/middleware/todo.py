@@ -1,67 +1,80 @@
-"""ToDo list middleware for task planning in agents.
+"""Deprecated TodoListMiddleware.
 
-This middleware wraps LangChain's TodoListMiddleware to provide agents
-with task planning capabilities for complex multi-step queries.
+This middleware is deprecated and does nothing. Planning is now handled
+via CoT prompts in the system message for better LLM compatibility.
 """
 
 from __future__ import annotations
 
-import logging
-from typing import TYPE_CHECKING
+import warnings
+from typing import TYPE_CHECKING, Awaitable, Callable
 
-from langchain.agents.middleware import TodoListMiddleware as LCTodoListMiddleware
+from langchain.agents.middleware import AgentMiddleware
 
 if TYPE_CHECKING:
-    pass
+    from langchain.agents.middleware import ModelRequest
+    from langchain.agents.middleware.types import ModelResponse
 
-logger = logging.getLogger(__name__)
 
+class TodoListMiddleware(AgentMiddleware):  # type: ignore[type-arg]
+    """Deprecated: Planning is now handled via CoT prompts.
 
-class TodoListMiddleware(LCTodoListMiddleware):  # type: ignore[misc]
-    """Middleware that equips agents with task planning capabilities.
+    This middleware is kept for backward compatibility but does nothing.
+    Remove from your middleware list for cleaner code.
 
-    This middleware allows agents to:
-    - Break down complex queries into manageable tasks
-    - Track progress on multi-step investigations
-    - Mark tasks as complete
-    - See remaining work in their context
+    The previous tag-based planning approach (<plan>, <task_complete>)
+    was not followed by LLMs (especially Gemini models). The new approach
+    uses Chain-of-Thought planning prompts that encourage visible planning
+    in the message history without requiring special parsing.
 
-    Particularly useful for:
-    - Complex multi-agent coordination
-    - Sequential investigations with dependencies
-    - Long-running tasks requiring multiple tool calls
-
-    Example:
-        >>> from macsdk.middleware import TodoListMiddleware
-        >>> from langchain.agents import create_agent
-        >>>
-        >>> middleware = [TodoListMiddleware()]
-        >>> agent = create_agent(
-        ...     model=get_answer_model(),
-        ...     tools=tools,
-        ...     middleware=middleware,
-        ... )
-
-    The middleware adds a to-do list to the agent's context that the
-    agent can manage using natural language in its reasoning:
-
-    Agent behavior:
-    - "Let me break this down: First check pipeline status, then investigate"
-    - "I've checked the pipeline. Now I need to get the job details."
-    - "Task complete. I have all the information needed."
-
-    Note:
-        The to-do list is internal to the agent. It doesn't require explicit
-        tool calls - the agent naturally plans and tracks tasks in its reasoning.
+    See SUPERVISOR_PLANNING_PROMPT and SPECIALIST_PLANNING_PROMPT for
+    the new planning guidance.
     """
 
     def __init__(self, enabled: bool = True) -> None:
-        """Initialize the middleware.
+        """Initialize the middleware with a deprecation warning.
 
         Args:
-            enabled: Whether the middleware is active. If False,
-                     the middleware passes through without modification.
+            enabled: Ignored, kept for backward compatibility.
         """
         super().__init__()
+        warnings.warn(
+            "TodoListMiddleware is deprecated and does nothing. "
+            "Planning is now handled via CoT prompts in the system message. "
+            "Remove this middleware from your configuration.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.enabled = enabled
-        logger.debug(f"TodoListMiddleware initialized (enabled={enabled})")
+
+    def wrap_model_call(
+        self,
+        request: "ModelRequest",
+        handler: Callable[["ModelRequest"], "ModelResponse"],
+    ) -> "ModelResponse":
+        """Pass through to next handler (no-op).
+
+        Args:
+            request: The model request.
+            handler: The next handler in the middleware chain.
+
+        Returns:
+            The model response from the handler.
+        """
+        return handler(request)
+
+    async def awrap_model_call(
+        self,
+        request: "ModelRequest",
+        handler: Callable[["ModelRequest"], Awaitable["ModelResponse"]],
+    ) -> "ModelResponse":
+        """Pass through to next handler (no-op, async version).
+
+        Args:
+            request: The model request.
+            handler: The next async handler in the middleware chain.
+
+        Returns:
+            The model response from the handler.
+        """
+        return await handler(request)
