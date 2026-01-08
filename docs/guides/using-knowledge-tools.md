@@ -8,8 +8,8 @@ The knowledge system consists of:
 
 - **Skills**: Step-by-step instructions for performing specific tasks
 - **Facts**: Contextual information like service names, configurations, and policies
-- **Tools**: `list_skills`, `read_skill`, `list_facts`, `read_fact`
-- **Middleware**: Automatically injects usage instructions into the system prompt
+- **Tools**: `read_skill`, `read_fact`
+- **Middleware**: Automatically injects usage instructions and inventory into the system prompt
 
 ## Quick Start
 
@@ -56,7 +56,7 @@ def get_tools() -> list:
         api_get,
         fetch_file,
         calculate,
-        *knowledge_tools,  # Adds: list_skills, read_skill, list_facts, read_fact
+        *knowledge_tools,  # Adds: read_skill, read_fact
     ]
 ```
 
@@ -142,26 +142,41 @@ The `get_knowledge_bundle(__package__)` function uses `importlib.resources` to l
 
 ### Automatic Instruction Injection
 
-The `ToolInstructionsMiddleware` detects which knowledge tools are present and automatically adds usage instructions to the system prompt:
+The `ToolInstructionsMiddleware` detects which knowledge tools are present and automatically adds usage instructions and the inventory of available skills/facts to the system prompt:
 
 **Skills only**:
 ```
 ## Skills System
-Use skills to discover how to perform tasks correctly:
-- list_skills(): Get available task instructions
-- read_skill(name): Get detailed steps for a specific task
+You have access to step-by-step task instructions (skills).
+
+**Skills**: Task instructions showing how to perform specific operations.
+Use `read_skill(path)` to get detailed steps for a specific task.
+
+The available skills are listed below...
+
+## Available Skills
+Use `read_skill(path)` to get detailed content.
+
+- **deploy-service** (`deploy-service.md`): How to deploy a service safely
+- **check-health** (`check-health.md`): Service health monitoring
 ```
 
 **Skills + Facts** (combined):
 ```
 ## Knowledge System
-You have access to skills (how-to instructions) and facts (contextual information):
+You have access to skills (how-to instructions) and facts (contextual information).
 
-**Skills** - Task instructions:
-- list_skills() → read_skill(name) to learn how to do something
+**Skills**: Step-by-step task instructions. Use `read_skill(path)` to get the content.
 
-**Facts** - Contextual data:
-- list_facts() → read_fact(name) to get accurate information
+**Facts**: Contextual data and reference information. Use `read_fact(path)` to get details.
+
+The available skills and facts are listed below...
+
+## Available Skills
+...
+
+## Available Facts
+...
 ```
 
 ## Usage Patterns
@@ -170,13 +185,9 @@ You have access to skills (how-to instructions) and facts (contextual informatio
 
 Agent flow when user asks to perform a complex task:
 
-1. **Check for relevant skill**:
-   ```
-   Agent: list_skills()
-   → ["deploy-service", "troubleshoot-alerts", ...]
-   ```
+1. **Check system prompt** for available skills (pre-injected inventory)
 
-2. **Read the skill**:
+2. **Read the relevant skill**:
    ```
    Agent: read_skill("deploy-service.md")
    → Full deployment instructions
@@ -190,11 +201,7 @@ Agent flow when user asks to perform a complex task:
 
 Agent flow when user asks about specific services:
 
-1. **Check available facts**:
-   ```
-   Agent: list_facts()
-   → ["service-catalog", "deployment-windows", ...]
-   ```
+1. **Check system prompt** for available facts (pre-injected inventory)
 
 2. **Read relevant facts**:
    ```
@@ -220,7 +227,7 @@ skills/
 ```
 
 The agent can navigate this structure:
-- List all skills to see categories
+- See all skills in the system prompt inventory
 - Read specific skills as needed
 
 ## Frontmatter Format
@@ -304,7 +311,7 @@ def get_tools() -> list:
         api_get,
         fetch_file,
         calculate,
-        *knowledge_tools,  # list_skills, read_skill, list_facts, read_fact
+        *knowledge_tools,  # read_skill, read_fact
     ]
 ```
 
@@ -455,10 +462,9 @@ Always test your knowledge tools:
 # In your test file
 def test_skills_available():
     tools, _ = get_knowledge_bundle(__package__)
-    list_skills = next(t for t in tools if t.name == "list_skills")
-    skills = list_skills.invoke({})
-    assert len(skills) > 0
-    assert any(s["name"] == "deploy-service" for s in skills)
+    read_skill = next(t for t in tools if t.name == "read_skill")
+    content = read_skill.invoke({"path": "deploy-service.md"})
+    assert "Deploy" in content
 ```
 
 ## Examples

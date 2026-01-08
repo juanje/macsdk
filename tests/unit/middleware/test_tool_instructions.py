@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -62,13 +63,10 @@ class TestToolInstructionsMiddleware:
     def test_skills_pattern_detection(self) -> None:
         """Test that skills pattern is detected and instructions are generated."""
 
-        def list_skills() -> None:
-            pass
-
         def read_skill() -> None:
             pass
 
-        middleware = ToolInstructionsMiddleware(tools=[list_skills, read_skill])
+        middleware = ToolInstructionsMiddleware(tools=[read_skill])
         instructions = middleware._get_instructions()
 
         assert instructions
@@ -77,13 +75,10 @@ class TestToolInstructionsMiddleware:
     def test_facts_pattern_detection(self) -> None:
         """Test that facts pattern is detected and instructions are generated."""
 
-        def list_facts() -> None:
-            pass
-
         def read_fact() -> None:
             pass
 
-        middleware = ToolInstructionsMiddleware(tools=[list_facts, read_fact])
+        middleware = ToolInstructionsMiddleware(tools=[read_fact])
         instructions = middleware._get_instructions()
 
         assert instructions
@@ -92,21 +87,13 @@ class TestToolInstructionsMiddleware:
     def test_combined_pattern_priority(self) -> None:
         """Test that combined pattern takes priority over individual patterns."""
 
-        def list_skills() -> None:
-            pass
-
         def read_skill() -> None:
-            pass
-
-        def list_facts() -> None:
             pass
 
         def read_fact() -> None:
             pass
 
-        middleware = ToolInstructionsMiddleware(
-            tools=[list_skills, read_skill, list_facts, read_fact]
-        )
+        middleware = ToolInstructionsMiddleware(tools=[read_skill, read_fact])
         instructions = middleware._get_instructions()
 
         # Should get combined instructions, not individual ones
@@ -127,13 +114,10 @@ class TestToolInstructionsMiddleware:
     def test_instruction_caching(self) -> None:
         """Test that instructions are cached after first retrieval."""
 
-        def list_skills() -> None:
-            pass
-
         def read_skill() -> None:
             pass
 
-        middleware = ToolInstructionsMiddleware(tools=[list_skills, read_skill])
+        middleware = ToolInstructionsMiddleware(tools=[read_skill])
 
         # First call should generate and cache
         instructions1 = middleware._get_instructions()
@@ -147,13 +131,10 @@ class TestToolInstructionsMiddleware:
     def test_inject_into_existing_system_message(self) -> None:
         """Test that instructions are appended to existing system message."""
 
-        def list_skills() -> None:
-            pass
-
         def read_skill() -> None:
             pass
 
-        middleware = ToolInstructionsMiddleware(tools=[list_skills, read_skill])
+        middleware = ToolInstructionsMiddleware(tools=[read_skill])
 
         # Create mock request with existing system message
         request = MagicMock()
@@ -170,13 +151,10 @@ class TestToolInstructionsMiddleware:
     def test_create_system_message_if_none(self) -> None:
         """Test that system message is created if it doesn't exist."""
 
-        def list_skills() -> None:
-            pass
-
         def read_skill() -> None:
             pass
 
-        middleware = ToolInstructionsMiddleware(tools=[list_skills, read_skill])
+        middleware = ToolInstructionsMiddleware(tools=[read_skill])
 
         # Create mock request with no system message
         request = MagicMock()
@@ -194,10 +172,10 @@ class TestToolInstructionsMiddleware:
     def test_wrap_model_call_when_disabled(self) -> None:
         """Test that wrap_model_call does nothing when disabled."""
 
-        def list_skills() -> None:
+        def read_skill() -> None:
             pass
 
-        middleware = ToolInstructionsMiddleware(tools=[list_skills], enabled=False)
+        middleware = ToolInstructionsMiddleware(tools=[read_skill], enabled=False)
 
         request = MagicMock()
         request.system_message = SystemMessage(content="Original")
@@ -217,10 +195,10 @@ class TestToolInstructionsMiddleware:
     async def test_awrap_model_call_when_disabled(self) -> None:
         """Test that awrap_model_call does nothing when disabled."""
 
-        def list_skills() -> None:
+        def read_skill() -> None:
             pass
 
-        middleware = ToolInstructionsMiddleware(tools=[list_skills], enabled=False)
+        middleware = ToolInstructionsMiddleware(tools=[read_skill], enabled=False)
 
         request = MagicMock()
         request.system_message = SystemMessage(content="Original")
@@ -240,15 +218,10 @@ class TestToolInstructionsMiddleware:
     def test_wrap_model_call_injects_instructions(self) -> None:
         """Test that wrap_model_call injects instructions."""
 
-        def list_skills() -> None:
-            pass
-
         def read_skill() -> None:
             pass
 
-        middleware = ToolInstructionsMiddleware(
-            tools=[list_skills, read_skill], enabled=True
-        )
+        middleware = ToolInstructionsMiddleware(tools=[read_skill], enabled=True)
 
         request = MagicMock()
         request.system_message = SystemMessage(content="Original")
@@ -264,15 +237,10 @@ class TestToolInstructionsMiddleware:
     async def test_awrap_model_call_injects_instructions(self) -> None:
         """Test that awrap_model_call injects instructions."""
 
-        def list_skills() -> None:
-            pass
-
         def read_skill() -> None:
             pass
 
-        middleware = ToolInstructionsMiddleware(
-            tools=[list_skills, read_skill], enabled=True
-        )
+        middleware = ToolInstructionsMiddleware(tools=[read_skill], enabled=True)
 
         request = MagicMock()
         request.system_message = SystemMessage(content="Original")
@@ -285,3 +253,118 @@ class TestToolInstructionsMiddleware:
         # System message should be modified
         assert request.system_message.content.startswith("Original")
         assert len(request.system_message.content) > len("Original")
+
+    def test_inventory_injection_skills(self, tmp_path: Path) -> None:
+        """Test that skills inventory is injected into system prompt."""
+        # Create test skill
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+        (skills_dir / "test.md").write_text(
+            """---
+name: test-skill
+description: A test skill
+---
+Content"""
+        )
+
+        def read_skill() -> None:
+            pass
+
+        middleware = ToolInstructionsMiddleware(
+            tools=[read_skill],
+            skills_dir=skills_dir,
+        )
+
+        instructions = middleware._get_instructions()
+        assert "Available Skills" in instructions
+        assert "test-skill" in instructions
+        assert "test.md" in instructions
+        assert "A test skill" in instructions
+
+    def test_inventory_injection_facts(self, tmp_path: Path) -> None:
+        """Test that facts inventory is injected into system prompt."""
+        # Create test fact
+        facts_dir = tmp_path / "facts"
+        facts_dir.mkdir()
+        (facts_dir / "test.md").write_text(
+            """---
+name: test-fact
+description: A test fact
+---
+Content"""
+        )
+
+        def read_fact() -> None:
+            pass
+
+        middleware = ToolInstructionsMiddleware(
+            tools=[read_fact],
+            facts_dir=facts_dir,
+        )
+
+        instructions = middleware._get_instructions()
+        assert "Available Facts" in instructions
+        assert "test-fact" in instructions
+        assert "test.md" in instructions
+        assert "A test fact" in instructions
+
+    def test_inventory_injection_combined(self, tmp_path: Path) -> None:
+        """Test that both skills and facts inventories are injected."""
+        # Create test skill
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+        (skills_dir / "skill.md").write_text(
+            """---
+name: my-skill
+description: Skill description
+---
+Content"""
+        )
+
+        # Create test fact
+        facts_dir = tmp_path / "facts"
+        facts_dir.mkdir()
+        (facts_dir / "fact.md").write_text(
+            """---
+name: my-fact
+description: Fact description
+---
+Content"""
+        )
+
+        def read_skill() -> None:
+            pass
+
+        def read_fact() -> None:
+            pass
+
+        middleware = ToolInstructionsMiddleware(
+            tools=[read_skill, read_fact],
+            skills_dir=skills_dir,
+            facts_dir=facts_dir,
+        )
+
+        instructions = middleware._get_instructions()
+        assert "Knowledge System" in instructions
+        assert "Available Skills" in instructions
+        assert "my-skill" in instructions
+        assert "Available Facts" in instructions
+        assert "my-fact" in instructions
+
+    def test_inventory_empty_directory(self, tmp_path: Path) -> None:
+        """Test that empty directory shows placeholder message."""
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+
+        def read_skill() -> None:
+            pass
+
+        middleware = ToolInstructionsMiddleware(
+            tools=[read_skill],
+            skills_dir=skills_dir,
+        )
+
+        instructions = middleware._get_instructions()
+        # Should show placeholder message when directory is empty
+        assert "Skills System" in instructions
+        assert "No skills found in directory" in instructions

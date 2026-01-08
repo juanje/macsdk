@@ -181,16 +181,10 @@ description: How to deploy a service
 Deploy instructions""")
 
         tools = create_skills_tools(tmp_path)
-        assert len(tools) == 2
+        assert len(tools) == 1
 
-        # Get the tool functions
-        list_skills = tools[0]
-        read_skill = tools[1]
-
-        # Test list_skills
-        skills = list_skills.invoke({})
-        assert len(skills) == 1
-        assert skills[0]["name"] == "deploy-service"
+        # Get the tool function
+        read_skill = tools[0]
 
         # Test read_skill
         content = read_skill.invoke({"path": "deploy.md"})
@@ -199,10 +193,12 @@ Deploy instructions""")
     def test_skills_tools_empty_directory(self, tmp_path: Path) -> None:
         """Test skills tools with no skills."""
         tools = create_skills_tools(tmp_path)
-        list_skills = tools[0]
+        assert len(tools) == 1
 
-        skills = list_skills.invoke({})
-        assert skills == []
+        # read_skill should still work, just return error for missing files
+        read_skill = tools[0]
+        content = read_skill.invoke({"path": "nonexistent.md"})
+        assert "Error" in content
 
 
 class TestFactsTools:
@@ -218,16 +214,10 @@ description: Information about services
 Service details""")
 
         tools = create_facts_tools(tmp_path)
-        assert len(tools) == 2
+        assert len(tools) == 1
 
-        # Get the tool functions
-        list_facts = tools[0]
-        read_fact = tools[1]
-
-        # Test list_facts
-        facts = list_facts.invoke({})
-        assert len(facts) == 1
-        assert facts[0]["name"] == "service-info"
+        # Get the tool function
+        read_fact = tools[0]
 
         # Test read_fact
         content = read_fact.invoke({"path": "services.md"})
@@ -236,10 +226,12 @@ Service details""")
     def test_facts_tools_empty_directory(self, tmp_path: Path) -> None:
         """Test facts tools with no facts."""
         tools = create_facts_tools(tmp_path)
-        list_facts = tools[0]
+        assert len(tools) == 1
 
-        facts = list_facts.invoke({})
-        assert facts == []
+        # read_fact should still work, just return error for missing files
+        read_fact = tools[0]
+        content = read_fact.invoke({"path": "nonexistent.md"})
+        assert "Error" in content
 
 
 class TestKnowledgeBundle:
@@ -268,10 +260,14 @@ class TestKnowledgeBundle:
             tools.extend(create_skills_tools(skills_dir))
             tools.extend(create_facts_tools(facts_dir))
 
-            middleware = [ToolInstructionsMiddleware(tools=tools)]
+            middleware = [
+                ToolInstructionsMiddleware(
+                    tools=tools, skills_dir=skills_dir, facts_dir=facts_dir
+                )
+            ]
 
             # Verify structure
-            assert len(tools) == 4  # 2 skills + 2 facts tools
+            assert len(tools) == 2  # 1 skill + 1 fact tool
             assert len(middleware) == 1
             assert isinstance(middleware[0], ToolInstructionsMiddleware)
 
@@ -286,9 +282,11 @@ class TestKnowledgeBundle:
             from macsdk.tools.knowledge.skills import create_skills_tools
 
             tools = create_skills_tools(skills_dir)
-            middleware = [ToolInstructionsMiddleware(tools=tools)]
+            middleware = [
+                ToolInstructionsMiddleware(tools=tools, skills_dir=skills_dir)
+            ]
 
-            assert len(tools) == 2  # Only skills tools
+            assert len(tools) == 1  # Only read_skill
             assert len(middleware) == 1
 
     def test_bundle_includes_facts_only(self) -> None:
@@ -302,7 +300,7 @@ class TestKnowledgeBundle:
             from macsdk.tools.knowledge.facts import create_facts_tools
 
             tools = create_facts_tools(facts_dir)
-            middleware = [ToolInstructionsMiddleware(tools=tools)]
+            middleware = [ToolInstructionsMiddleware(tools=tools, facts_dir=facts_dir)]
 
-            assert len(tools) == 2  # Only facts tools
+            assert len(tools) == 1  # Only read_fact
             assert len(middleware) == 1

@@ -33,7 +33,7 @@ def get_tools() -> list:
 
     Includes:
     - Generic SDK tools (api_get, fetch_file, calculate)
-    - Knowledge tools (list_skills, read_skill, list_facts, read_fact)
+    - Knowledge tools (read_skill, read_fact)
 
     Note: calculate is included by default. LLMs are unreliable at math,
     so always keep this tool available. Do not remove it.

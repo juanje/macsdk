@@ -66,15 +66,11 @@ This is a test fact for integration testing.
         return facts_dir
 
     def test_skills_tools_workflow(self, test_skills_dir: Path) -> None:
-        """Test the complete skills workflow: list → read."""
+        """Test the skills workflow: read."""
         tools = create_skills_tools(test_skills_dir)
-        list_skills, read_skill = tools
+        assert len(tools) == 1
 
-        # List skills
-        skills = list_skills.invoke({})
-        assert len(skills) == 1
-        assert skills[0]["name"] == "test-skill"
-        assert skills[0]["description"] == "A test skill for integration testing"
+        read_skill = tools[0]
 
         # Read skill
         content = read_skill.invoke({"path": "test-skill.md"})
@@ -84,15 +80,11 @@ This is a test fact for integration testing.
         assert "Third step" in content
 
     def test_facts_tools_workflow(self, test_facts_dir: Path) -> None:
-        """Test the complete facts workflow: list → read."""
+        """Test the facts workflow: read."""
         tools = create_facts_tools(test_facts_dir)
-        list_facts, read_fact = tools
+        assert len(tools) == 1
 
-        # List facts
-        facts = list_facts.invoke({})
-        assert len(facts) == 1
-        assert facts[0]["name"] == "test-fact"
-        assert facts[0]["description"] == "A test fact for integration testing"
+        read_fact = tools[0]
 
         # Read fact
         content = read_fact.invoke({"path": "test-fact.md"})
@@ -108,23 +100,15 @@ This is a test fact for integration testing.
         facts_tools = create_facts_tools(test_facts_dir)
 
         all_tools = [*skills_tools, *facts_tools]
-        assert len(all_tools) == 4
+        assert len(all_tools) == 2
 
         # Extract tools
-        list_skills = next(t for t in all_tools if t.name == "list_skills")
         read_skill = next(t for t in all_tools if t.name == "read_skill")
-        list_facts = next(t for t in all_tools if t.name == "list_facts")
         read_fact = next(t for t in all_tools if t.name == "read_fact")
 
-        # Use all tools in sequence
-        skills = list_skills.invoke({})
-        assert len(skills) == 1
-
+        # Use tools to read content
         skill_content = read_skill.invoke({"path": "test-skill.md"})
         assert "First step" in skill_content
-
-        facts = list_facts.invoke({})
-        assert len(facts) == 1
 
         fact_content = read_fact.invoke({"path": "test-fact.md"})
         assert "Service ID: 123" in fact_content
@@ -132,27 +116,35 @@ This is a test fact for integration testing.
     def test_middleware_integration(
         self, test_skills_dir: Path, test_facts_dir: Path
     ) -> None:
-        """Test that middleware correctly injects instructions."""
+        """Test that middleware correctly injects instructions and inventory."""
         # Create tools
         skills_tools = create_skills_tools(test_skills_dir)
         facts_tools = create_facts_tools(test_facts_dir)
         all_tools = [*skills_tools, *facts_tools]
 
-        # Create middleware
-        middleware = ToolInstructionsMiddleware(tools=all_tools)
+        # Create middleware with directory paths for inventory
+        middleware = ToolInstructionsMiddleware(
+            tools=all_tools, skills_dir=test_skills_dir, facts_dir=test_facts_dir
+        )
 
         # Verify tool names were extracted
-        assert "list_skills" in middleware.tool_names
         assert "read_skill" in middleware.tool_names
-        assert "list_facts" in middleware.tool_names
         assert "read_fact" in middleware.tool_names
 
-        # Get instructions (should be combined)
+        # Verify inventories were loaded
+        assert len(middleware._skills_inventory) == 1
+        assert len(middleware._facts_inventory) == 1
+
+        # Get instructions (should be combined with inventory)
         instructions = middleware._get_instructions()
         assert instructions
         assert "Knowledge System" in instructions
         assert "Skills" in instructions
         assert "Facts" in instructions
+        assert "Available Skills" in instructions
+        assert "Available Facts" in instructions
+        assert "test-skill" in instructions
+        assert "test-fact" in instructions
 
     def test_middleware_injection(
         self, test_skills_dir: Path, test_facts_dir: Path
@@ -162,8 +154,10 @@ This is a test fact for integration testing.
         skills_tools = create_skills_tools(test_skills_dir)
         all_tools = [*skills_tools]
 
-        # Create middleware
-        middleware = ToolInstructionsMiddleware(tools=all_tools)
+        # Create middleware with skills directory for inventory
+        middleware = ToolInstructionsMiddleware(
+            tools=all_tools, skills_dir=test_skills_dir
+        )
 
         # Create a mock request with system message
         from unittest.mock import MagicMock
@@ -177,12 +171,13 @@ This is a test fact for integration testing.
         # Verify system message was modified
         assert request.system_message.content.startswith("Original system prompt")
         assert "Skills System" in request.system_message.content
-        assert "list_skills()" in request.system_message.content
+        assert "read_skill(path)" in request.system_message.content
+        assert "Available Skills" in request.system_message.content
 
     def test_error_handling_invalid_path(self, test_skills_dir: Path) -> None:
         """Test error handling for invalid file paths."""
         tools = create_skills_tools(test_skills_dir)
-        read_skill = tools[1]
+        read_skill = tools[0]
 
         # Try to read non-existent skill
         result = read_skill.invoke({"path": "nonexistent.md"})
@@ -192,7 +187,7 @@ This is a test fact for integration testing.
     def test_error_handling_path_traversal(self, test_skills_dir: Path) -> None:
         """Test security against path traversal attacks."""
         tools = create_skills_tools(test_skills_dir)
-        read_skill = tools[1]
+        read_skill = tools[0]
 
         # Try path traversal
         result = read_skill.invoke({"path": "../../../etc/passwd"})
@@ -206,11 +201,12 @@ This is a test fact for integration testing.
 
         # Create tools for empty directory
         tools = create_skills_tools(empty_dir)
-        list_skills = tools[0]
+        assert len(tools) == 1
+        read_skill = tools[0]
 
-        # Should return empty list, not error
-        skills = list_skills.invoke({})
-        assert skills == []
+        # Reading non-existent file should return error message
+        result = read_skill.invoke({"path": "nonexistent.md"})
+        assert "Error" in result
 
     def test_hierarchical_structure(self, tmp_path: Path) -> None:
         """Test that hierarchical skill organization works."""
@@ -235,13 +231,14 @@ Content""")
 
         # Create tools
         tools = create_skills_tools(skills_dir)
-        list_skills, read_skill = tools
+        assert len(tools) == 1
+        read_skill = tools[0]
 
-        # List should show both
-        skills = list_skills.invoke({})
-        assert len(skills) == 2
+        # Create middleware to verify inventory captures both
+        middleware = ToolInstructionsMiddleware(tools=tools, skills_dir=skills_dir)
+        assert len(middleware._skills_inventory) == 2
 
-        names = {s["name"] for s in skills}
+        names = {s["name"] for s in middleware._skills_inventory}
         assert "deploy-frontend" in names
         assert "deploy-backend" in names
 
@@ -253,12 +250,13 @@ Content""")
         """Test using only skills without facts."""
         # Create only skills tools
         tools = create_skills_tools(test_skills_dir)
-        middleware = ToolInstructionsMiddleware(tools=tools)
+        middleware = ToolInstructionsMiddleware(tools=tools, skills_dir=test_skills_dir)
 
-        # Should generate skills-only instructions
+        # Should generate skills-only instructions with inventory
         instructions = middleware._get_instructions()
         assert "Skills System" in instructions
-        assert "Facts" not in instructions
+        assert "Available Skills" in instructions
+        assert "Facts" not in instructions or "Available Facts" not in instructions
 
     def test_middleware_caching(
         self, test_skills_dir: Path, test_facts_dir: Path
@@ -268,7 +266,9 @@ Content""")
             *create_skills_tools(test_skills_dir),
             *create_facts_tools(test_facts_dir),
         ]
-        middleware = ToolInstructionsMiddleware(tools=tools)
+        middleware = ToolInstructionsMiddleware(
+            tools=tools, skills_dir=test_skills_dir, facts_dir=test_facts_dir
+        )
 
         # First call
         instructions1 = middleware._get_instructions()
@@ -292,6 +292,5 @@ Content""")
         middleware = ToolInstructionsMiddleware(tools=all_tools)
 
         # Should extract all names correctly
-        assert "list_skills" in middleware.tool_names
         assert "read_skill" in middleware.tool_names
         assert "custom_tool" in middleware.tool_names

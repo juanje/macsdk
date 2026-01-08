@@ -453,7 +453,7 @@ class DatetimeContextMiddleware(AgentMiddleware):
 
 **Middleware Execution Order:**
 1. DatetimeContext - injects temporal context
-2. ToolInstructions (if knowledge tools present) - injects usage instructions
+2. ToolInstructions (if knowledge tools present) - injects usage instructions and knowledge inventory
 3. Summarization - compresses old messages if context too large
 4. Supervisor - main LLM routing
 5. DebugPrompts - logs final prompt for debugging
@@ -717,7 +717,7 @@ HTML comments (`<!-- -->`) are ignored by LLMs, providing robust delimiters for 
 
 **False Positive:** "Hardcoded tool names are tightly coupled. Use metadata/attributes instead."
 
-**Reality:** Tool names (`list_skills`, `read_skill`) are public API contract. Name matching is intentional KISS design. Do NOT suggest metadata approach.
+**Reality:** Tool names (`read_skill`, `read_fact`) are public API contract. Name matching is intentional KISS design. The middleware pre-injects knowledge inventory into the system prompt. Do NOT suggest metadata approach.
 
 **Evidence:** `src/macsdk/middleware/tool_instructions.py`
 
@@ -738,6 +738,36 @@ HTML comments (`<!-- -->`) are ignored by LLMs, providing robust delimiters for 
 **False Positive:** "Calling `get_knowledge_bundle()` twice is inefficient/duplicative"
 
 **Reality:** Intentional. `get_knowledge_bundle(__package__)` called separately in `tools.py` (for tools) and `agent.py` (for middleware). Enables lazy initialization and CLI visibility. Lightweight operation (just creates instances). Do NOT suggest caching in global variable or wrapper functions.
+
+---
+
+### Knowledge Inventory Synchronous I/O
+
+**False Positive:** "Synchronous file I/O in `ToolInstructionsMiddleware.__init__` blocks the event loop"
+
+**Reality:** Middleware instantiated **once at agent creation** during startup, not per-request. File reading happens before application serves requests. Typical: 10-20 files, <10ms. Not in hot path.
+
+**Evidence:** `src/macsdk/cli/templates/agent/agent.py.j2`, `src/macsdk/tools/knowledge/__init__.py`
+
+---
+
+### Knowledge Inventory Size Limits
+
+**False Positive:** "Unbounded inventory injection will exhaust context window"
+
+**Reality:** Typical usage 10-50 items (~50-100 tokens each), well within 128K+ context limits. Example project: 11 items. Future: could warn if >100 items, but not critical.
+
+**Evidence:** `examples/agent-with-knowledge/`
+
+---
+
+### Knowledge Tools Breaking Change (v0.7.0)
+
+**False Positive:** "`list_skills`/`list_facts` removal breaks backward compatibility"
+
+**Reality:** Intentional optimization. Eliminates redundant LLM discovery calls by pre-injecting inventory into prompt. Reduces latency and tokens. All code/tests/docs updated.
+
+**Evidence:** `PROPOSAL_KNOWLEDGE_INVENTORY.md`
 
 ---
 
