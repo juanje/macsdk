@@ -144,21 +144,52 @@ my_agent:
 # No enable_todo needed - always enabled
 ```
 
-### 5. Removed Prompts
+### 5. TodoListMiddleware Deprecation (v0.6.0+)
 
-The following prompt constants were removed from `macsdk.prompts`:
+**Important Change:** `TodoListMiddleware` is now deprecated and replaced with Chain-of-Thought (CoT) planning prompts.
 
-| Prompt | Status | Action |
-|--------|--------|--------|
-| `TODO_PLANNING_COMMON` | ❌ Removed | Remove imports (integrated into middleware) |
-| `TODO_PLANNING_SUPERVISOR_PROMPT` | ❌ Removed | Remove imports (integrated into `SUPERVISOR_PROMPT`) |
-| `TODO_PLANNING_SPECIALIST_PROMPT` | ✅ Available | Import from `macsdk.agents.supervisor.prompts` |
+**What Changed:**
+- `TodoListMiddleware` is now a no-op that issues a `DeprecationWarning`
+- Task planning is now handled via specialized prompts in system messages
+- More efficient, cleaner agent reasoning
 
-**Usage:**
+**Migration:**
+
 ```python
-from macsdk.agents.supervisor.prompts import TODO_PLANNING_SPECIALIST_PROMPT
+# Old approach (deprecated)
+middleware.append(TodoListMiddleware(enabled=True))  # ⚠️ Deprecated
 
-system_prompt = BASE_PROMPT + "\n\n" + TODO_PLANNING_SPECIALIST_PROMPT
+# New approach (recommended)
+# For specialists: Planning prompt is automatically included
+from macsdk.agents.supervisor import SPECIALIST_PLANNING_PROMPT
+system_prompt = BASE_PROMPT + "\n\n" + SPECIALIST_PLANNING_PROMPT
+
+# For supervisor: Planning is built into SUPERVISOR_PROMPT
+# No action needed - it's automatic
+```
+
+**Action Required:**
+- Remove `TodoListMiddleware` from your middleware lists (optional but recommended)
+- Ensure `SPECIALIST_PLANNING_PROMPT` is appended to specialist system prompts
+- Supervisor agents need no changes (planning built-in)
+
+### 6. Planning Prompt Changes
+
+The planning prompts have been reorganized:
+
+| Prompt Constant | Status | Action |
+|-----------------|--------|--------|
+| `SUPERVISOR_PROMPT` | ✅ Updated | Now includes planning principles (no changes needed) |
+| `SPECIALIST_PLANNING_PROMPT` | ✅ Active | Append to specialist system prompts |
+| `TODO_PLANNING_SPECIALIST_PROMPT` | ⚠️ Deprecated Alias | Use `SPECIALIST_PLANNING_PROMPT` instead |
+
+**Imports:**
+```python
+# Recommended
+from macsdk.agents.supervisor import SPECIALIST_PLANNING_PROMPT
+
+# Backward compatible (but deprecated)
+from macsdk.prompts import TODO_PLANNING_SPECIALIST_PROMPT
 ```
 
 ---

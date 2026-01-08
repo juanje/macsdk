@@ -11,6 +11,7 @@ from .agent import (
 )
 from .prompts import (
     AGENT_CAPABILITIES_PLACEHOLDER,
+    SPECIALIST_PLANNING_PROMPT,
     SUPERVISOR_PROMPT,
     TODO_PLANNING_SPECIALIST_PROMPT,
 )
@@ -20,5 +21,6 @@ __all__ = [
     "supervisor_agent_node",
     "AGENT_CAPABILITIES_PLACEHOLDER",
     "SUPERVISOR_PROMPT",
-    "TODO_PLANNING_SPECIALIST_PROMPT",
+    "SPECIALIST_PLANNING_PROMPT",
+    "TODO_PLANNING_SPECIALIST_PROMPT",  # Backward compatibility
 ]

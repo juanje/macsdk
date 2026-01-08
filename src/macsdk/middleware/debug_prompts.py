@@ -346,27 +346,26 @@ class PromptDebugMiddleware(AgentMiddleware):  # type: ignore[type-arg]
 
         self._output(f"\n📊 Total messages: {len(messages)}\n")
 
-    def _log_response(self, response: "ModelResponse", agent_context: str = "") -> None:
-        """Log the model response.
+    def _extract_message(self, response: "ModelResponse") -> Any:
+        """Extract the message from a model response.
 
         Args:
-            response: The model response to log.
-            agent_context: Optional agent context string.
+            response: The model response to extract from.
+
+        Returns:
+            The extracted message, or None if extraction failed.
 
         Note:
-            This method handles multiple LangChain response structures:
+            Handles multiple LangChain response structures:
             - Old: response.message (single AIMessage)
             - New: response.result (can be AIMessage or list of messages)
         """
-        self._output(f"\n🤖 [LLM{agent_context}] After Model Call")
-
-        # Try different response structures (LangChain has changed this over time)
-        msg = None
+        # Try old structure first (pre-v0.3)
         if hasattr(response, "message"):
-            # Old structure (pre-v0.3)
-            msg = response.message
-        elif hasattr(response, "result"):
-            # Newer LangChain structure (v0.3+)
+            return response.message
+
+        # Try newer structure (v0.3+)
+        if hasattr(response, "result"):
             result = response.result
             # result might be a list of messages, take the last one (the AI response)
             if isinstance(result, list):
@@ -375,8 +374,21 @@ class PromptDebugMiddleware(AgentMiddleware):  # type: ignore[type-arg]
                 msg = result
 
             # Verify it's message-like (has content or tool_calls)
-            if msg and not (hasattr(msg, "content") or hasattr(msg, "tool_calls")):
-                msg = None  # Will trigger diagnostic output below
+            if msg and (hasattr(msg, "content") or hasattr(msg, "tool_calls")):
+                return msg
+
+        return None
+
+    def _log_response(self, response: "ModelResponse", agent_context: str = "") -> None:
+        """Log the model response.
+
+        Args:
+            response: The model response to log.
+            agent_context: Optional agent context string.
+        """
+        self._output(f"\n🤖 [LLM{agent_context}] After Model Call")
+
+        msg = self._extract_message(response)
 
         if msg is None:
             # Could not extract response - log diagnostic info

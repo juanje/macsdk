@@ -18,14 +18,13 @@ from macsdk.core import config, get_answer_model, run_agent_with_tools
 from macsdk.middleware import (
     DatetimeContextMiddleware,
     PromptDebugMiddleware,
-    TodoListMiddleware,
 )
 {% if with_knowledge %}
 from macsdk.tools.knowledge import get_knowledge_bundle
 {% endif %}
 
 from .models import AgentResponse
-from .prompts import SYSTEM_PROMPT, TODO_PLANNING_SPECIALIST_PROMPT
+from .prompts import SPECIALIST_PLANNING_PROMPT, SYSTEM_PROMPT
 from .tools import get_tools
 
 if TYPE_CHECKING:
@@ -59,9 +58,8 @@ def create_{{ agent_slug }}(
     # Get all tools (includes knowledge tools if enabled)
     tools = get_tools()
 
-    # Build system prompt with task planning integrated
-    # TODO middleware is always enabled
-    system_prompt = SYSTEM_PROMPT + "\n\n" + TODO_PLANNING_SPECIALIST_PROMPT
+    # Build system prompt with task planning guidance (CoT prompts)
+    system_prompt = SYSTEM_PROMPT + "\n\n" + SPECIALIST_PLANNING_PROMPT
 
     # Build middleware list
     middleware: list[Any] = []
@@ -79,9 +77,6 @@ def create_{{ agent_slug }}(
 
     # Add datetime context middleware
     middleware.append(DatetimeContextMiddleware())
-
-    # Add todo middleware (always enabled for task planning)
-    middleware.append(TodoListMiddleware(enabled=True))
 {% if with_knowledge %}
 
     # Add knowledge middleware (auto-injects usage instructions)

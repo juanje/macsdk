@@ -20,7 +20,6 @@ from ...core.utils import STREAM_WRITER_KEY, log_progress
 from ...middleware import (
     DatetimeContextMiddleware,
     SummarizationMiddleware,
-    TodoListMiddleware,
 )
 from ...middleware.debug_prompts import PromptDebugMiddleware
 from .prompts import SUPERVISOR_PROMPT
@@ -70,8 +69,7 @@ def create_supervisor_agent(
     # Get all registered agents as tools
     agent_tools = get_all_agent_tools()
 
-    # Build dynamic prompt with capabilities
-    # TODO middleware is always enabled, so planning is integrated into the prompt
+    # Build dynamic prompt with capabilities and planning guidance
     system_prompt = _build_supervisor_prompt()
 
     # Build middleware list
@@ -94,9 +92,6 @@ def create_supervisor_agent(
     )
     if datetime_enabled:
         middleware.append(DatetimeContextMiddleware(enabled=True))
-
-    # Add todo middleware (always enabled for task planning)
-    middleware.append(TodoListMiddleware(enabled=True))
 
     # Add summarization middleware if enabled
     if config.summarization_enabled:
