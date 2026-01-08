@@ -352,22 +352,60 @@ class PromptDebugMiddleware(AgentMiddleware):  # type: ignore[type-arg]
         Args:
             response: The model response to log.
             agent_context: Optional agent context string.
+
+        Note:
+            This method handles multiple LangChain response structures:
+            - Old: response.message (single AIMessage)
+            - New: response.result (can be AIMessage or list of messages)
         """
         self._output(f"\n🤖 [LLM{agent_context}] After Model Call")
 
+        # Try different response structures (LangChain has changed this over time)
+        msg = None
         if hasattr(response, "message"):
+            # Old structure (pre-v0.3)
             msg = response.message
-            tool_calls = getattr(msg, "tool_calls", None)
-
-            if tool_calls:
-                # Model decided to call tools
-                self._output(f"\n🔧 MODEL REQUESTING TOOL CALLS ({len(tool_calls)}):")
-                for tc in tool_calls:
-                    self._output(self._format_tool_call(tc))
+        elif hasattr(response, "result"):
+            # Newer LangChain structure (v0.3+)
+            result = response.result
+            # result might be a list of messages, take the last one (the AI response)
+            if isinstance(result, list):
+                msg = result[-1] if result else None
             else:
-                # Regular text response
-                self._output("\n🤖 MODEL RESPONSE:")
-                self._output(self._format_message(msg))
+                msg = result
+
+            # Verify it's message-like (has content or tool_calls)
+            if msg and not (hasattr(msg, "content") or hasattr(msg, "tool_calls")):
+                msg = None  # Will trigger diagnostic output below
+
+        if msg is None:
+            # Could not extract response - log diagnostic info
+            self._output("\n⚠️  Could not extract response content")
+            self._output(f"Response type: {type(response).__name__}")
+            attrs = [a for a in dir(response) if not a.startswith("_")]
+            self._output(f"Available attributes: {attrs}")
+            self._output("")
+            return
+
+        # Log token usage if available (useful for cost tracking and optimization)
+        if hasattr(msg, "response_metadata"):
+            metadata = msg.response_metadata
+            if isinstance(metadata, dict):
+                # Different providers use different keys
+                usage = metadata.get("usage") or metadata.get("token_usage")
+                if usage:
+                    self._output(f"\n📊 TOKEN USAGE: {usage}")
+
+        tool_calls = getattr(msg, "tool_calls", None)
+        if tool_calls:
+            # Model decided to call tools
+            self._output(f"\n🔧 MODEL REQUESTING TOOL CALLS ({len(tool_calls)}):")
+            for tc in tool_calls:
+                self._output(self._format_tool_call(tc))
+        else:
+            # Regular text response
+            self._output("\n🤖 MODEL RESPONSE:")
+            self._output(self._format_message(msg))
 
         self._output("")  # Empty line for separation
 
