@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from ...core.llm import get_answer_model
+from ...core.utils import extract_text_content
 from .prompts import FORMATTER_PROMPT
 
 if TYPE_CHECKING:
@@ -67,7 +68,8 @@ using the information provided below."""
 
     try:
         response = await llm.ainvoke(messages)
-        formatted_response = response.content
+        # Extract text from structured content (handles Gemini's list format)
+        formatted_response = extract_text_content(response.content)
 
         # Update messages with the formatted response (not raw results)
         # This ensures conversation history matches what the user sees
