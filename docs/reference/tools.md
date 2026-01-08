@@ -350,8 +350,8 @@ Knowledge tools enable agents to access task instructions (skills) and contextua
 
 - **Skills**: Step-by-step instructions for tasks (e.g., "how to deploy a service")
 - **Facts**: Contextual information (e.g., "service catalog with IDs and configurations")
-- **Tools**: `list_skills`, `read_skill`, `list_facts`, `read_fact`
-- **Middleware**: Auto-injects usage instructions
+- **Tools**: `read_skill`, `read_fact`
+- **Middleware**: Auto-injects usage instructions and inventory of available skills/facts
 
 ### Quick Start
 
@@ -393,7 +393,7 @@ def get_tools() -> list:
         api_get,
         fetch_file,
         calculate,
-        *knowledge_tools,  # list_skills, read_skill, list_facts, read_fact
+        *knowledge_tools,  # read_skill, read_fact
     ]
 ```
 
@@ -445,10 +445,10 @@ description: How to deploy a service safely
 
 When a user asks to perform a task:
 
-1. Agent calls `list_skills()` to see available instructions
-2. Agent calls `read_skill("deploy-service.md")` to get the steps
+1. Agent sees available skills/facts in the system prompt (pre-injected inventory)
+2. Agent calls `read_skill("deploy-service.md")` to get the detailed steps
 3. Agent follows the instructions systematically
-4. Agent uses `list_facts()` / `read_fact()` for accurate data
+4. Agent uses `read_fact()` for accurate contextual data
 
 ### Why Knowledge Tools?
 
@@ -456,6 +456,7 @@ When a user asks to perform a task:
 - **Accuracy**: Correct service names and IDs from facts
 - **Maintainability**: Update knowledge files, not prompts
 - **Portability**: Knowledge travels with the agent package
+- **Efficiency**: Inventory pre-injected in prompt (no redundant list calls)
 
 ### Complete Guide
 

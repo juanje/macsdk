@@ -40,14 +40,14 @@ def get_knowledge_bundle(
     This is a convenience function that returns tools and middleware
     configured correctly for the knowledge system. The middleware
     auto-detects which tools are included and injects appropriate
-    usage instructions.
+    usage instructions along with the inventory of available skills/facts.
 
     Args:
         package: Package name. Use __package__ for current package.
         skills_subdir: Subdirectory for skills (default: "skills").
         facts_subdir: Subdirectory for facts (default: "facts").
-        include_skills: Include skills tools (list_skills, read_skill).
-        include_facts: Include facts tools (list_facts, read_fact).
+        include_skills: Include skills tools (read_skill).
+        include_facts: Include facts tools (read_fact).
 
     Returns:
         Tuple of (tools, middleware).
@@ -79,19 +79,33 @@ def get_knowledge_bundle(
     package_root = files(package)
     tools: list[Any] = []
 
+    skills_path: Path | None = None
+    facts_path: Path | None = None
+
     # Create skills tools if requested
     if include_skills:
         skills_path = Path(str(package_root.joinpath(skills_subdir)))
         skills_tools = create_skills_tools(skills_path)
-        tools.extend(skills_tools)
+        tools.extend(skills_tools)  # Now just [read_skill]
 
     # Create facts tools if requested
     if include_facts:
         facts_path = Path(str(package_root.joinpath(facts_subdir)))
         facts_tools = create_facts_tools(facts_path)
-        tools.extend(facts_tools)
+        tools.extend(facts_tools)  # Now just [read_fact]
 
     # Create middleware configured for the included tools
-    middleware = [ToolInstructionsMiddleware(tools=tools)] if tools else []
+    # Pass directory paths for inventory injection into system prompt
+    middleware = (
+        [
+            ToolInstructionsMiddleware(
+                tools=tools,
+                skills_dir=skills_path,
+                facts_dir=facts_path,
+            )
+        ]
+        if tools
+        else []
+    )
 
     return tools, middleware

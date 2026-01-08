@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware
@@ -55,30 +56,53 @@ class ToolInstructionsMiddleware(AgentMiddleware):  # type: ignore[type-arg]
         ... )
     """
 
-    # Mapping of tool sets → instructions (pairs)
+    # Mapping of tool sets → instructions
     # These tool names are part of the public API contract
     TOOL_PATTERNS: dict[frozenset[str], str] = {
-        frozenset({"list_skills", "read_skill"}): SKILLS_INSTRUCTIONS,
-        frozenset({"list_facts", "read_fact"}): FACTS_INSTRUCTIONS,
+        frozenset({"read_skill"}): SKILLS_INSTRUCTIONS,
+        frozenset({"read_fact"}): FACTS_INSTRUCTIONS,
     }
 
     # Combined instructions (priority over individual patterns)
     COMBINED_PATTERNS: dict[frozenset[str], str] = {
-        frozenset(
-            {"list_skills", "read_skill", "list_facts", "read_fact"}
-        ): KNOWLEDGE_SYSTEM_INSTRUCTIONS,
+        frozenset({"read_skill", "read_fact"}): KNOWLEDGE_SYSTEM_INSTRUCTIONS,
     }
 
-    def __init__(self, tools: list[Callable[..., Any]], enabled: bool = True) -> None:
+    def __init__(
+        self,
+        tools: list[Callable[..., Any]],
+        skills_dir: Path | None = None,
+        facts_dir: Path | None = None,
+        enabled: bool = True,
+    ) -> None:
         """Initialize the middleware.
 
         Args:
             tools: List of tool functions the agent has access to.
+            skills_dir: Path to skills directory for inventory injection.
+            facts_dir: Path to facts directory for inventory injection.
             enabled: Whether the middleware is active.
         """
         self.enabled = enabled
         self.tool_names = self._extract_tool_names(tools)
         self._cached_instructions: str | None = None
+
+        # Pre-compute inventories for injection into system prompt
+        self._skills_inventory: list[dict[str, str]] = []
+        self._facts_inventory: list[dict[str, str]] = []
+
+        if skills_dir and skills_dir.exists():
+            from ..tools.knowledge.helpers import _list_documents
+
+            self._skills_inventory = _list_documents(skills_dir)
+            logger.debug(f"Loaded {len(self._skills_inventory)} skills for inventory")
+
+        if facts_dir and facts_dir.exists():
+            from ..tools.knowledge.helpers import _list_documents
+
+            self._facts_inventory = _list_documents(facts_dir)
+            logger.debug(f"Loaded {len(self._facts_inventory)} facts for inventory")
+
         logger.debug(
             f"ToolInstructionsMiddleware initialized with tools: {self.tool_names}"
         )
@@ -100,6 +124,28 @@ class ToolInstructionsMiddleware(AgentMiddleware):  # type: ignore[type-arg]
             else:
                 names.add(getattr(tool, "__name__", str(tool)))
         return names
+
+    def _format_inventory(
+        self, title: str, tool_name: str, items: list[dict[str, str]]
+    ) -> str:
+        """Format inventory list for injection into prompt.
+
+        Args:
+            title: Title for the inventory section (e.g., "Skills", "Facts").
+            tool_name: Name of the tool to read items (e.g., "skill", "fact").
+            items: List of inventory items with name, description, and path.
+
+        Returns:
+            Formatted markdown string with inventory listing.
+        """
+        lines = [f"## Available {title}"]
+        lines.append(f"Use `read_{tool_name}(path)` to get detailed content.\n")
+
+        for item in items:
+            desc = item.get("description", "No description")
+            lines.append(f"- **{item['name']}** (`{item['path']}`): {desc}")
+
+        return "\n".join(lines)
 
     def _get_instructions(self) -> str:
         """Get cached instructions based on detected tools.
@@ -127,6 +173,25 @@ class ToolInstructionsMiddleware(AgentMiddleware):  # type: ignore[type-arg]
                 if pattern.issubset(self.tool_names):
                     parts.append(instructions)
                     logger.debug(f"Using individual pattern: {pattern}")
+
+        # Append inventory sections if available
+        if self._skills_inventory:
+            parts.append(
+                self._format_inventory("Skills", "skill", self._skills_inventory)
+            )
+            logger.debug(f"Added {len(self._skills_inventory)} skills to inventory")
+        elif "read_skill" in self.tool_names:
+            # Tool exists but no inventory - prevent confusing "listed below" prompt
+            parts.append("## Available Skills\n\nNo skills found in directory.")
+            logger.debug("Skills tool present but inventory is empty")
+
+        if self._facts_inventory:
+            parts.append(self._format_inventory("Facts", "fact", self._facts_inventory))
+            logger.debug(f"Added {len(self._facts_inventory)} facts to inventory")
+        elif "read_fact" in self.tool_names:
+            # Tool exists but no inventory - prevent confusing "listed below" prompt
+            parts.append("## Available Facts\n\nNo facts found in directory.")
+            logger.debug("Facts tool present but inventory is empty")
 
         self._cached_instructions = "\n\n".join(parts)
         return self._cached_instructions
