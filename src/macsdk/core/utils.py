@@ -21,6 +21,54 @@ if TYPE_CHECKING:
 STREAM_WRITER_KEY = "stream_writer_func"
 
 
+def extract_text_content(content: Any) -> str:
+    """Extract text from LLM message content.
+
+    Handles both string content and structured content (list of dicts
+    with 'type' and 'text' fields, as returned by some models like Gemini 3).
+
+    This is needed because different LLM providers return content in different
+    formats:
+    - Claude/GPT/Gemini 2.5: Returns a string directly
+    - Gemini 3: Returns a list like [{'type': 'text', 'text': '...', 'extras': {...}}]
+
+    Args:
+        content: The message content (string, list, or any other type).
+
+    Returns:
+        The extracted text as a string.
+
+    Example:
+        >>> # String content (Claude/GPT/Gemini 2.5)
+        >>> extract_text_content("Hello world")
+        'Hello world'
+
+        >>> # Structured content (Gemini 3)
+        >>> extract_text_content([{'type': 'text', 'text': 'Hello world'}])
+        'Hello world'
+    """
+    # Handle None explicitly (cleaner for UI than string "None")
+    if content is None:
+        return ""
+
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        # Extract text from structured content blocks (Gemini 3 format)
+        text_parts = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                # Use 'or ""' to handle None values safely
+                text_parts.append(block.get("text") or "")
+            elif isinstance(block, str):
+                text_parts.append(block)
+        # Return empty string for empty lists (cleaner for UI than "[]")
+        return "\n".join(text_parts)
+
+    return str(content)
+
+
 def log_progress(message: str, config: "RunnableConfig | None" = None) -> None:
     """Log a progress message to the stream writer if available, otherwise print.
 
@@ -213,11 +261,15 @@ async def run_agent_with_tools(
         log_progress(f"[{agent_name}] Tools used: {tools_str}\n", config)
 
     response_message = result["messages"][-1]
+    # Extract text content (handles both string and Gemini's structured format)
+    raw_content = (
+        response_message.content
+        if hasattr(response_message, "content")
+        else str(response_message)
+    )
 
     return {
-        "response": response_message.content
-        if hasattr(response_message, "content")
-        else str(response_message),
+        "response": extract_text_content(raw_content),
         "agent_name": agent_name,
         "tools_used": tools_used,
     }

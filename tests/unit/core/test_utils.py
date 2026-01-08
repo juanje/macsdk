@@ -190,3 +190,130 @@ class TestRunAgentWithTools:
         # Should work correctly despite being deprecated
         assert result["response"] == TEST_RESPONSE
         assert result["agent_name"] == TEST_AGENT_NAME
+
+
+class TestExtractTextContent:
+    """Tests for extract_text_content function."""
+
+    def test_extract_text_from_string(self) -> None:
+        """Handles string content directly (Claude/GPT format)."""
+        from macsdk.core.utils import extract_text_content
+
+        text = "Hello, world!"
+        result = extract_text_content(text)
+
+        assert result == text
+        assert isinstance(result, str)
+
+    def test_extract_text_from_gemini_structured_list(self) -> None:
+        """Handles Gemini's structured list format with type and text."""
+        from macsdk.core.utils import extract_text_content
+
+        gemini_content = [
+            {"type": "text", "text": "First paragraph."},
+            {"type": "text", "text": "Second paragraph."},
+        ]
+        result = extract_text_content(gemini_content)
+
+        assert result == "First paragraph.\nSecond paragraph."
+        assert isinstance(result, str)
+
+    def test_extract_text_from_gemini_with_extras(self) -> None:
+        """Handles Gemini format with extras field (signatures, etc)."""
+        from macsdk.core.utils import extract_text_content
+
+        gemini_content = [
+            {
+                "type": "text",
+                "text": "Response text here.",
+                "extras": {"signature": "very_long_base64_signature..."},
+            }
+        ]
+        result = extract_text_content(gemini_content)
+
+        assert result == "Response text here."
+        assert "signature" not in result
+        assert "extras" not in result
+
+    def test_extract_text_from_mixed_list(self) -> None:
+        """Handles lists with both string and dict elements."""
+        from macsdk.core.utils import extract_text_content
+
+        mixed_content = [
+            "Plain string",
+            {"type": "text", "text": "Structured text"},
+        ]
+        result = extract_text_content(mixed_content)
+
+        assert result == "Plain string\nStructured text"
+
+    def test_extract_text_from_list_with_non_text_types(self) -> None:
+        """Ignores non-text type blocks in structured content."""
+        from macsdk.core.utils import extract_text_content
+
+        content = [
+            {"type": "text", "text": "Valid text"},
+            {"type": "image", "data": "base64..."},
+            {"type": "text", "text": "More text"},
+        ]
+        result = extract_text_content(content)
+
+        assert result == "Valid text\nMore text"
+        assert "image" not in result
+
+    def test_extract_text_from_empty_list(self) -> None:
+        """Handles empty list gracefully."""
+        from macsdk.core.utils import extract_text_content
+
+        result = extract_text_content([])
+
+        # Empty list returns empty string (cleaner for UI than "[]")
+        assert result == ""
+
+    def test_extract_text_from_list_without_text_key(self) -> None:
+        """Handles malformed structured content with missing 'text' field."""
+        from macsdk.core.utils import extract_text_content
+
+        malformed = [{"type": "text", "content": "Wrong key"}]
+        result = extract_text_content(malformed)
+
+        # Missing 'text' field results in empty string extraction
+        assert result == ""
+        assert isinstance(result, str)
+
+    def test_extract_text_from_list_with_none_text(self) -> None:
+        """Handles structured content with explicit None text value."""
+        from macsdk.core.utils import extract_text_content
+
+        content_with_none = [{"type": "text", "text": None}]
+        result = extract_text_content(content_with_none)
+
+        # None text value is treated as empty string (doesn't crash)
+        assert result == ""
+        assert isinstance(result, str)
+
+    def test_extract_text_from_other_types(self) -> None:
+        """Converts other types to string."""
+        from macsdk.core.utils import extract_text_content
+
+        assert extract_text_content(123) == "123"
+        assert extract_text_content({"key": "value"}) == "{'key': 'value'}"
+
+    def test_extract_text_from_none(self) -> None:
+        """Handles None explicitly (cleaner for UI than 'None' string)."""
+        from macsdk.core.utils import extract_text_content
+
+        # None returns empty string instead of 'None' for cleaner UI
+        assert extract_text_content(None) == ""
+
+    def test_extract_text_preserves_newlines(self) -> None:
+        """Preserves newlines within text blocks."""
+        from macsdk.core.utils import extract_text_content
+
+        content = [
+            {"type": "text", "text": "Line 1\nLine 2\nLine 3"},
+        ]
+        result = extract_text_content(content)
+
+        assert result == "Line 1\nLine 2\nLine 3"
+        assert result.count("\n") == 2

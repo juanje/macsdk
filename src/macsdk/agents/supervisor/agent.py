@@ -16,7 +16,7 @@ from langgraph.config import get_stream_writer
 from ...core.config import config
 from ...core.llm import get_answer_model
 from ...core.registry import get_all_agent_tools, get_all_capabilities
-from ...core.utils import STREAM_WRITER_KEY, log_progress
+from ...core.utils import STREAM_WRITER_KEY, extract_text_content, log_progress
 from ...middleware import (
     DatetimeContextMiddleware,
     SummarizationMiddleware,
@@ -114,34 +114,6 @@ def create_supervisor_agent(
     return agent
 
 
-def _extract_text_content(content: str | list) -> str:
-    """Extract text from message content.
-
-    Handles both string content and structured content (list of dicts
-    with 'type' and 'text' fields, as returned by some models).
-
-    Args:
-        content: The message content (string or list).
-
-    Returns:
-        The extracted text as a string.
-    """
-    if isinstance(content, str):
-        return content
-
-    if isinstance(content, list):
-        # Extract text from structured content blocks
-        text_parts = []
-        for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                text_parts.append(block.get("text", ""))
-            elif isinstance(block, str):
-                text_parts.append(block)
-        return "\n".join(text_parts) if text_parts else str(content)
-
-    return str(content)
-
-
 def _build_conversation_context(messages: list, max_messages: int = 10) -> list:
     """Build conversation context from recent messages.
 
@@ -226,7 +198,7 @@ async def supervisor_agent_node(
             if hasattr(response_message, "content")
             else str(response_message)
         )
-        response_text = _extract_text_content(raw_content)
+        response_text = extract_text_content(raw_content)
 
         log_progress("Response ready.\n")
 
