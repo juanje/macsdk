@@ -143,10 +143,13 @@ The agent can discover and use these resources whether installed system-wide or 
 ## Development
 
 The agent structure:
-- `agent.py`: Agent creation, middleware configuration
+- `agent.py`: CAPABILITIES (system prompt) + agent creation + middleware
 - `tools.py`: Single source of truth for all tools
 - `models.py`: Response model (extends BaseAgentResponse)
-- `prompts.py`: System prompt and capabilities
 - `cli.py`: Command-line interface (chat, tools, info commands)
 - `skills/`: Task instruction documents (6 DevOps skills)
 - `facts/`: Contextual information (3 reference documents)
+
+**Note**: `CAPABILITIES` in `agent.py` is the single source of truth - it's
+used both as the system prompt and for supervisor routing. Skills and facts
+extend the agent's knowledge without code changes.

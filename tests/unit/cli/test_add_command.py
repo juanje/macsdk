@@ -269,7 +269,7 @@ class TestCreateLocalAgent:
         assert (agent_dir / "models.py").exists()
         assert (agent_dir / "agent.py").exists()
         assert (agent_dir / "tools.py").exists()
-        assert (agent_dir / "prompts.py").exists()
+        # prompts.py no longer generated - CAPABILITIES is the system prompt
 
     def test_fails_if_agent_exists(self, tmp_path: Path) -> None:
         """Raises SystemExit if agent already exists."""

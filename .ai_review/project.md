@@ -279,9 +279,10 @@ class SpecialistAgent(Protocol):
 
 **Key Principles:**
 1. **Protocol-based, not inheritance-based** - Agents don't need to inherit from a base class; they just need to implement the protocol methods.
-2. **Capabilities are LLM prompts** - The `capabilities` string is injected into the supervisor's prompt, so it must be descriptive and actionable.
+2. **CAPABILITIES as Single Source of Truth** - The `CAPABILITIES` constant serves dual purpose: it's used by the supervisor for routing AND as the agent's base `SYSTEM_PROMPT`. This eliminates duplication and ensures alignment.
 3. **Agents as Tools** - The `as_tool()` method wraps the agent for LangGraph tool invocation, enabling the supervisor to call agents like function tools.
 4. **Context dict pattern** - Agents receive optional context (conversation history, config) via dict parameter rather than constructor injection.
+5. **Extensibility via Skills/Facts** - Agents can be extended with domain knowledge through skills (step-by-step instructions) and facts (reference data) without modifying core code.
 
 ### LangGraph State Pattern
 
@@ -471,8 +472,14 @@ class DatetimeContextMiddleware(AgentMiddleware):
 
 **Specialist Planning:**
 ```python
+# In agent.py - CAPABILITIES serves as SYSTEM_PROMPT
 from macsdk.agents.supervisor import SPECIALIST_PLANNING_PROMPT
-system_prompt = BASE_PROMPT + "\n\n" + SPECIALIST_PLANNING_PROMPT
+
+CAPABILITIES = """Your agent description here..."""
+SYSTEM_PROMPT = CAPABILITIES  # Single source of truth
+
+# Planning prompt is appended by run_agent_with_tools() or manually
+full_prompt = SYSTEM_PROMPT + "\n\n" + SPECIALIST_PLANNING_PROMPT
 ```
 
 **Backward Compatibility:**
@@ -485,6 +492,7 @@ system_prompt = BASE_PROMPT + "\n\n" + SPECIALIST_PLANNING_PROMPT
 - Planning is now via prompts, not middleware
 - Agent creation functions return `Any` (agent only), not tuples
 - System prompt passed to `create_agent(system_prompt=...)`, not `run_agent_with_tools()`
+- **Specialist agents no longer have `prompts.py`** - `CAPABILITIES` in `agent.py` is the single source of truth
 
 ## Code Review Checklist
 
@@ -771,6 +779,35 @@ HTML comments (`<!-- -->`) are ignored by LLMs, providing robust delimiters for 
 
 ---
 
+### Progressive Disclosure for Skills/Facts
+
+**False Positive:** "Skills/facts in subdirectories are not listed in the inventory"
+
+**Reality:** Intentional design pattern. `_list_documents()` uses `glob("*.md")` (not `rglob`) to list only top-level documents. This implements progressive disclosure:
+
+1. **Top-level documents** are listed in the inventory (injected into system prompt)
+2. **Sub-documents** (in subdirectories) are accessed on-demand via `read_skill`/`read_fact`
+3. **Top-level documents link to sub-documents** in their content
+
+**Benefits:**
+- Reduces initial prompt size (only high-level skills/facts shown)
+- Agent reads generic skill first, then specific sub-skills if needed
+- Better context management for complex knowledge hierarchies
+
+**Pattern:**
+```
+skills/
+├── deployment.md          # Listed in inventory, links to sub-skills
+├── deployment/
+│   ├── kubernetes.md      # Accessed via read_skill("deployment/kubernetes.md")
+│   └── openshift.md       # Accessed via read_skill("deployment/openshift.md")
+└── monitoring.md          # Listed in inventory
+```
+
+**Evidence:** `src/macsdk/tools/knowledge/helpers.py`, `docs/guides/using-knowledge-tools.md`
+
+---
+
 ### Calculate Tool DoS Limits
 
 **False Positive:** "Limits too restrictive (factorial max 100, pow max ±1000)"
@@ -812,7 +849,8 @@ Built-in agents (supervisor, formatter, RAG) are now organized under `src/macsdk
 - **TYPE_CHECKING Block**: Ensures RAGAgent is visible to mypy/IDEs while maintaining runtime lazy behavior
 - **`__dir__` Implementation**: Enables RAGAgent to appear in `dir()` and IDE autocompletion
 - **Backward Compatibility**: Re-exports in `core/__init__.py` and `prompts.py` maintain existing import paths
-- **Prompts Colocated**: Agent prompts moved to respective `agents/<agent>/prompts.py` for better organization
+- **Built-in Agent Prompts**: Supervisor and formatter have `prompts.py` for composable prompts
+- **Specialist Agent Simplification**: Generated specialist agents use `CAPABILITIES = SYSTEM_PROMPT` pattern (no separate `prompts.py`)
 
 **Graph Flow:**
 ```
@@ -825,6 +863,17 @@ START → supervisor_node → formatter_node → END
 - Check lazy loading doesn't break at runtime due to missing optional dependencies
 - Ensure `TYPE_CHECKING` imports don't create circular dependencies
 - Verify `agent_results` field is properly initialized in all state creation points
+
+### Specialist Agent Architecture (CAPABILITIES = SYSTEM_PROMPT)
+
+**For reviewers:** Specialist agents use `SYSTEM_PROMPT = CAPABILITIES` pattern. This is intentional:
+- No separate `prompts.py` for specialists (only supervisor/formatter have one)
+- `CAPABILITIES` serves dual purpose: supervisor routing + agent system prompt
+- Domain knowledge added via skills/facts, not prompt files
+
+**Do NOT suggest:** Creating `prompts.py` for specialist agents, separating CAPABILITIES from SYSTEM_PROMPT.
+
+---
 
 ### Protocol-Based Architecture (not Inheritance)
 

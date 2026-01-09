@@ -31,28 +31,28 @@ MACSDK is a comprehensive SDK for building customizable multi-agent chatbots. It
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                            MACSDK                                    │
+│                            MACSDK                                   │
 ├─────────────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌────────────┐ │
-│  │    Core     │  │    CLI      │  │   Tools     │  │   Agents   │ │
-│  │             │  │             │  │             │  │            │ │
-│  │ - Protocol  │  │ - new       │  │ - api_get   │  │ - RAG      │ │
-│  │ - Registry  │  │ - add-agent │  │ - api_post  │  │   Agent    │ │
-│  │ - Supervisor│  │ - list      │  │ - fetch_file│  │            │ │
-│  │ - Config    │  │             │  │             │  │            │ │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └────────────┘ │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌────────────┐  │
+│  │    Core     │  │    CLI      │  │   Tools     │  │   Agents   │  │
+│  │             │  │             │  │             │  │            │  │
+│  │ - Protocol  │  │ - new       │  │ - api_get   │  │ - RAG      │  │
+│  │ - Registry  │  │ - add-agent │  │ - api_post  │  │   Agent    │  │
+│  │ - Supervisor│  │ - list      │  │ - fetch_file│  │            │  │
+│  │ - Config    │  │             │  │             │  │            │  │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └────────────┘  │
 ├─────────────────────────────────────────────────────────────────────┤
-│                        Interfaces                                    │
-│  ┌─────────────────────────────┐  ┌─────────────────────────────┐  │
-│  │      CLI Interface          │  │      Web Interface          │  │
-│  │  Rich tables, panels,       │  │  FastAPI + WebSocket        │  │
-│  │  progress indicators        │  │  real-time streaming        │  │
-│  └─────────────────────────────┘  └─────────────────────────────┘  │
+│                        Interfaces                                   │
+│  ┌─────────────────────────────┐  ┌─────────────────────────────┐   │
+│  │      CLI Interface          │  │      Web Interface          │   │
+│  │  Rich tables, panels,       │  │  FastAPI + WebSocket        │   │
+│  │  progress indicators        │  │  real-time streaming        │   │
+│  └─────────────────────────────┘  └─────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────────┤
-│                    Custom Chatbots                                   │
+│                    Custom Chatbots                                  │
 │  Uses macsdk.core, registers external agents                        │
 ├─────────────────────────────────────────────────────────────────────┤
-│                    External Agents                                   │
+│                    External Agents                                  │
 │  Separate packages implementing SpecialistAgent protocol            │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -66,6 +66,24 @@ MACSDK is a comprehensive SDK for building customizable multi-agent chatbots. It
 5. **Run**: Start with `my-chatbot chat` (CLI) or `my-chatbot web` (web interface)
 
 The supervisor automatically routes user queries to the appropriate specialist agents based on their declared capabilities. The response formatter then synthesizes the raw results into a polished, user-friendly response.
+
+## Agent Philosophy: Simple and Extensible
+
+MACSDK agents follow a **single source of truth** principle:
+
+```
+CAPABILITIES = "What this agent can do"
+└── Used as system prompt (tells LLM what to do)
+└── Used by supervisor (decides when to route here)
+└── Used as documentation (describes the agent)
+```
+
+**Extend without code changes:**
+- **Tools**: New actions the agent can execute
+- **Skills**: Step-by-step instructions for complex tasks
+- **Facts**: Domain context and reference data
+
+Agents work out of the box and can be customized declaratively.
 
 ## Features
 

@@ -16,6 +16,7 @@ from langchain.agents import create_agent
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, tool
 
+from macsdk.agents.supervisor import SPECIALIST_PLANNING_PROMPT
 from macsdk.core import config, get_answer_model, run_agent_with_tools
 from macsdk.middleware import (
     DatetimeContextMiddleware,
@@ -24,14 +25,16 @@ from macsdk.middleware import (
 )
 
 from .models import AgentResponse
-from .prompts import SYSTEM_PROMPT, TODO_PLANNING_SPECIALIST_PROMPT
 from .tools import get_tools
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
 
 
-CAPABILITIES = """DevOps monitoring agent using MACSDK API tools.
+# CAPABILITIES is the single source of truth for this agent:
+# - Used as the system prompt for the LLM
+# - Used by the supervisor to decide when to route queries here
+CAPABILITIES = """DevOps monitoring assistant using MACSDK API tools.
 
 This agent can:
 - Monitor CI/CD pipelines and investigate failures
@@ -40,8 +43,60 @@ This agent can:
 - Track deployments across environments
 - Download and analyze job logs
 
-Uses generic SDK tools (api_get, fetch_file) plus custom tools
-for specialized operations with JSONPath extraction."""
+## API Service: "devops"
+
+You have access to a DevOps monitoring API with these endpoints:
+
+### Services (Infrastructure Health)
+- GET /services - List all services
+- GET /services/{id} - Get specific service (id: 1-6)
+  Fields: id, name, status (healthy/degraded/warning), uptime, last_check, issues
+
+### Alerts
+- GET /alerts - List all alerts
+- GET /alerts with params {"severity": "critical"} - Filter by severity
+- GET /alerts with params {"acknowledged": "false"} - Unacknowledged alerts
+  Fields: id, title, severity (info/warning/critical), service, acknowledged
+
+### Pipelines (CI/CD)
+- GET /pipelines - List all pipelines
+- GET /pipelines/{id} - Get specific pipeline (id: 1-5)
+- GET /pipelines with params {"status": "failed"} - Filter by status
+  Fields: id, name, status (passed/failed/running/pending), branch, commit
+
+### Jobs
+- GET /jobs - List all jobs
+- GET /jobs with params {"pipelineId": "1"} - Jobs for a pipeline
+- GET /jobs with params {"status": "failed"} - Failed jobs
+  Fields: id, name, pipelineId, status, duration, error, log_url
+
+### Deployments
+- GET /deployments - List all deployments
+- GET /deployments with params {"environment": "production"} - Filter by env
+  Fields: id, version, environment, status, deployed_by, created_at
+
+## Available Tools
+
+### Generic Tools (use with any endpoint)
+- **api_get**: Make GET requests to any endpoint above
+- **fetch_file**: Download files (logs, configs) from URLs
+
+### Custom Tools (specialized operations)
+- **get_service_health_summary**: Quick overview of all services health
+- **get_failed_pipeline_names**: List names of failed pipelines
+- **investigate_failed_job**: Deep investigation with log analysis
+
+## Guidelines
+
+1. Use `api_get` with service="devops" for most queries
+2. Use custom tools when they match the use case exactly
+3. For failed jobs, use `investigate_failed_job` to get full details with logs
+4. When asked about services, `get_service_health_summary` gives a quick overview
+5. Always provide actionable insights based on the data
+"""
+
+# CAPABILITIES is the system prompt
+SYSTEM_PROMPT = CAPABILITIES
 
 
 def create_api_agent(
@@ -57,8 +112,7 @@ def create_api_agent(
         Configured agent instance.
     """
     # Build system prompt with task planning integrated
-    # TODO middleware is always enabled
-    system_prompt = SYSTEM_PROMPT + "\n\n" + TODO_PLANNING_SPECIALIST_PROMPT
+    system_prompt = SYSTEM_PROMPT + "\n\n" + SPECIALIST_PLANNING_PROMPT
 
     # Build middleware list
     middleware: list[Any] = []
@@ -120,7 +174,7 @@ class ApiAgent:
     1. Register services with ApiServiceRegistry
     2. Use generic SDK tools (api_get, fetch_file) for flexibility
     3. Create custom tools with make_api_request for JSONPath extraction
-    4. Describe API schema in the prompt for the LLM
+    4. Describe API schema in CAPABILITIES for the LLM
     """
 
     name: str = "api_agent"

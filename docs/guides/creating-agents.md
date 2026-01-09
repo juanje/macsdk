@@ -2,6 +2,33 @@
 
 This guide covers how to create specialist agents for MACSDK chatbots.
 
+## Philosophy: Simple, Specialized Agents
+
+MACSDK agents follow a **single-responsibility principle**:
+
+- **One definition**: `CAPABILITIES` defines what the agent does
+- **Minimal configuration**: Agents work out of the box
+- **Extension without code changes**: Use tools, skills, and facts
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AGENT ARCHITECTURE                       │
+│                                                             │
+│   CAPABILITIES  ─────►  System prompt (what I do)           │
+│        │                        +                           │
+│        │                 Planning guidance (CoT)            │
+│        │                        +                           │
+│        │                 Tools (what I can execute)         │
+│        │                                                    │
+│        └────────►  Supervisor routing (when to use me)      │
+│                                                             │
+│   Extension (no code changes):                              │
+│   • Tools   → New actions                                   │
+│   • Skills  → How to do complex tasks                       │
+│   • Facts   → Domain context and reference data             │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ## Project Approaches
 
 MACSDK supports two approaches for organizing agents:
@@ -27,10 +54,9 @@ infra-agent/
 ├── Containerfile            # Container build instructions
 ├── src/infra_agent/
 │   ├── __init__.py          # Exports agent class
-│   ├── agent.py             # Main agent implementation
-│   ├── config.py            # Agent configuration (extends MACSDKConfig)
-│   ├── models.py            # Response models (uses BaseAgentResponse by default)
-│   ├── prompts.py           # System prompts with API schema
+│   ├── agent.py             # CAPABILITIES + agent implementation
+│   ├── config.py            # Agent configuration
+│   ├── models.py            # Response models
 │   ├── tools.py             # Tool configuration
 │   └── cli.py               # Testing CLI (Rich-powered)
 ├── config.yml.example
@@ -38,6 +64,60 @@ infra-agent/
 ├── .gitignore
 └── README.md
 ```
+
+## Defining Your Agent
+
+The `CAPABILITIES` constant in `agent.py` is the **single source of truth**:
+
+```python
+CAPABILITIES = """DevOps monitoring assistant.
+
+This agent can:
+- Check infrastructure service health and status
+- Monitor CI/CD pipelines and their jobs
+- Review alerts (critical, warnings, unacknowledged)
+- Track deployments across environments
+
+Use this agent for infrastructure monitoring and DevOps queries."""
+
+# CAPABILITIES is the system prompt
+SYSTEM_PROMPT = CAPABILITIES
+```
+
+### Why This Matters
+
+| Use | Purpose |
+|-----|---------|
+| **Supervisor routing** | Decides when to delegate to this agent |
+| **System prompt** | Base instructions for the LLM |
+| **Self-documentation** | Clear description of agent purpose |
+
+### Writing Good CAPABILITIES
+
+**Be specific and bounded:**
+
+```python
+# ✅ Good - Clear, specific, bounded
+CAPABILITIES = """Database monitoring specialist.
+
+This agent can:
+- Check PostgreSQL connection status
+- Monitor query performance metrics
+- Review slow query logs
+- Analyze table sizes and indexes
+
+Limitations:
+- Does NOT execute DDL commands
+- Does NOT access production data directly"""
+
+# ❌ Bad - Vague, unbounded
+CAPABILITIES = """General database assistant that helps with databases."""
+```
+
+!!! tip "Keep CAPABILITIES Concise"
+    Remember that `CAPABILITIES` is injected into the **supervisor's prompt** for routing.
+    If you have many agents with very detailed CAPABILITIES, consider moving extensive
+    documentation (API schemas, detailed instructions) to **Facts** or **Skills** instead.
 
 ## Running Your Agent
 
@@ -69,21 +149,11 @@ uv run infra-agent chat
 uv run infra-agent tools
 ```
 
-```
-🔧 Available Tools (Generic SDK)
-┏━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Tool       ┃ Description                                      ┃
-┡━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ api_get    │ Make a GET request to a registered API service.  │
-│ fetch_file │ Fetch a file from a URL with optional filtering. │
-└────────────┴──────────────────────────────────────────────────┘
-```
-
 ## Using API Tools
 
-MACSDK uses a minimalist approach: **few generic tools** instead of many specific tools. The LLM decides which endpoints to call based on the API description in the prompt.
+MACSDK uses a minimalist approach: **few generic tools** instead of many specific tools. The LLM decides which endpoints to call based on the API description.
 
-### The recommended pattern
+### The Recommended Pattern
 
 **1. Register the service** (in `tools.py`):
 
@@ -100,10 +170,12 @@ def get_tools():
     return [api_get, fetch_file]  # Only 2 generic tools
 ```
 
-**2. Describe the API in the prompt** (in `prompts.py`):
+**2. Describe the API in CAPABILITIES** (in `agent.py`):
 
 ```python
-SYSTEM_PROMPT = """You are a DevOps assistant.
+CAPABILITIES = """DevOps assistant monitoring infrastructure.
+
+This agent can check service health, monitor alerts, and track deployments
 
 ## API Service: "devops"
 
@@ -113,82 +185,108 @@ Available endpoints:
 - GET /alerts - List alerts
 - GET /alerts with params {"severity": "critical"} - Filter by severity
 
-Always use service="devops" when calling api_get.
-"""
+Always use service="devops" when calling api_get."""
+
+SYSTEM_PROMPT = CAPABILITIES
 ```
 
 **3. The LLM does the rest**: When the user asks "Are there any critical alerts?", the LLM automatically chooses the right endpoint.
 
-### Why this approach?
+### Why This Approach?
 
 | Traditional | MACSDK |
 |-------------|--------|
 | 20 tools for 20 endpoints | 2 generic tools |
 | Lots of repetitive code | Simple code |
-| Hard to maintain | Adding endpoints = updating prompt |
+| Hard to maintain | Adding endpoints = updating CAPABILITIES |
 | LLM chooses between many options | LLM reads API description |
 
-### Custom tools (when you need them)
+### Using Skills for Complex APIs
 
-Only create specific tools when you need:
-- **JSONPath extraction**: Extract specific fields to reduce tokens
-- **Business logic**: Combine calls or transform data
+For detailed API documentation, use **facts** instead of putting everything in CAPABILITIES:
+
+```markdown
+<!-- facts/api-reference.md -->
+---
+name: api-reference
+description: Complete DevOps API reference
+---
+
+## Services API
+
+### GET /services
+Returns all services with their status.
+
+Response fields:
+- id: Service identifier
+- name: Display name
+- status: healthy | degraded | warning
+- uptime: Percentage uptime
+...
+```
+
+The middleware automatically injects this into the prompt when the agent has knowledge tools.
+
+## Extending Your Agent
+
+### Adding Tools
+
+Edit `tools.py` to add custom tools:
 
 ```python
-from macsdk.tools import make_api_request
+from langchain_core.tools import tool
 
 @tool
 async def get_service_health_summary() -> str:
     """Quick summary of service health status."""
-    result = await make_api_request(
-        "GET", "devops", "/services",
-        extract="$[*].name",  # JSONPath to extract only names
-    )
-    # ... formatting logic ...
+    # Custom logic here
+    ...
+
+def get_tools():
+    return [api_get, fetch_file, get_service_health_summary]
 ```
 
-📖 **See [API Tools Reference](../reference/tools.md)** for complete documentation
+### Adding Knowledge (Skills and Facts)
 
-## Defining Capabilities
+Create an agent with knowledge tools:
 
-Edit `agent.py`:
-
-```python
-CAPABILITIES = """DevOps monitoring assistant.
-
-This agent can:
-- Check infrastructure service health
-- Monitor CI/CD pipelines and jobs
-- Review alerts (critical, warnings)
-- Track deployments
-
-Use this agent when users ask about infrastructure, pipelines, or alerts."""
+```bash
+macsdk new agent devops-specialist --with-knowledge
 ```
 
-**Important**: Write detailed capabilities so the supervisor routes queries correctly.
+Or add knowledge to an existing agent manually:
 
-## Customizing the Prompt
+**Skills** (`skills/deploy-service.md`):
+```markdown
+---
+name: deploy-service
+description: How to deploy a service safely
+---
 
-Edit `prompts.py` to describe your API:
+# Deploy Service
 
-```python
-SYSTEM_PROMPT = """You are a DevOps monitoring assistant.
-
-## API Service: "myapi"
-
-Available endpoints:
-- GET /services - List all services
-- GET /services/{id} - Get specific service
-- GET /pipelines - List pipelines
-- GET /pipelines with params {"status": "failed"} - Filter by status
-- GET /alerts - List alerts
-
-## Guidelines
-1. Always use service="myapi" when calling api_get
-2. For alerts, prioritize critical ones
-3. Be concise in responses
-"""
+## Steps
+1. Check service health
+2. Review alerts
+3. Deploy using API
+4. Monitor deployment
 ```
+
+**Facts** (`facts/service-catalog.md`):
+```markdown
+---
+name: service-catalog
+description: Information about available services
+---
+
+# Service Catalog
+
+## Production Services
+- API Gateway (ID: 1)
+- Auth Service (ID: 2)
+```
+
+📖 **See [Using Knowledge Tools](./using-knowledge-tools.md)** for complete documentation.
 
 ## Response Models
 
@@ -196,66 +294,28 @@ By default, agents use `BaseAgentResponse` from the SDK, which provides:
 - `response_text`: Human-readable response
 - `tools_used`: List of tools that were called
 
-This is sufficient for most agents since the supervisor receives `response_text` via the tool wrapper.
-For most cases, you won't need to modify this file.
-
-For advanced use cases (like inter-agent data coordination), you can extend the base model in `models.py`:
-
-```python
-from macsdk.core import BaseAgentResponse
-from pydantic import Field
-
-class AgentResponse(BaseAgentResponse):
-    """Custom response model with additional structured data."""
-    
-    service_name: str | None = Field(default=None, description="Service name")
-    status: str | None = Field(default=None, description="Service status")
-    error_summary: str | None = Field(default=None, description="Error details")
-```
-
-**Note:** Custom fields are available in the result dict (`result["service_name"]`) but are not automatically passed to the supervisor. The default approach of putting all relevant information in `response_text` is simpler and works well for most cases.
+This is sufficient for most agents. For advanced use cases (like inter-agent data coordination), you can extend the base model in `models.py`.
 
 ## The SpecialistAgent Protocol
 
 Every agent must implement the `SpecialistAgent` protocol:
 
 ```python
-from typing import Annotated
-from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import BaseTool, InjectedToolArg, tool
-from macsdk.core import run_agent_with_tools
-
 class InfraAgent:
     name: str = "infra_agent"
-    capabilities: str = CAPABILITIES
+    capabilities: str = CAPABILITIES  # Same as SYSTEM_PROMPT
     tools: list = []
 
     def __init__(self):
         self.tools = get_tools()
 
-    async def run(
-        self,
-        query: str,
-        context: dict | None = None,
-        config: RunnableConfig | None = None,
-    ) -> dict:
+    async def run(self, query: str, ...) -> dict:
         """Execute the agent."""
-        return await run_infra_agent(query, context, config)
+        ...
 
     def as_tool(self) -> BaseTool:
         """Return this agent as a tool for the supervisor."""
-        agent_instance = self
-
-        @tool
-        async def infra_agent(
-            query: str,
-            config: Annotated[RunnableConfig, InjectedToolArg],
-        ) -> str:
-            """Query this specialist agent with a natural language request."""
-            result = await agent_instance.run(query, config=config)
-            return result["response"]
-
-        return infra_agent
+        ...
 ```
 
 ## Testing Your Agent
@@ -264,21 +324,6 @@ class InfraAgent:
 
 ```bash
 uv run infra-agent chat
-```
-
-```
-╭─────────────────── infra-agent Chat ────────────────────╮
-│ Type exit or press Ctrl+C to quit                       │
-╰─────────────────────────────────────────────────────────╯
-
->> Is the authentication service running?
-[infra_agent] Processing query...
-[infra_agent] 🔧 Using tool: api_get
-[infra_agent] Tools used: api_get
-
-╭─────────────────────── Response ───────────────────────╮
-│ Service auth-service: Running (healthy)                │
-╰────────────────────────────────────────────────────────╯
 ```
 
 ### Run Tests
@@ -292,12 +337,8 @@ uv run pytest
 ### Remote Agents (Multi-repo)
 
 ```bash
-# From local path (inside chatbot directory)
 cd my-chatbot
 macsdk add-agent . --path ../infra-agent
-
-# Or publish to PyPI and install
-macsdk add-agent . --package infra-agent
 ```
 
 ### Local Agents (Mono-repo)
@@ -309,155 +350,53 @@ cd my-chatbot
 macsdk add-agent . --new weather --description "Weather information service"
 ```
 
-This creates:
+This creates the agent in `src/my_chatbot/local_agents/weather/` and automatically registers it.
+
+## Task Planning
+
+The `SPECIALIST_PLANNING_PROMPT` is automatically included, providing:
+
+- Chain-of-thought reasoning guidance
+- Multi-step investigation support
+- Task decomposition patterns
+
+For complex queries, the agent breaks them into steps:
+
 ```
-my-chatbot/
-└── src/my_chatbot/
-    └── local_agents/
-        └── weather/
-            ├── __init__.py
-            ├── agent.py
-            ├── config.py
-            ├── models.py
-            ├── prompts.py
-            └── tools.py
+User: "Why did the deployment fail?"
+Agent:
+1. Check recent deployments
+2. Get failed pipeline details
+3. Fetch error logs
+4. Analyze and respond
 ```
-
-The agent is automatically registered in `agents.py` with relative imports:
-
-```python
-from .local_agents.weather import WeatherAgent
-
-def register_all_agents():
-    if not registry.is_registered("weather"):
-        register_agent(WeatherAgent())
-```
-
-**When to use local agents:**
-- Agent is specific to one chatbot
-- Simpler dependency management
-- Faster iteration during development
 
 ## Best Practices
 
-1. **Use generic tools**: Start with `api_get` + `fetch_file`, add custom tools only when needed
-2. **Describe API in prompt**: Let the LLM decide which endpoints to call
-3. **Clear capabilities**: Write detailed CAPABILITIES for correct routing
-4. **Helpful tool docstrings**: The LLM uses docstrings to decide when to use tools
-5. **Handle errors gracefully**: Return helpful error messages
-6. **Use streaming**: Call `log_progress` for long operations
-
-## Task Planning with TodoListMiddleware
-
-The TodoListMiddleware is always enabled for all agents (as of version 0.3.0), providing consistent task planning capabilities across the system.
-
-### How It Works
-
-When enabled, the TodoListMiddleware equips agents with an internal to-do list for tracking complex investigations:
-
-- **Breaks down complex queries** into manageable steps
-- **Tracks progress** as the agent gathers information
-- **Ensures completeness** by reviewing remaining tasks before responding
-
-### When It Helps Most
-
-Task planning is particularly valuable for:
-- Multi-step investigations ("Why did the deployment fail?")
-- Queries requiring multiple tool calls with dependencies
-- Complex diagnostic workflows
-
-For simple queries, the middleware adds minimal overhead and agents naturally skip planning when not needed.
-
-### Example
-
-User asks: "Why did the deployment fail?"
-
-With task planning enabled:
-1. Agent creates internal plan: Check deployments → Get pipeline details → Fetch logs
-2. Tracks progress through each step
-3. Ensures all investigation paths are followed
-4. Returns complete answer with root cause
-
-### Task Planning Prompts
-
-Specialist agents use `TODO_PLANNING_SPECIALIST_PROMPT`, which includes examples tailored for tool-based workflows:
-
-```python
-# Generated agents include this import
-from macsdk.agents.supervisor import TODO_PLANNING_SPECIALIST_PROMPT
-
-# And append it to the system prompt
-system_prompt = SYSTEM_PROMPT + "\n\n" + TODO_PLANNING_SPECIALIST_PROMPT
-```
-
-This prompt differs from `TODO_PLANNING_SUPERVISOR_PROMPT` (used by supervisors) because:
-- **Specialist prompts**: Show examples using tools (`get_deployment_details()`, `fetch_logs()`)
-- **Supervisor prompts**: Show examples coordinating agents (`call deployment_agent`, `call pipeline_agent`)
-
-#### Customizing for Your Domain
-
-You can override the default in your agent's `prompts.py`:
-
-```python
-from macsdk.agents.supervisor import TODO_PLANNING_COMMON
-
-# Build on the common base with domain-specific examples
-TODO_PLANNING_SPECIALIST_PROMPT = (
-    TODO_PLANNING_COMMON + """
-**Example Investigation Flow for Your Domain:**
-1. Call get_domain_specific_data()
-2. Call analyze_results(data)
-3. Call get_recommendations()
-... your custom examples ...
-"""
-)
-```
-
-**Note:** For backward compatibility, you can also import from `macsdk.prompts`:
-```python
-from macsdk.prompts import TODO_PLANNING_SPECIALIST_PROMPT  # Still works
-```
-
-**Important:** When using `macsdk new agent`, the generated code includes this prompt setup automatically. You must include it in your `create_agent()` call's `system_prompt` parameter for the task planning features to work.
-
-## Advanced: Using Subgraphs
-
-For agents that need multi-step processing, you can use LangGraph:
-
-```python
-from langgraph.graph import StateGraph, END
-
-class AgentState(TypedDict):
-    messages: list
-    current_step: str
-
-def create_complex_agent():
-    graph = StateGraph(AgentState)
-    graph.add_node("analyze", analyze_node)
-    graph.add_node("gather_data", gather_data_node)
-    graph.add_node("synthesize", synthesize_node)
-    
-    graph.add_edge("analyze", "gather_data")
-    graph.add_edge("gather_data", "synthesize")
-    graph.add_edge("synthesize", END)
-    
-    graph.set_entry_point("analyze")
-    return graph.compile()
-```
+1. **Clear CAPABILITIES**: Write detailed, specific CAPABILITIES for correct routing
+2. **Use generic tools**: Start with `api_get` + `fetch_file`, add custom tools only when needed
+3. **Extend with knowledge**: Use skills for procedures, facts for context
+4. **Keep agents focused**: One agent = one domain
+5. **Test interactively**: Use `uv run my-agent chat` for quick testing
 
 ## Container Deployment
 
-Each generated agent includes a `Containerfile` for building container images.
-
-### Build the Container
+Each generated agent includes a `Containerfile`:
 
 ```bash
-cd my-agent
+# Build
 podman build -t my-agent .
-```
 
-### Run the Container
-
-```bash
+# Run
 podman run --rm -it -e GOOGLE_API_KEY=$GOOGLE_API_KEY my-agent chat
 ```
+
+## Summary
+
+| Component | Purpose | Location |
+|-----------|---------|----------|
+| **CAPABILITIES** | What the agent does (single source of truth) | `agent.py` |
+| **Tools** | What actions the agent can execute | `tools.py` |
+| **Skills** | How to do complex tasks | `skills/*.md` |
+| **Facts** | Domain context and reference data | `facts/*.md` |
+| **Models** | Response structure (usually unchanged) | `models.py` |

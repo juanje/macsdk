@@ -116,16 +116,31 @@ def _read_file_content(file_path: Path) -> tuple[dict[str, Any], str]:
 
 
 def _list_documents(directory: Path) -> list[dict[str, str]]:
-    """List markdown documents with frontmatter in a directory.
+    """List top-level markdown documents with frontmatter in a directory.
 
-    Searches recursively for .md files and extracts their metadata
-    from YAML frontmatter.
+    Only lists files at the first level (not in subdirectories) to support
+    progressive disclosure: top-level skills/facts provide overviews and
+    link to more specific documents in subdirectories.
+
+    This pattern reduces prompt size and helps agents navigate knowledge
+    hierarchically - reading general guidance first, then diving into
+    specifics when needed.
 
     Args:
         directory: The directory to search.
 
     Returns:
         List of documents with name, description, and path.
+
+    Example:
+        Given this structure:
+            skills/
+            ├── deploy.md              # Listed (top-level)
+            └── deploy/
+                └── deploy-frontend.md # NOT listed, but accessible via read_skill()
+
+        The agent sees only "deploy.md" in the inventory, which should
+        explain and link to the specific sub-skills in deploy/.
     """
     documents: list[dict[str, str]] = []
 
@@ -133,7 +148,9 @@ def _list_documents(directory: Path) -> list[dict[str, str]]:
     if not directory.exists():
         return documents
 
-    for file in directory.rglob("*.md"):
+    # Use glob (not rglob) to list only top-level files
+    # Sub-documents are accessible via read_skill/read_fact but not listed
+    for file in directory.glob("*.md"):
         try:
             frontmatter, _ = _read_file_content(file)
             if "name" in frontmatter:
