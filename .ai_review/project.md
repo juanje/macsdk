@@ -709,6 +709,32 @@ enable_todo: bool = Field(
 
 ---
 
+### DatetimeContextMiddleware Modes
+
+**False Positive:** "DatetimeContextMiddleware injects unnecessary temporal context into specialist agents"
+
+**Reality:**
+- Middleware has two modes: `minimal` (default, ~15 tokens) and `full` (~500 tokens)
+- **Minimal mode**: Only current date - for specialist agents that need timestamp interpretation
+- **Full mode**: Complete context with pre-calculated dates + routing instructions - for supervisors
+- Full mode automatically includes instructions on passing concrete dates to specialists
+- Default changed to minimal for 90%+ token reduction in typical workflows
+
+**Pattern:**
+```python
+# Specialist agents (default) - minimal context
+middleware.append(DatetimeContextMiddleware())
+
+# Supervisor agents (explicit) - full context with instructions
+middleware.append(DatetimeContextMiddleware(mode="full"))
+```
+
+**Evidence:** `src/macsdk/middleware/datetime_context.py`, `src/macsdk/agents/supervisor/agent.py`
+
+**Do NOT suggest:** Using full mode for specialists, removing datetime context entirely, or manually adding temporal routing instructions to supervisor prompts.
+
+---
+
 ### XML Tags in Prompts - Gemini Behavior
 
 **False Positive:** "Should use XML tags like `<datetime>` for better structure"

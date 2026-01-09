@@ -6,13 +6,56 @@ from datetime import datetime, timezone
 from typing import Any, cast
 from unittest.mock import MagicMock
 
+import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from macsdk.middleware import DatetimeContextMiddleware, format_datetime_context
+from macsdk.middleware import (
+    DatetimeContextMiddleware,
+    format_datetime_context,
+    format_minimal_datetime_context,
+)
 from macsdk.middleware.datetime_context import _calculate_date_references
 
 # Type alias for agent state in tests
 AgentStateDict = dict[str, Any]
+
+
+class TestFormatMinimalDatetimeContext:
+    """Tests for format_minimal_datetime_context function."""
+
+    def test_returns_string(self) -> None:
+        """Test that format_minimal_datetime_context returns a string."""
+        result = format_minimal_datetime_context()
+        assert isinstance(result, str)
+
+    def test_contains_current_date(self) -> None:
+        """Test that result contains current date label."""
+        result = format_minimal_datetime_context()
+        assert "Current date" in result
+
+    def test_custom_datetime(self) -> None:
+        """Test with a specific datetime."""
+        test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = format_minimal_datetime_context(test_dt)
+
+        assert "Saturday, June 15, 2024" in result
+        assert "2024-06-15T10:30:00Z" in result
+
+    def test_does_not_contain_precalculated_dates(self) -> None:
+        """Test that minimal format doesn't include pre-calculated dates."""
+        result = format_minimal_datetime_context()
+        assert "Pre-calculated dates" not in result
+        assert "Last 7 days" not in result
+        assert "Start of this week" not in result
+
+    def test_is_much_shorter_than_full(self) -> None:
+        """Test that minimal format is significantly shorter than full."""
+        test_dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        minimal = format_minimal_datetime_context(test_dt)
+        full = format_datetime_context(test_dt)
+
+        # Minimal should be < 20% of full length
+        assert len(minimal) < len(full) * 0.2
 
 
 class TestFormatDatetimeContext:
@@ -62,6 +105,21 @@ class TestDatetimeContextMiddleware:
         middleware = DatetimeContextMiddleware(enabled=False)
         assert middleware.enabled is False
 
+    def test_init_rejects_invalid_mode(self) -> None:
+        """Test that invalid mode raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid datetime mode 'invalid'"):
+            DatetimeContextMiddleware(mode="invalid")  # type: ignore[arg-type]
+
+    def test_init_accepts_minimal_mode(self) -> None:
+        """Test that 'minimal' mode is accepted."""
+        middleware = DatetimeContextMiddleware(mode="minimal")
+        assert middleware.mode == "minimal"
+
+    def test_init_accepts_full_mode(self) -> None:
+        """Test that 'full' mode is accepted."""
+        middleware = DatetimeContextMiddleware(mode="full")
+        assert middleware.mode == "full"
+
     def test_disabled_middleware_returns_none(self) -> None:
         """Test that disabled middleware returns None."""
         middleware = DatetimeContextMiddleware(enabled=False)
@@ -100,7 +158,8 @@ class TestDatetimeContextMiddleware:
         assert "messages" in result
         assert len(result["messages"]) == 2
         assert isinstance(result["messages"][0], SystemMessage)
-        assert "## Current DateTime Context" in result["messages"][0].content
+        # Default is minimal mode, so check for minimal format
+        assert "Current date" in result["messages"][0].content
         assert original_system in result["messages"][0].content
         assert isinstance(result["messages"][1], HumanMessage)
 
@@ -116,7 +175,8 @@ class TestDatetimeContextMiddleware:
         assert "messages" in result
         assert len(result["messages"]) == 2
         assert isinstance(result["messages"][0], SystemMessage)
-        assert "## Current DateTime Context" in result["messages"][0].content
+        # Default is minimal mode, so check for minimal format
+        assert "Current date" in result["messages"][0].content
         assert isinstance(result["messages"][1], HumanMessage)
 
     def test_preserves_message_order(self) -> None:
@@ -165,13 +225,14 @@ class TestDatetimeContextMiddleware:
         updated_message = result["messages"][0]
         assert isinstance(updated_message, SystemMessage)
         assert "Original system prompt" in updated_message.content
-        assert "## Current DateTime Context" in updated_message.content
+        # Default is minimal mode, so check for minimal format
+        assert "Current date" in updated_message.content
 
         # The old timestamp should be gone (replaced with fresh one)
         assert old_timestamp not in updated_message.content
 
         # The datetime context should only appear once (no duplication)
-        assert updated_message.content.count("## Current DateTime Context") == 1
+        assert updated_message.content.count("Current date") == 1
 
     def test_missing_messages_key_returns_none(self) -> None:
         """Test that missing messages key returns None."""
@@ -182,6 +243,57 @@ class TestDatetimeContextMiddleware:
         result = middleware.before_model(cast(Any, state), runtime)
 
         assert result is None
+
+    def test_minimal_mode_is_default(self) -> None:
+        """Test that minimal mode is the default."""
+        middleware = DatetimeContextMiddleware()
+        assert middleware.mode == "minimal"
+
+    def test_can_set_full_mode(self) -> None:
+        """Test that full mode can be set."""
+        middleware = DatetimeContextMiddleware(mode="full")
+        assert middleware.mode == "full"
+
+    def test_minimal_mode_injects_short_context(self) -> None:
+        """Test that minimal mode injects shorter context."""
+        middleware = DatetimeContextMiddleware(mode="minimal")
+        state: AgentStateDict = {
+            "messages": [
+                SystemMessage(content="System prompt"),
+                HumanMessage(content="Hello"),
+            ]
+        }
+        runtime = MagicMock()
+
+        result = middleware.before_model(cast(Any, state), runtime)
+
+        assert result is not None
+        system_content = result["messages"][0].content
+        assert "Current date" in system_content
+        # Minimal mode should NOT have pre-calculated dates
+        assert "Pre-calculated dates" not in system_content
+        assert "Last 7 days" not in system_content
+
+    def test_full_mode_injects_complete_context(self) -> None:
+        """Test that full mode injects complete context with pre-calculated dates."""
+        middleware = DatetimeContextMiddleware(mode="full")
+        state: AgentStateDict = {
+            "messages": [
+                SystemMessage(content="System prompt"),
+                HumanMessage(content="Hello"),
+            ]
+        }
+        runtime = MagicMock()
+
+        result = middleware.before_model(cast(Any, state), runtime)
+
+        assert result is not None
+        system_content = result["messages"][0].content
+        assert "## Current DateTime Context" in system_content
+        # Full mode SHOULD have pre-calculated dates
+        assert "Pre-calculated dates" in system_content
+        assert "Last 7 days" in system_content
+        assert "Start of this week" in system_content
 
 
 class TestCalculateDateReferences:

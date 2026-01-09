@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from langchain.agents.middleware import AgentMiddleware
 
@@ -88,11 +88,40 @@ def _calculate_date_references(now: datetime) -> dict[str, str]:
     }
 
 
+def format_minimal_datetime_context(now: datetime | None = None) -> str:
+    """Format minimal datetime context with just current date.
+
+    Provides only the current date for timestamp interpretation,
+    without pre-calculated date ranges. This is optimized for
+    specialist agents that don't need temporal query translation.
+
+    Args:
+        now: Optional datetime to format. Defaults to current UTC time.
+
+    Returns:
+        Minimal datetime context string with current date only.
+
+    Example:
+        >>> context = format_minimal_datetime_context()
+        >>> print(context)
+        **Current date**: Friday, January 09, 2026 (2026-01-09T19:55:00Z)
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    return f"""
+{DATETIME_CONTEXT_START}
+**Current date**: {now.strftime("%A, %B %d, %Y")} ({now.strftime("%Y-%m-%dT%H:%M:00Z")})
+{DATETIME_CONTEXT_END}
+"""
+
+
 def format_datetime_context(now: datetime | None = None) -> str:
-    """Format current datetime as context string for prompts.
+    """Format full datetime context with pre-calculated date ranges.
 
     Includes pre-calculated dates for common time-range queries,
     making it easy for agents to use relative dates in API calls.
+    This is the full-featured version for supervisor agents.
 
     Args:
         now: Optional datetime to format. Defaults to current UTC time.
@@ -143,6 +172,13 @@ like `updated_after`, `created_after`, `since`, etc.
 - "this week" → use {refs["start_of_week"]}
 - "last month" (relative) → use {refs["last_30_days"]}
 - "last month" (calendar) → use {refs["start_of_prev_month"]}
+
+**Important for Supervisors:**
+When routing to specialist tools with temporal queries:
+- Translate user's temporal references to concrete ISO dates from the table above
+- Pass explicit dates to specialists (e.g., "since {refs["last_7_days"]}"
+  instead of "last week")
+- Specialists only receive current date context - they cannot interpret relative dates
 {DATETIME_CONTEXT_END}
 """
 
@@ -155,6 +191,10 @@ class DatetimeContextMiddleware(AgentMiddleware):  # type: ignore[type-arg]
     - Understand "today", "yesterday", "last week" in user queries
     - Avoid confusion from training data cutoff dates
 
+    The middleware supports two modes:
+    - "minimal": Only current date (optimized for specialist agents)
+    - "full": Complete context with pre-calculated date ranges (for supervisors)
+
     The datetime context is prepended to the system prompt before
     each model invocation using the `before_model` hook.
 
@@ -162,6 +202,7 @@ class DatetimeContextMiddleware(AgentMiddleware):  # type: ignore[type-arg]
         >>> from macsdk.middleware import DatetimeContextMiddleware
         >>> from langchain.agents import create_agent
         >>>
+        >>> # Specialist agent with minimal context
         >>> middleware = [DatetimeContextMiddleware()]
         >>> agent = create_agent(
         ...     model=get_answer_model(),
@@ -169,14 +210,26 @@ class DatetimeContextMiddleware(AgentMiddleware):  # type: ignore[type-arg]
         ...     middleware=middleware,
         ...     system_prompt="You are a helpful assistant.",
         ... )
+        >>>
+        >>> # Supervisor agent with full context
+        >>> middleware = [DatetimeContextMiddleware(mode="full")]
+        >>> supervisor = create_agent(...)
     """
 
-    def __init__(self, enabled: bool = True, cache_ttl_seconds: int = 60) -> None:
+    def __init__(
+        self,
+        enabled: bool = True,
+        mode: Literal["minimal", "full"] = "minimal",
+        cache_ttl_seconds: int = 60,
+    ) -> None:
         """Initialize the middleware.
 
         Args:
             enabled: Whether the middleware is active. If False,
                      the middleware passes through without modification.
+            mode: Context mode - "minimal" (current date only) or "full"
+                  (with pre-calculated date ranges). Default is "minimal"
+                  for optimal token efficiency in specialist agents.
             cache_ttl_seconds: Time-to-live for cached datetime context in
                               seconds. Default is 60 seconds to balance
                               freshness with performance.
@@ -184,6 +237,11 @@ class DatetimeContextMiddleware(AgentMiddleware):  # type: ignore[type-arg]
         import re
 
         self.enabled = enabled
+        if mode not in ("minimal", "full"):
+            raise ValueError(
+                f"Invalid datetime mode '{mode}'. Must be 'minimal' or 'full'."
+            )
+        self.mode = mode
         self._cache_ttl = cache_ttl_seconds
         self._cached_context: str | None = None
         self._cache_time: datetime | None = None
@@ -198,7 +256,7 @@ class DatetimeContextMiddleware(AgentMiddleware):  # type: ignore[type-arg]
 
         logger.debug(
             f"DatetimeContextMiddleware initialized "
-            f"(enabled={enabled}, cache_ttl={cache_ttl_seconds}s)"
+            f"(enabled={enabled}, mode={mode}, cache_ttl={cache_ttl_seconds}s)"
         )
 
     def _get_cached_context(self) -> str:
@@ -215,7 +273,7 @@ class DatetimeContextMiddleware(AgentMiddleware):  # type: ignore[type-arg]
         consider adding a threading.Lock.
 
         Returns:
-            Formatted datetime context string.
+            Formatted datetime context string (minimal or full based on mode).
         """
         now = datetime.now(timezone.utc)
         if (
@@ -223,9 +281,12 @@ class DatetimeContextMiddleware(AgentMiddleware):  # type: ignore[type-arg]
             or self._cache_time is None
             or (now - self._cache_time).total_seconds() > self._cache_ttl
         ):
-            self._cached_context = format_datetime_context(now)
+            if self.mode == "minimal":
+                self._cached_context = format_minimal_datetime_context(now)
+            else:
+                self._cached_context = format_datetime_context(now)
             self._cache_time = now
-            logger.debug("Generated new datetime context (cache miss or expired)")
+            logger.debug(f"Generated new datetime context (mode={self.mode})")
         else:
             logger.debug("Using cached datetime context")
         return self._cached_context

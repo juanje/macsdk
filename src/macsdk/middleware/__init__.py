@@ -22,6 +22,7 @@ Example:
 from .datetime_context import (
     DatetimeContextMiddleware,
     format_datetime_context,
+    format_minimal_datetime_context,
 )
 from .debug_prompts import PromptDebugMiddleware
 from .summarization import SummarizationMiddleware
@@ -35,4 +36,5 @@ __all__ = [
     "TodoListMiddleware",
     "ToolInstructionsMiddleware",
     "format_datetime_context",
+    "format_minimal_datetime_context",
 ]
