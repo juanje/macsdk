@@ -53,7 +53,7 @@ class TestMACSDKConfig:
     def test_default_values(self) -> None:
         """Config has sensible defaults."""
         config = MACSDKConfig()
-        assert config.llm_model == "gemini-2.5-flash"
+        assert config.llm_model == "gemini-3-flash-preview"
         assert config.llm_temperature == 0.3
         assert config.server_port == 8000
 
@@ -217,7 +217,7 @@ class TestCreateConfig:
     def test_creates_default_config(self) -> None:
         """Creates config with defaults when no file exists."""
         config = create_config()
-        assert config.llm_model == "gemini-2.5-flash"
+        assert config.llm_model == "gemini-3-flash-preview"
 
     def test_loads_yaml_config(self, temp_config_dir: Path) -> None:
         """Loads values from YAML file."""
@@ -338,7 +338,7 @@ class TestCreateDefaultConfig:
 
             config = _create_default_config()
 
-            assert config.llm_model == "gemini-2.5-flash"
+            assert config.llm_model == "gemini-3-flash-preview"
             assert config.url_security.enabled is False
             # No warning should be logged for missing file
             assert "Failed to load config.yml" not in caplog.text

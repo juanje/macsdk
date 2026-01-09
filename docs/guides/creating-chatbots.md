@@ -98,7 +98,7 @@ uv run my-assistant info
 ```
 ╭────────────────────── My Assistant ──────────────────────╮
 │                                                          │
-│  Supervisor Model: gemini-2.5-flash                      │
+│  Supervisor Model: gemini-3-flash-preview                │
 │  Temperature: 0.3                                        │
 │  Agents: rag_agent, api_agent                            │
 │  RAG Sources: 2 configured                               │

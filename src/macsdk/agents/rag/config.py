@@ -131,7 +131,7 @@ class RAGConfig(EnvPrioritySettingsMixin, BaseSettings):
         description="Maximum query rewrites before fallback",
     )
     model_name: str = Field(
-        default="gemini-2.5-flash",
+        default="gemini-3-flash-preview",
         description="LLM model for grading and generation",
     )
     temperature: float = Field(

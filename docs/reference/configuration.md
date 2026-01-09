@@ -20,7 +20,7 @@ Create a `config.yml` file in your project root:
 # =============================================================================
 # LLM Configuration
 # =============================================================================
-llm_model: gemini-2.5-flash
+llm_model: gemini-3-flash-preview
 llm_temperature: 0.3
 llm_reasoning_effort: medium  # low, medium, high
 
@@ -112,7 +112,7 @@ rag:
   # Retrieval settings
   retriever_k: 6            # Documents to retrieve
   max_rewrites: 2           # Max query rewrites
-  model_name: "gemini-2.5-flash"
+  model_name: "gemini-3-flash-preview"
   temperature: 0.3
 
   # Caching
@@ -422,7 +422,7 @@ All configuration options can be set via environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GOOGLE_API_KEY` | Google AI API key (required) | - |
-| `LLM_MODEL` | Model for responses | `gemini-2.5-flash` |
+| `LLM_MODEL` | Model for responses | `gemini-3-flash-preview` |
 | `LLM_TEMPERATURE` | Response creativity (0.0-1.0) | `0.3` |
 | `LLM_REASONING_EFFORT` | Reasoning level | `medium` |
 

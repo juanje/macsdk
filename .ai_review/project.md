@@ -21,6 +21,7 @@
   - LangChain 1.0 includes: `create_agent` abstraction, middleware system (built-in: human-in-the-loop, summarization, PII redaction), and support for custom middleware
   - If reviewing against older LangChain docs (0.3.x or earlier), note that middleware patterns and `create_agent()` signatures have changed significantly
 - **langchain-google-genai>=2.0.0** - Default LLM provider integration with Google's Gemini models.
+  - **Default Model:** `gemini-3-flash-preview` (latest Gemini Flash model as of January 2026)
 - **pydantic>=2.0.0** - Enforces strict data validation and settings management using V2 syntax. All configuration and agent responses use Pydantic models.
 - **fastapi>=0.115.0** - Powers the web interface with WebSocket support for real-time streaming of agent responses.
 - **httpx>=0.27.0** - Async/sync HTTP client for API tools and RAG web crawler. Provides connection pooling, SSL certificate management, and HTTP/2 support.

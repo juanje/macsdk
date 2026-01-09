@@ -95,7 +95,7 @@ GOOGLE_API_KEY=your_key_here
 
 ```yaml
 # LLM settings
-llm_model: gemini-2.5-flash
+llm_model: gemini-3-flash-preview
 llm_temperature: 0.3
 
 # RAG sources (if --with-rag)

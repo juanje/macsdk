@@ -187,7 +187,7 @@ class MACSDKConfig(EnvPrioritySettingsMixin, BaseSettings):
     """
 
     # LLM Configuration
-    llm_model: str = "gemini-2.5-flash"
+    llm_model: str = "gemini-3-flash-preview"
     llm_temperature: float = Field(default=0.3, ge=0.0, le=2.0)
     llm_reasoning_effort: Optional[str] = "medium"
     google_api_key: Optional[str] = None

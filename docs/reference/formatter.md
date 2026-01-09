@@ -116,7 +116,7 @@ The formatter doesn't require separate configuration. It uses the same LLM setti
 
 ```yaml
 # config.yml
-llm_model: gemini-2.5-flash
+llm_model: gemini-3-flash-preview
 llm_temperature: 0.3  # Used by formatter
 ```
 
