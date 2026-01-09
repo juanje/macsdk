@@ -44,6 +44,7 @@ def _show_welcome() -> None:
     commands_table.add_row("chat", "Start interactive CLI chat")
     commands_table.add_row("web", "Start web interface")
     commands_table.add_row("agents", "List registered agents")
+    commands_table.add_row("tools", "List tools for agents")
     commands_table.add_row("info", "Show configuration")
     {% if with_rag %}
     commands_table.add_row("index", "Index documentation for RAG")
@@ -64,16 +65,124 @@ def _show_welcome() -> None:
     console.print("  [green]{{ script_name }} --help[/] Show all options\n")
 
 
-@cli.command(name="tools", hidden=True)
+@cli.command(name="tools")
+@click.argument("agent_name", required=False)
+@click.option("--all", "-a", "show_all", is_flag=True, help="Show tools for all agents")
 @click.pass_context
-def tools_redirect(ctx: click.Context) -> None:
-    """Redirect to agents command with helpful message."""
+def tools_command(ctx: click.Context, agent_name: str | None, show_all: bool) -> None:
+    """List tools for a specific agent or all agents.
+
+    \b
+    Examples:
+      {{ script_name }} tools              # Show available agents
+      {{ script_name }} tools api_agent    # Show tools for api_agent
+      {{ script_name }} tools --all        # Show tools for all agents
+    """
+    # Lazy import to avoid loading heavy dependencies
+    from macsdk.core import get_registry
+
+    from . import agents
+
+    agents.register_all_agents()
+    registry = get_registry()
+    registered = agents.get_registered_agents()
+
     console.print()
+
+    # Case 1: Show all agents with their tools
+    if show_all:
+        if not registered:
+            console.print(
+                Panel(
+                    "[dim]No agents registered yet.\n\n"
+                    "Add agents in [white]src/{{ project_slug }}/agents.py[/][/]",
+                    title="[bold]🤖 Agents & Tools[/]",
+                    border_style="yellow",
+                )
+            )
+            return
+
+        for agent_info in registered:
+            name = agent_info.get("name", "Unknown")
+            agent = registry.get(name)
+            agent_tools = getattr(agent, "tools", [])
+
+            console.print(f"[bold cyan]{name}[/] [dim]({len(agent_tools)} tools)[/]")
+
+            if not agent_tools:
+                console.print("  [dim]No tools available[/]\n")
+                continue
+
+            table = Table(
+                show_header=True,
+                header_style="bold magenta",
+                border_style="dim",
+                box=None,
+                padding=(0, 2),
+            )
+            table.add_column("Tool", style="cyan", no_wrap=True)
+            table.add_column("Description", style="white")
+
+            for t in agent_tools:
+                tool_name = t.name
+                description = t.description or "No description"
+                first_line = description.split("\n")[0].strip()
+                table.add_row(tool_name, first_line)
+
+            console.print(table)
+            console.print()
+
+        return
+
+    # Case 2: Show tools for specific agent
+    if agent_name is not None:
+        if not registry.is_registered(agent_name):
+            console.print(f"[red]✗ Error:[/] Agent '{agent_name}' not found")
+            console.print(
+                "[dim]Use[/] [green]{{ script_name }} agents[/] "
+                "[dim]to see registered agents.[/]\n"
+            )
+            return
+
+        agent = registry.get(agent_name)
+        agent_tools = getattr(agent, "tools", [])
+
+        if not agent_tools:
+            console.print(f"[yellow]Agent '{agent_name}' has no tools[/]\n")
+            return
+
+        table = Table(
+            title=f"[bold]🔧 Tools for {agent_name}[/]",
+            show_header=True,
+            header_style="bold magenta",
+            border_style="dim",
+            title_justify="left",
+        )
+        table.add_column("Tool", style="cyan", no_wrap=True)
+        table.add_column("Description", style="white")
+
+        for t in agent_tools:
+            tool_name = t.name
+            description = t.description or "No description"
+            first_line = description.split("\n")[0].strip()
+            table.add_row(tool_name, first_line)
+
+        console.print(table)
+        console.print(f"\n[dim]Total: {len(agent_tools)} tools[/]\n")
+        return
+
+    # Case 3: No argument - show agents with hint about tools command
     console.print(
         "[yellow]💡 Tip:[/] Chatbots use [cyan]agents[/], not tools directly.\n"
         "   Each agent has its own tools. Showing agents instead:\n"
     )
     ctx.invoke(list_agents)
+    console.print(
+        "[dim]To see tools for a specific agent:[/]\n"
+        "  [green]{{ script_name }} tools <agent_name>[/]\n"
+        "\n[dim]To see all tools for all agents:[/]\n"
+        "  [green]{{ script_name }} tools --all[/]\n"
+    )
 
 
 @cli.command(name="agents")
