@@ -51,6 +51,7 @@ from .config import (
     load_config_from_yaml,
     validate_config,
 )
+from .exceptions import SpecialistTimeoutError
 from .graph import create_chatbot_graph, create_web_chatbot_graph
 from .llm import get_answer_model
 from .logging import (
@@ -102,6 +103,8 @@ __all__ = [
     "ConfigurationError",
     "DEFAULT_CONFIG_FILE",
     "CONFIG_FILE_ENV_VAR",
+    # Exceptions
+    "SpecialistTimeoutError",
     # Logging
     "configure_cli_logging",
     "determine_log_level",

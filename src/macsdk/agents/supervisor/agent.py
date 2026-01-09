@@ -6,6 +6,7 @@ specialist agents using them as tools.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -14,6 +15,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.config import get_stream_writer
 
 from ...core.config import config
+from ...core.exceptions import SpecialistTimeoutError
 from ...core.llm import get_answer_model
 from ...core.registry import get_all_agent_tools, get_all_capabilities
 from ...core.utils import STREAM_WRITER_KEY, extract_text_content, log_progress
@@ -186,10 +188,11 @@ async def supervisor_agent_node(
         except (RuntimeError, Exception):
             pass
 
-        result = await supervisor.ainvoke(
-            {"messages": input_messages},
-            config=run_config,
-        )
+        async with asyncio.timeout(config.supervisor_timeout):
+            result = await supervisor.ainvoke(
+                {"messages": input_messages},
+                config=run_config,
+            )
 
         # Extract the response
         response_message = result["messages"][-1]
@@ -211,6 +214,37 @@ async def supervisor_agent_node(
                 "workflow_step": "format",
             }
         )
+
+    except SpecialistTimeoutError as e:
+        # Specialist agent timeout - preserve specific error message
+        error_response = (
+            f"The request took too long to process. {str(e)} "
+            "Try asking about fewer items at once."
+        )
+        state.update(
+            {
+                "chatbot_response": error_response,
+                "messages": [AIMessage(content=error_response)],
+                "workflow_step": "error",
+            }
+        )
+        return state
+
+    except TimeoutError:
+        # Supervisor timeout - provide generic message
+        error_response = (
+            f"The request took too long to process "
+            f"(exceeded {config.supervisor_timeout} seconds). "
+            "Try asking about fewer items at once."
+        )
+        state.update(
+            {
+                "chatbot_response": error_response,
+                "messages": [AIMessage(content=error_response)],
+                "workflow_step": "error",
+            }
+        )
+        return state
 
     except Exception as e:
         import traceback
@@ -235,11 +269,6 @@ async def supervisor_agent_node(
             error_response = (
                 "The request required too many steps to complete. "
                 "Try asking a more specific question."
-            )
-        elif "timeout" in error_msg.lower() or "deadline" in error_msg.lower():
-            error_response = (
-                "The request took too long to process. "
-                "Try asking about fewer items at once."
             )
         elif "rate" in error_msg.lower() or "quota" in error_msg.lower():
             error_response = (

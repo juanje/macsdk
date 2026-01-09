@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from io import StringIO
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -190,6 +191,36 @@ class TestRunAgentWithTools:
         # Should work correctly despite being deprecated
         assert result["response"] == TEST_RESPONSE
         assert result["agent_name"] == TEST_AGENT_NAME
+
+    @pytest.mark.asyncio
+    async def test_run_agent_with_timeout(self) -> None:
+        """Raises SpecialistTimeoutError when agent execution exceeds timeout."""
+        from macsdk.core import SpecialistTimeoutError, run_agent_with_tools
+
+        mock_agent = AsyncMock()
+
+        # Simulate a long-running agent operation
+        async def slow_invoke(*args, **kwargs):
+            await asyncio.sleep(1)  # Longer than test timeout
+            return {"messages": [MagicMock(content=TEST_RESPONSE)]}
+
+        mock_agent.ainvoke = slow_invoke
+
+        with (
+            patch("macsdk.core.utils.log_progress"),
+            patch("macsdk.core.config.config") as mock_config,
+        ):
+            # Use a very short timeout for testing (0.1 seconds)
+            mock_config.specialist_timeout = 0.1
+            mock_config.recursion_limit = 50
+
+            # Should raise SpecialistTimeoutError
+            with pytest.raises(SpecialistTimeoutError, match="timed out after 0.1"):
+                await run_agent_with_tools(
+                    agent=mock_agent,
+                    query=TEST_QUERY,
+                    agent_name=TEST_AGENT_NAME,
+                )
 
 
 class TestExtractTextContent:
