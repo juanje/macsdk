@@ -209,11 +209,24 @@ This is a test fact for integration testing.
         assert "Error" in result
 
     def test_hierarchical_structure(self, tmp_path: Path) -> None:
-        """Test that hierarchical skill organization works."""
+        """Test progressive disclosure: top-level listed, sub-skills accessible.
+
+        The inventory only lists top-level skills. Sub-skills in subdirectories
+        are NOT listed but ARE accessible via read_skill() with relative paths.
+        """
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
 
-        # Create nested structure
+        # Create top-level skill that links to specific sub-skills
+        (skills_dir / "deploy.md").write_text("""---
+name: deploy
+description: General deployment guidance
+---
+For specific deployments, see:
+- deploy/deploy-frontend.md
+- deploy/deploy-backend.md""")
+
+        # Create nested structure with sub-skills
         deploy_dir = skills_dir / "deploy"
         deploy_dir.mkdir()
 
@@ -221,30 +234,35 @@ This is a test fact for integration testing.
 name: deploy-frontend
 description: Deploy frontend service
 ---
-Content""")
+Frontend deployment steps""")
 
         (deploy_dir / "deploy-backend.md").write_text("""---
 name: deploy-backend
 description: Deploy backend service
 ---
-Content""")
+Backend deployment steps""")
 
         # Create tools
         tools = create_skills_tools(skills_dir)
         assert len(tools) == 1
         read_skill = tools[0]
 
-        # Create middleware to verify inventory captures both
+        # Middleware inventory should only contain top-level skill
         middleware = ToolInstructionsMiddleware(tools=tools, skills_dir=skills_dir)
-        assert len(middleware._skills_inventory) == 2
+        assert len(middleware._skills_inventory) == 1  # Only "deploy"
 
         names = {s["name"] for s in middleware._skills_inventory}
-        assert "deploy-frontend" in names
-        assert "deploy-backend" in names
+        assert "deploy" in names
+        # Sub-skills NOT in inventory (progressive disclosure)
+        assert "deploy-frontend" not in names
+        assert "deploy-backend" not in names
 
-        # Read using relative path
+        # But sub-skills ARE accessible via read_skill with relative path
         content = read_skill.invoke({"path": "deploy/deploy-frontend.md"})
-        assert "Content" in content
+        assert "Frontend deployment steps" in content
+
+        content = read_skill.invoke({"path": "deploy/deploy-backend.md"})
+        assert "Backend deployment steps" in content
 
     def test_partial_knowledge(self, test_skills_dir: Path) -> None:
         """Test using only skills without facts."""

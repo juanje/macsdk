@@ -45,12 +45,14 @@ macsdk add-agent . --new weather --description "Weather forecasts"
 # This creates:
 # src/my_chatbot/local_agents/weather/
 #   ├── __init__.py
-#   ├── agent.py
+#   ├── agent.py     # CAPABILITIES (system prompt) + agent implementation
 #   ├── config.py
 #   ├── models.py
-#   ├── prompts.py
 #   └── tools.py
 ```
+
+**Note**: `CAPABILITIES` in `agent.py` is the single source of truth - it's
+used both as the system prompt and for supervisor routing.
 
 ## When to Use This Approach
 

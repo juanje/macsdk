@@ -86,7 +86,7 @@ class TestAgentGeneration:
         assert (generated_agent / "src" / agent_slug / "agent.py").exists()
         assert (generated_agent / "src" / agent_slug / "tools.py").exists()
         assert (generated_agent / "src" / agent_slug / "py.typed").exists()
-        assert (generated_agent / "src" / agent_slug / "prompts.py").exists()
+        # prompts.py no longer generated - CAPABILITIES is the system prompt
         assert (generated_agent / "tests" / "test_agent.py").exists()
 
     def test_agent_can_import(self, generated_agent: Path) -> None:
@@ -206,7 +206,7 @@ class TestMonoRepoWorkflow:
         assert (agent_dir / "config.py").exists()
         assert (agent_dir / "agent.py").exists()
         assert (agent_dir / "tools.py").exists()
-        assert (agent_dir / "prompts.py").exists()
+        # prompts.py no longer generated - CAPABILITIES is the system prompt
 
     def test_local_agent_can_import(self, chatbot_with_local_agent: Path) -> None:
         """Local agent can be imported using relative imports."""

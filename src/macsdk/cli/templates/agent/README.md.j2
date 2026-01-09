@@ -140,14 +140,23 @@ macsdk add-agent . --path ./{{ name }}
 
 ## Customization
 
+### Defining What Your Agent Does
+
+Edit `CAPABILITIES` in `src/{{ agent_slug }}/agent.py` to define what your agent can do.
+This is the single source of truth - used both as the system prompt and for supervisor routing.
+
 ### Adding Tools
 
 Edit `src/{{ agent_slug }}/tools.py` to add new tools.
 Remember to also update the `TOOLS` list in `cli.py`.
 
-### Modifying the Prompt
+### Extending with Knowledge
 
-Edit `src/{{ agent_slug }}/prompts.py` to change agent behavior.
+For more complex behavior, add skills and facts:
+- **Skills** (`skills/`): Step-by-step instructions for tasks
+- **Facts** (`facts/`): Domain context and reference data
+
+See `macsdk new agent --with-knowledge` for knowledge-enabled agents.
 
 ### Structured Responses
 

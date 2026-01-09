@@ -104,8 +104,8 @@ Content"""
         assert "Content" in body
 
     def test_list_documents(self, tmp_path: Path) -> None:
-        """Test listing markdown documents."""
-        # Create test files
+        """Test listing markdown documents (top-level only)."""
+        # Create top-level test files
         (tmp_path / "skill1.md").write_text("""---
 name: skill1
 description: First skill
@@ -118,21 +118,23 @@ description: Second skill
 ---
 Content 2""")
 
-        # Create a subdirectory with a file
+        # Create a subdirectory with a file (should NOT be listed)
         subdir = tmp_path / "subdir"
         subdir.mkdir()
         (subdir / "skill3.md").write_text("""---
 name: skill3
-description: Third skill
+description: Third skill (sub-skill)
 ---
 Content 3""")
 
-        # List documents
+        # List documents - only top-level files should be listed
         docs = _list_documents(tmp_path)
-        assert len(docs) == 3
+        assert len(docs) == 2  # Only skill1 and skill2, not skill3
 
         names = {doc["name"] for doc in docs}
-        assert names == {"skill1", "skill2", "skill3"}
+        assert names == {"skill1", "skill2"}
+        # skill3 is NOT listed (progressive disclosure pattern)
+        assert "skill3" not in names
 
     def test_list_documents_empty_directory(self, tmp_path: Path) -> None:
         """Test listing documents in an empty directory."""
@@ -166,6 +168,51 @@ Document content""")
         content = _read_document(tmp_path, "../../../etc/passwd", "skill")
         assert "Error" in content
         assert "Invalid path" in content
+
+    def test_read_document_in_subdirectory(self, tmp_path: Path) -> None:
+        """Test reading a document in a subdirectory (progressive disclosure).
+
+        Sub-skills are NOT listed in inventory but ARE accessible via read_skill().
+        """
+        # Create subdirectory with a file
+        subdir = tmp_path / "check-health"
+        subdir.mkdir()
+        (subdir / "api-gateway.md").write_text("""---
+name: api-gateway-health
+description: API Gateway health check
+---
+Detailed API Gateway troubleshooting steps""")
+
+        # Should be able to read it with relative path
+        content = _read_document(tmp_path, "check-health/api-gateway.md", "skill")
+        assert "API Gateway troubleshooting" in content
+
+    def test_list_documents_progressive_disclosure(self, tmp_path: Path) -> None:
+        """Test progressive disclosure: top-level listed, sub-skills accessible."""
+        # Create top-level skill
+        (tmp_path / "check-health.md").write_text("""---
+name: check-health
+description: General health check guidance
+---
+For specific services, see check-health/api-gateway.md""")
+
+        # Create sub-skill in subdirectory
+        subdir = tmp_path / "check-health"
+        subdir.mkdir()
+        (subdir / "api-gateway.md").write_text("""---
+name: api-gateway-health
+description: API Gateway specific
+---
+Detailed steps""")
+
+        # Only top-level should be listed
+        docs = _list_documents(tmp_path)
+        assert len(docs) == 1
+        assert docs[0]["name"] == "check-health"
+
+        # But sub-skill should still be readable
+        content = _read_document(tmp_path, "check-health/api-gateway.md", "skill")
+        assert "Detailed steps" in content
 
 
 class TestSkillsTools:

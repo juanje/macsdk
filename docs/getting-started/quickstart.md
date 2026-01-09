@@ -101,8 +101,8 @@ uv run infra-agent tools
 └────────────┴──────────────────────────────────────────────────┘
 ```
 
-These are **generic SDK tools** that work with any API. The API schema is in the prompt,
-so the LLM decides which endpoints to call. Edit `prompts.py` to describe your API.
+These are **generic SDK tools** that work with any API. The API schema is in `CAPABILITIES`,
+so the LLM decides which endpoints to call. Edit `CAPABILITIES` in `agent.py` to describe your API.
 
 ## 7. Add Agent to Chatbot
 

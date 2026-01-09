@@ -120,7 +120,7 @@ class TestNewAgentCommand:
             assert (agent_dir / "agent.py").exists()
             assert (agent_dir / "models.py").exists()
             assert (agent_dir / "tools.py").exists()
-            assert (agent_dir / "prompts.py").exists()
+            # prompts.py no longer generated - CAPABILITIES is the system prompt
 
     def test_creates_tests_directory(self) -> None:
         """Creates tests directory."""
@@ -138,12 +138,12 @@ class TestNewAgentCommand:
                 ["new", "agent", TEST_AGENT_NAME, "--description", TEST_DESCRIPTION],
             )
             assert result.exit_code == 0
-            # Check prompts file has system prompt defined
-            prompts_content = (
-                Path(TEST_AGENT_NAME) / "src" / TEST_AGENT_SLUG / "prompts.py"
+            # Check agent.py has CAPABILITIES and SYSTEM_PROMPT defined
+            agent_content = (
+                Path(TEST_AGENT_NAME) / "src" / TEST_AGENT_SLUG / "agent.py"
             ).read_text()
-            assert "SYSTEM_PROMPT" in prompts_content
-            assert "api_get" in prompts_content.lower()
+            assert "CAPABILITIES" in agent_content
+            assert "SYSTEM_PROMPT = CAPABILITIES" in agent_content
 
     def test_creates_agent_with_output_dir(self) -> None:
         """Creates agent in specified output directory."""

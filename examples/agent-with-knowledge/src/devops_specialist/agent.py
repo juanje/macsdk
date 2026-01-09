@@ -1,4 +1,9 @@
-"""DevOps Specialist agent implementation."""
+"""DevOps Specialist agent implementation.
+
+This agent demonstrates using knowledge tools (skills and facts) to extend
+agent capabilities without modifying code. CAPABILITIES defines what the
+agent does, while skills and facts provide detailed instructions and context.
+"""
 
 from __future__ import annotations
 
@@ -8,27 +13,58 @@ from langchain.agents import create_agent
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, tool
 
+from macsdk.agents.supervisor import SPECIALIST_PLANNING_PROMPT
 from macsdk.core import get_answer_model, run_agent_with_tools
 from macsdk.middleware import DatetimeContextMiddleware, TodoListMiddleware
 from macsdk.tools.knowledge import get_knowledge_bundle
 
 from .models import AgentResponse
-from .prompts import SYSTEM_PROMPT, TODO_PLANNING_SPECIALIST_PROMPT
 from .tools import get_tools
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
 
-CAPABILITIES = """DevOps specialist with access to skills and facts knowledge systems.
 
-Can help with:
-- Service deployment and configuration
-- Health monitoring and troubleshooting
-- Infrastructure management
-- CI/CD operations
-- Log analysis
+# CAPABILITIES is the single source of truth for this agent:
+# - Used as the system prompt for the LLM
+# - Used by the supervisor to decide when to route queries here
+# - Skills and facts extend these capabilities with detailed instructions
+CAPABILITIES = """DevOps specialist with knowledge-based task guidance.
 
-Uses knowledge tools for task guidance and contextual information."""
+This agent can help with:
+- Service health monitoring and troubleshooting
+- Deployment procedures and automation
+- Infrastructure configuration
+- CI/CD pipeline management
+- Log analysis and debugging
+
+## Tools Available
+
+You have access to:
+- Generic API tools (api_get) for REST calls
+- File fetching tools (fetch_file) for logs and configs
+- Calculate tool for any math operations
+- **Skills system** for step-by-step task instructions
+- **Facts system** for contextual information and reference data
+
+## Guidelines
+
+1. **Use skills first**: Before attempting complex tasks, check if there's a
+   relevant skill with instructions (the available skills are listed in
+   the system prompt)
+2. **Consult facts**: Use facts to get accurate service names, configurations,
+   and policies
+3. **Calculate accurately**: Always use calculate() for math - never compute
+   mentally
+4. **Be systematic**: Follow documented procedures from skills when available
+5. **Verify your work**: Check results and report any issues clearly
+
+**Math**: Always use calculate() for any numeric operation. Never compute
+mentally.
+"""
+
+# CAPABILITIES is the system prompt
+SYSTEM_PROMPT = CAPABILITIES
 
 
 def create_devops_specialist(debug: bool = False) -> Any:
@@ -44,7 +80,7 @@ def create_devops_specialist(debug: bool = False) -> Any:
     tools = get_tools()
 
     # Build system prompt with task planning
-    system_prompt = SYSTEM_PROMPT + "\n\n" + TODO_PLANNING_SPECIALIST_PROMPT
+    system_prompt = SYSTEM_PROMPT + "\n\n" + SPECIALIST_PLANNING_PROMPT
 
     # Build middleware list
     middleware: list[Any] = [
@@ -52,7 +88,7 @@ def create_devops_specialist(debug: bool = False) -> Any:
         TodoListMiddleware(enabled=True),
     ]
 
-    # Add knowledge middleware (auto-injects usage instructions)
+    # Add knowledge middleware (auto-injects skills/facts inventory)
     _, knowledge_middleware = get_knowledge_bundle(__package__)
     middleware.extend(knowledge_middleware)
 
@@ -95,7 +131,12 @@ async def run_devops_specialist(
 
 
 class DevOpsSpecialist:
-    """DevOps Specialist agent that implements the SpecialistAgent protocol."""
+    """DevOps Specialist agent that implements the SpecialistAgent protocol.
+
+    This agent extends its capabilities through knowledge tools:
+    - Skills: Step-by-step instructions for tasks (skills/*.md)
+    - Facts: Contextual information and reference data (facts/*.md)
+    """
 
     name: str = "devops_specialist"
     capabilities: str = CAPABILITIES

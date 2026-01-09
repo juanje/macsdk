@@ -253,8 +253,8 @@ def add_local_agent_to_chatbot(
 
     console.print("\n[green]✓[/green] Local agent created successfully!")
     console.print("\n[dim]Next steps:[/dim]")
-    console.print(f"  1. Implement your tools in local_agents/{agent_slug}/tools.py")
-    console.print(f"  2. Customize the prompt in local_agents/{agent_slug}/prompts.py")
+    console.print(f"  1. Define CAPABILITIES in local_agents/{agent_slug}/agent.py")
+    console.print(f"  2. Configure tools in local_agents/{agent_slug}/tools.py")
     console.print(f"  3. Run: uv run {chatbot_slug.replace('_', '-')}")
 
 
@@ -383,7 +383,6 @@ def _create_local_agent(
         ("agent/models.py.j2", agent_dir / "models.py"),
         ("agent/agent.py.j2", agent_dir / "agent.py"),
         ("agent/tools.py.j2", agent_dir / "tools.py"),
-        ("agent/prompts.py.j2", agent_dir / "prompts.py"),
     ]
 
     for template_name, output_file in templates:

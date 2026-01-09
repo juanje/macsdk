@@ -56,20 +56,21 @@ from macsdk.tools import api_get, fetch_file
 tools = [api_get, fetch_file]
 ```
 
-And describe the API in the prompt:
+And describe the API in CAPABILITIES (which becomes the system prompt):
 
 ```python
-SYSTEM_PROMPT = """
-## API Service: "devops"
+CAPABILITIES = """DevOps monitoring assistant.
 
-Available endpoints:
-- GET /services - List all services
-- GET /services/{id} - Get a specific service
-- GET /alerts - List alerts
-- GET /alerts with params {"severity": "critical"} - Filter by severity
+This agent can:
+- Check infrastructure service health and status
+- Monitor CI/CD pipelines and their jobs
+- Review alerts (critical, warnings, unacknowledged)
+- Track deployments across environments
+- Fetch and analyze log files
 
-Always use service="devops" when calling api_get.
-"""
+Uses api_get and fetch_file tools to access the API."""
+
+SYSTEM_PROMPT = CAPABILITIES  # Single source of truth
 ```
 
 **Advantages:**
@@ -92,10 +93,19 @@ register_api_service(
 )
 ```
 
-### 2. Describe the API in the prompt
+### 2. Describe the API in CAPABILITIES
+
+In `agent.py`, CAPABILITIES serves as both the system prompt and the supervisor's routing guide:
 
 ```python
-SYSTEM_PROMPT = """You are a DevOps assistant.
+CAPABILITIES = """DevOps monitoring assistant.
+
+This agent can:
+- Check infrastructure service health and status
+- Monitor CI/CD pipelines and their jobs
+- Review alerts (critical, warnings, unacknowledged)
+- Track deployments across environments
+- Fetch and analyze log files
 
 ## API Service: "devops"
 
@@ -107,8 +117,9 @@ Endpoints:
 - GET /alerts - List alerts
 - GET /alerts with params {"severity": "critical"} - Critical only
 
-Always use service="devops" when calling api_get.
-"""
+Always use service="devops" when calling api_get."""
+
+SYSTEM_PROMPT = CAPABILITIES
 ```
 
 ### 3. Use the generic tools

@@ -131,15 +131,14 @@ devops-chatbot/
 │   │   ├── __init__.py
 │   │   └── api/           # API agent as internal module
 │   │       ├── __init__.py
-│   │       ├── agent.py
+│   │       ├── agent.py   # CAPABILITIES + agent implementation
 │   │       ├── config.py
 │   │       ├── models.py
-│   │       ├── prompts.py
 │   │       └── tools.py
 │   ├── agents.py          # Agent registration (relative imports)
 │   ├── cli.py             # CLI entry point
 │   ├── config.py          # Custom configuration
-│   └── prompts.py         # Supervisor prompts
+│   └── prompts.py         # Supervisor prompts (chatbot customization)
 ├── config.yml.example     # RAG configuration example
 ├── .env.example           # Environment variables
 └── pyproject.toml

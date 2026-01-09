@@ -2,6 +2,27 @@
 
 Knowledge tools enable agents to access task instructions (skills) and contextual information (facts) that are packaged with the agent. This guide explains how to use the knowledge system effectively.
 
+## Philosophy: Extension Without Code Changes
+
+The knowledge system follows MACSDK's core principle: **extend agent capabilities without modifying code**.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AGENT + KNOWLEDGE                        │
+│                                                             │
+│   CAPABILITIES (agent.py)                                   │
+│   └── "What I can do" (base system prompt)                  │
+│                                                             │
+│   + Skills (skills/*.md)                                    │
+│   └── "How to do complex tasks" (step-by-step)              │
+│                                                             │
+│   + Facts (facts/*.md)                                      │
+│   └── "Domain context" (reference data, configs)            │
+│                                                             │
+│   = Complete agent prompt (assembled by middleware)         │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ## Overview
 
 The knowledge system consists of:
@@ -211,24 +232,107 @@ Agent flow when user asks about specific services:
 
 3. **Use accurate information** in subsequent operations
 
-### Pattern 3: Hierarchical Knowledge
+### Pattern 3: Progressive Disclosure (Hierarchical Knowledge)
 
-Organize knowledge hierarchically:
+For complex domains, organize knowledge hierarchically using **progressive disclosure**:
+the agent sees only top-level skills/facts in the inventory, and discovers more specific
+documents by reading the general ones first.
+
+#### Directory Structure
 
 ```
 skills/
-├── deploy/
-│   ├── deploy-frontend.md
-│   ├── deploy-backend.md
-│   └── deploy-database.md
-└── troubleshoot/
-    ├── troubleshoot-alerts.md
-    └── troubleshoot-logs.md
+├── check-service-health.md       # ← Listed in inventory (top-level)
+├── check-service-health/         # ← NOT listed, but accessible
+│   ├── api-gateway.md
+│   ├── auth-service.md
+│   └── postgres-primary.md
+├── deploy-service.md             # ← Listed in inventory
+└── deploy-service/               # ← NOT listed
+    ├── deploy-frontend.md
+    └── deploy-backend.md
 ```
 
-The agent can navigate this structure:
-- See all skills in the system prompt inventory
-- Read specific skills as needed
+#### How It Works
+
+1. **Inventory shows only top-level files**: The agent's system prompt lists only
+   `check-service-health.md` and `deploy-service.md`
+
+2. **Top-level skills link to specific ones**: The general skill explains the topic
+   and references specific sub-skills:
+
+   ```markdown
+   # Check Service Health
+
+   ## General Workflow
+   1. Start with /services to get overview
+   2. For deeper investigation, use service-specific skills (see below)
+
+   ## Service-Specific Skills
+   - **check-service-health/api-gateway.md**: API Gateway troubleshooting
+   - **check-service-health/auth-service.md**: Auth service monitoring
+   ```
+
+3. **Agent navigates hierarchically**: When the agent needs details, it reads
+   the specific sub-skill using the full path:
+
+   ```
+   Agent: read_skill("check-service-health/api-gateway.md")
+   → Detailed API Gateway troubleshooting steps
+   ```
+
+#### Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| **Reduced prompt size** | Only top-level skills in inventory |
+| **Better context** | Agent reads general guidance before specifics |
+| **Scalability** | Works well with many specific skills |
+| **Intentionality** | Agent understands WHY it needs the specific skill |
+
+#### Writing Top-Level Skills
+
+A good top-level skill should:
+
+1. **Provide overview**: Explain the general approach
+2. **List sub-skills**: Document what specific skills exist and when to use them
+3. **Include paths**: Use exact paths so the agent can read them
+
+**Example** (`check-service-health.md`):
+
+```markdown
+---
+name: check-service-health
+description: How to check service health (general guidance)
+---
+
+# Check Service Health
+
+## Quick Overview
+Use `api_get` with service="devops", endpoint="/services"
+
+## When to Use Service-Specific Skills
+
+For detailed troubleshooting, use these specialized skills:
+- **check-service-health/api-gateway.md**: Latency issues, timeouts
+- **check-service-health/auth-service.md**: Token problems, dependencies
+- **check-service-health/postgres-primary.md**: Connection pools, queries
+
+Use this general skill for **overview and initial assessment**.
+Use service-specific skills when you need **detailed troubleshooting**.
+```
+
+#### Agent Workflow Example
+
+**User**: "Why is the API Gateway having issues?"
+
+**Agent**:
+1. Sees `check-service-health.md` in inventory
+2. Reads it → gets overview + learns about specific skills
+3. Reads `check-service-health/api-gateway.md` for detailed steps
+4. Follows the specific troubleshooting procedure
+
+This pattern ensures the agent has context before diving into specifics.
 
 ## Frontmatter Format
 
@@ -418,6 +522,7 @@ middleware = [
 - **Prerequisites**: List what's needed before starting
 - **Common issues**: Include troubleshooting tips
 - **Related content**: Link to relevant facts or other skills
+- **Progressive disclosure**: For complex topics, create a general skill that links to specific sub-skills in a subdirectory
 
 ### 2. Fact Design
 
