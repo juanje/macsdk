@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from ...core.config import config
 from ...core.llm import get_answer_model
 from ...core.utils import extract_text_content
 from .prompts import FORMATTER_PROMPT
@@ -67,7 +68,8 @@ using the information provided below."""
     ]
 
     try:
-        response = await llm.ainvoke(messages)
+        async with asyncio.timeout(config.formatter_timeout):
+            response = await llm.ainvoke(messages)
         # Extract text from structured content (handles Gemini's list format)
         formatted_response = extract_text_content(response.content)
 
@@ -76,6 +78,13 @@ using the information provided below."""
         return {
             "chatbot_response": formatted_response,
             "messages": [AIMessage(content=formatted_response)],
+            "workflow_step": "complete",
+        }
+    except asyncio.TimeoutError:
+        # If formatting times out, return the raw results
+        return {
+            "chatbot_response": agent_results,
+            "messages": [AIMessage(content=agent_results)],
             "workflow_step": "complete",
         }
     except Exception as e:

@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import Any, Literal, Optional
 
-from pydantic import Field, ValidationError, field_validator
+from pydantic import Field, ValidationError, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -178,6 +178,10 @@ class MACSDKConfig(EnvPrioritySettingsMixin, BaseSettings):
         server_port: Port for the web server.
         message_max_length: Maximum message length in characters.
         warmup_timeout: Timeout for graph warmup on startup.
+        supervisor_timeout: Timeout for supervisor (includes specialist calls).
+        formatter_timeout: Timeout for formatter agent execution.
+        specialist_timeout: Timeout for specialist agent execution.
+        llm_request_timeout: Timeout for individual LLM HTTP requests.
         enable_todo: (DEPRECATED) TODO middleware is always enabled.
         url_security: URL security configuration for SSRF protection.
     """
@@ -214,6 +218,22 @@ class MACSDKConfig(EnvPrioritySettingsMixin, BaseSettings):
     recursion_limit: int = Field(default=50, ge=1)
     # Use higher values (100+) for complex workflows with many steps
 
+    # Timeout Configuration (seconds)
+    supervisor_timeout: float = Field(
+        default=120.0,
+        gt=0,
+        description="Timeout for supervisor (includes nested specialist calls)",
+    )
+    formatter_timeout: float = Field(
+        default=30.0, gt=0, description="Timeout for formatter agent execution"
+    )
+    specialist_timeout: float = Field(
+        default=90.0, gt=0, description="Timeout for specialist agent execution"
+    )
+    llm_request_timeout: float = Field(
+        default=60.0, gt=0, description="Timeout for individual LLM HTTP requests"
+    )
+
     # Debug Configuration
     debug: bool = False  # Enable debug mode (shows prompts sent to LLM)
 
@@ -230,6 +250,23 @@ class MACSDKConfig(EnvPrioritySettingsMixin, BaseSettings):
 
     # URL Security Configuration
     url_security: URLSecurityConfig = Field(default_factory=URLSecurityConfig)
+
+    @model_validator(mode="after")
+    def validate_timeout_hierarchy(self) -> "MACSDKConfig":
+        """Validate that timeout values follow logical hierarchy.
+
+        The supervisor timeout should be >= specialist timeout since the supervisor
+        orchestrates specialist agents. If supervisor_timeout is too low, it may
+        cancel specialists that are still within their valid time window.
+        """
+        if self.supervisor_timeout < self.specialist_timeout:
+            logger.warning(
+                f"supervisor_timeout ({self.supervisor_timeout}s) is less than "
+                f"specialist_timeout ({self.specialist_timeout}s). This may cause "
+                "specialists to be cancelled prematurely. Consider increasing "
+                "supervisor_timeout or decreasing specialist_timeout."
+            )
+        return self
 
     @field_validator("log_level", mode="before")
     @classmethod

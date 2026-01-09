@@ -32,6 +32,7 @@ def get_answer_model() -> ChatGoogleGenerativeAI:
         temperature=config.llm_temperature,
         google_api_key=config.get_api_key(),
         model_kwargs={"reasoning_effort": config.llm_reasoning_effort},
+        timeout=config.llm_request_timeout,
     )
 
 

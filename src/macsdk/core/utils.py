@@ -6,6 +6,7 @@ including logging, agent execution helpers, and streaming utilities.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import warnings
 from typing import TYPE_CHECKING, Any, Callable
@@ -218,7 +219,13 @@ async def run_agent_with_tools(
     else:
         invoke_config["callbacks"] = [tool_callback]
 
-    result = await agent.ainvoke({"messages": messages}, config=invoke_config)
+    try:
+        async with asyncio.timeout(macsdk_config.specialist_timeout):
+            result = await agent.ainvoke({"messages": messages}, config=invoke_config)
+    except asyncio.TimeoutError:
+        from .exceptions import SpecialistTimeoutError
+
+        raise SpecialistTimeoutError(agent_name, macsdk_config.specialist_timeout)
 
     # Extract tools used from messages (if available)
     tools_used = []

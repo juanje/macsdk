@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -84,6 +85,44 @@ class TestFormatterNode:
             assert result["chatbot_response"] == "Raw weather data: sunny, 25°C"
             assert result["workflow_step"] == "complete"
             # Even on error, messages should be updated (with raw results)
+            assert "messages" in result
+            assert len(result["messages"]) == 1
+            assert result["messages"][0].content == "Raw weather data: sunny, 25°C"
+
+    @pytest.mark.asyncio
+    async def test_formatter_handles_timeout(self) -> None:
+        """Formatter returns raw results when formatting times out."""
+        state: ChatbotState = {
+            "messages": [],
+            "user_query": "What is the weather?",
+            "chatbot_response": "",
+            "workflow_step": "format",
+            "agent_results": "Raw weather data: sunny, 25°C",
+        }
+
+        with (
+            patch("macsdk.agents.formatter.agent.get_answer_model") as mock_model,
+            patch("macsdk.agents.formatter.agent.config") as mock_config,
+        ):
+            # Use a very short timeout for testing (0.1 seconds)
+            mock_config.formatter_timeout = 0.1
+
+            mock_llm = AsyncMock()
+
+            # Simulate a timeout (longer than test timeout)
+            async def slow_invoke(*args, **kwargs):
+                await asyncio.sleep(1)  # 1 second > 0.1s test timeout
+                return AIMessage(content="Formatted response")
+
+            mock_llm.ainvoke = slow_invoke
+            mock_model.return_value = mock_llm
+
+            result = await formatter_node(state)
+
+            # Should return raw results as fallback after timeout
+            assert result["chatbot_response"] == "Raw weather data: sunny, 25°C"
+            assert result["workflow_step"] == "complete"
+            # Messages should be updated with raw results
             assert "messages" in result
             assert len(result["messages"]) == 1
             assert result["messages"][0].content == "Raw weather data: sunny, 25°C"

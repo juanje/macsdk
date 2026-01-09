@@ -828,6 +828,30 @@ skills/
 
 ---
 
+### Specialist Agents Architecture (Tools, Not Nodes)
+
+**False Positive:** "`supervisor_timeout` only covers planning, not specialist execution. Specialists run in separate LangGraph tool nodes."
+
+**Reality:**
+- Specialist agents are **LangChain tools** (BaseTool), not LangGraph nodes
+- Graph: `START → supervisor → formatter → END` (only 2 nodes)
+- Specialists execute **inside** `supervisor.ainvoke()` as synchronous tool calls
+- `supervisor_timeout` wraps the entire `ainvoke()`, including all tool/specialist executions
+
+**Pattern:**
+```python
+async with asyncio.timeout(config.supervisor_timeout):
+    result = await supervisor.ainvoke(...)  # Tools execute here, not after
+```
+
+**Not standard LangGraph** (supervisor_node → tool_node → supervisor_node). This project uses agents-as-tools pattern.
+
+**Evidence:** `src/macsdk/core/graph.py` (2 nodes), `src/macsdk/agents/supervisor/agent.py:71,108` (tools=agent_tools)
+
+**Do NOT suggest:** Moving timeout to graph.invoke() or renaming to `supervisor_planning_timeout`.
+
+---
+
 ## Business Logic & Implementation Decisions
 
 ### Built-in Agents Architecture

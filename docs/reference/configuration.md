@@ -44,6 +44,12 @@ summarization_keep_messages: 6
 recursion_limit: 50  # Max iterations for agent tool calls (default: 50)
 # Use higher values (100+) for complex workflows with many steps
 
+# Timeout configuration (seconds) - prevents hanging on long-running operations
+supervisor_timeout: 120.0      # Supervisor execution (includes specialist calls)
+specialist_timeout: 90.0       # Specialist agent execution (includes LLM + tools)
+formatter_timeout: 30.0        # Response formatting
+llm_request_timeout: 60.0      # Individual LLM HTTP requests
+
 # =============================================================================
 # Web Server Configuration
 # =============================================================================
@@ -447,6 +453,18 @@ All configuration options can be set via environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `RECURSION_LIMIT` | Max agent iterations | `50` |
+| `SUPERVISOR_TIMEOUT` | Supervisor execution timeout (includes specialist calls) | `120.0` |
+| `SPECIALIST_TIMEOUT` | Specialist agent timeout (includes LLM + tools) | `90.0` |
+| `FORMATTER_TIMEOUT` | Response formatting timeout | `30.0` |
+| `LLM_REQUEST_TIMEOUT` | Individual LLM HTTP request timeout | `60.0` |
+
+**Timeout Hierarchy:**
+- `llm_request_timeout`: Lowest level - times out individual HTTP calls to the LLM API
+- `specialist_timeout`: Mid level - times out entire specialist execution (multiple LLM calls + tool usage)
+- `supervisor_timeout`: Highest level - times out supervisor orchestration (can include multiple specialist calls)
+- `formatter_timeout`: Independent - times out response formatting (returns raw results if exceeded)
+
+Adjust these values if you experience frequent timeouts with complex queries or slow network connections.
 
 ### Other
 
