@@ -88,12 +88,12 @@ def create_supervisor_agent(
             )
         )
 
-    # Add datetime middleware if enabled
+    # Add datetime middleware if enabled (supervisor uses full mode)
     datetime_enabled = (
         include_datetime if include_datetime is not None else config.include_datetime
     )
     if datetime_enabled:
-        middleware.append(DatetimeContextMiddleware(enabled=True))
+        middleware.append(DatetimeContextMiddleware(enabled=True, mode="full"))
 
     # Add summarization middleware if enabled
     if config.summarization_enabled:

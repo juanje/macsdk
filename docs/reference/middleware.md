@@ -16,6 +16,13 @@ MACSDK includes middleware components that enhance agent capabilities automatica
 
 Injects temporal context into prompts, helping agents interpret timestamps, logs, and relative date expressions.
 
+The middleware supports two modes optimized for different agent types:
+
+| Mode | Token Cost | Best For | Contains |
+|------|------------|----------|----------|
+| `minimal` | ~15 tokens | **Specialist agents** (default) | Current date only |
+| `full` | ~500 tokens | **Supervisor agents** | Current date + pre-calculated ranges |
+
 ### Configuration
 
 ```yaml
@@ -25,7 +32,15 @@ include_datetime: true  # default: true
 
 ### What It Provides
 
-When enabled, agents receive this context automatically:
+**Minimal mode** (default for specialists):
+
+```
+**Current date**: Friday, January 09, 2026 (2026-01-09T19:55:00Z)
+```
+
+**Full mode** (for supervisors):
+
+When enabled with `mode="full"`, agents receive this complete context:
 
 ```
 ## Current DateTime Context
@@ -68,9 +83,73 @@ The datetime context is injected **at the end** of the system prompt before each
 - **Pre-calculated ranges**: Common date ranges ready to use
 - **Optimized for caching**: Placement maximizes LLM provider caching efficiency
 
+### Mode Selection
+
+**When to use `minimal` (default):**
+- Specialist agents that receive pre-processed queries from supervisor
+- Agents that need timestamp interpretation but not temporal query translation
+- Token efficiency is important (99% of agents)
+
+**When to use `full`:**
+- Supervisor agents that interpret user queries with temporal references
+- Agents that need to translate "last week" → concrete ISO dates
+- First point of contact for user queries
+
+### Usage Examples
+
+**Specialist agent (minimal mode - default):**
+```python
+from macsdk.middleware import DatetimeContextMiddleware
+
+middleware = [
+    DatetimeContextMiddleware()  # Uses minimal mode by default
+]
+```
+
+**Supervisor agent (full mode):**
+```python
+from macsdk.middleware import DatetimeContextMiddleware
+
+middleware = [
+    DatetimeContextMiddleware(mode="full")  # Includes pre-calculated dates
+]
+```
+
+**Programmatic usage:**
+```python
+from macsdk.middleware import (
+    format_minimal_datetime_context,
+    format_datetime_context,
+)
+
+# Get minimal context string
+minimal = format_minimal_datetime_context()
+
+# Get full context string  
+full = format_datetime_context()
+```
+
+### Architecture Pattern
+
+In supervisor/specialist architectures:
+
+1. **Supervisor** uses `mode="full"` to interpret user queries like "failed pipelines from last week"
+2. **Supervisor** translates temporal references to concrete dates: "since 2026-01-02T00:00:00Z"
+3. **Specialists** use `mode="minimal"` to interpret timestamps in logs/API responses
+4. **Result**: 90%+ reduction in datetime context tokens across the system
+
 ### Example Use Case
 
-When a user asks "Show me failed pipelines from last week", the agent can immediately use the pre-calculated `Last 7 days` date in its API call without needing custom date logic in the prompt.
+**User query**: "Show me failed pipelines from last week"
+
+**Supervisor** (with full mode):
+- Sees pre-calculated `Last 7 days: 2026-01-02T00:00:00Z`
+- Routes to specialist: `"failed pipelines since 2026-01-02T00:00:00Z"`
+
+**Specialist** (with minimal mode):
+- Receives concrete date from supervisor
+- Uses minimal context to interpret log timestamps
+- No need for date range calculations
 
 ## TodoListMiddleware (DEPRECATED)
 
