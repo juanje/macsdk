@@ -59,12 +59,6 @@ def cli() -> None:
     default=False,
     help="Include RAG agent (chatbot only, default: no)",
 )
-@click.option(
-    "--with-knowledge/--no-knowledge",
-    "-K/-k",
-    default=False,
-    help="Include knowledge tools (agent only, default: no)",
-)
 def new(
     project_type: str,
     name: str,
@@ -74,7 +68,6 @@ def new(
     macsdk_git: bool,
     macsdk_path: str | None,
     with_rag: bool,
-    with_knowledge: bool,
 ) -> None:
     """Create a new chatbot or agent project.
 
@@ -90,16 +83,11 @@ def new(
       --no-rag:         Don't include RAG agent (default)
 
     \b
-    Agent Options:
-      --with-knowledge: Include knowledge tools (skills/facts)
-      --no-knowledge:   Don't include knowledge tools (default)
-
-    \b
     Examples:
       macsdk new chatbot my-assistant --display-name "My Assistant"
       macsdk new chatbot docs-bot --with-rag  # With RAG for docs Q&A
       macsdk new agent weather-agent
-      macsdk new agent devops-agent --with-knowledge  # With skills/facts
+      macsdk new agent devops-agent  # Knowledge tools auto-detected
       macsdk new chatbot my-bot --macsdk-git
       macsdk new agent my-agent --macsdk-path /path/to/macsdk
     """
@@ -114,17 +102,13 @@ def new(
         macsdk_source = {"type": "git", "value": __repo_url__}
 
     if project_type == "chatbot":
-        if with_knowledge:
-            click.echo("Note: --with-knowledge is only applicable to agents, ignoring.")
         create_chatbot_project(
             name, display_name, description, output_dir, macsdk_source, with_rag
         )
     else:
         if with_rag:
             click.echo("Note: --with-rag is only applicable to chatbots, ignoring.")
-        create_agent_project(
-            name, description, output_dir, macsdk_source, with_knowledge
-        )
+        create_agent_project(name, description, output_dir, macsdk_source)
 
 
 @cli.command(name="add-agent")

@@ -86,16 +86,14 @@ This example demonstrates the clean integration pattern for knowledge tools:
 ```python
 def get_tools() -> list:
     """All tools collected in one place."""
-    from macsdk.tools.knowledge import get_knowledge_bundle
+    from macsdk.tools import get_sdk_tools
     
     _ensure_api_registered()
-    knowledge_tools, _ = get_knowledge_bundle(__package__)
     
     return [
+        *get_sdk_tools(__package__),  # calculate + auto-detect knowledge
         api_get,
         fetch_file,
-        calculate,
-        *knowledge_tools,  # Automatically includes: list_skills, read_skill, list_facts, read_fact
     ]
 ```
 
@@ -106,12 +104,8 @@ def create_devops_specialist(debug: bool = False) -> Any:
     
     middleware = [
         DatetimeContextMiddleware(),
-        TodoListMiddleware(enabled=True),
+        *get_sdk_middleware(__package__),  # Auto-detect knowledge
     ]
-    
-    # Add knowledge middleware directly
-    _, knowledge_middleware = get_knowledge_bundle(__package__)
-    middleware.extend(knowledge_middleware)
     
     return create_agent(...)
 ```

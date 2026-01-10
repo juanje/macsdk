@@ -155,6 +155,7 @@ macsdk/
 - **src/macsdk/agents/__init__.py** - Implements lazy loading for RAGAgent using `__getattr__` with `TYPE_CHECKING` block for static analysis.
 - **src/macsdk/tools/api.py** - API tools (`api_get`, `api_post`) with retry logic, JSONPath extraction, and certificate management.
 - **src/macsdk/tools/calculate.py** - Safe math evaluator with DoS protection (factorial/pow limits, expression length).
+- **src/macsdk/tools/sdk_tools.py** - Auto-inclusion of internal SDK tools (`get_sdk_tools`, `get_sdk_middleware`) with knowledge tool detection.
 - **src/macsdk/tools/knowledge/** - Skills/facts document tools with frontmatter parsing and path security.
 - **src/macsdk/cli/commands/new.py** - Project scaffolding logic; generates chatbots/agents from Jinja2 templates.
 
@@ -752,9 +753,9 @@ HTML comments (`<!-- -->`) are ignored by LLMs, providing robust delimiters for 
 
 **False Positive:** "Hardcoded tool names are tightly coupled. Use metadata/attributes instead."
 
-**Reality:** Tool names (`read_skill`, `read_fact`) are public API contract. Name matching is intentional KISS design. The middleware pre-injects knowledge inventory into the system prompt. Do NOT suggest metadata approach.
+**Reality:** Tool names (`read_skill`, `read_fact`) are public API contract. Name matching is intentional KISS design. `get_sdk_middleware(__package__)` includes `ToolInstructionsMiddleware` only if knowledge tools detected (checked once at agent creation).
 
-**Evidence:** `src/macsdk/middleware/tool_instructions.py`
+**Evidence:** `src/macsdk/middleware/tool_instructions.py`, `src/macsdk/tools/sdk_tools.py`
 
 ---
 
@@ -768,11 +769,21 @@ HTML comments (`<!-- -->`) are ignored by LLMs, providing robust delimiters for 
 
 ---
 
-### Knowledge Bundle Dual Calls
+### SDK Tools Auto-Detection Pattern
 
-**False Positive:** "Calling `get_knowledge_bundle()` twice is inefficient/duplicative"
+**False Positive:** "Should manually import `calculate`, `read_skill`, `read_fact` in agent tools"
 
-**Reality:** Intentional. `get_knowledge_bundle(__package__)` called separately in `tools.py` (for tools) and `agent.py` (for middleware). Enables lazy initialization and CLI visibility. Lightweight operation (just creates instances). Do NOT suggest caching in global variable or wrapper functions.
+**Reality:** `get_sdk_tools(__package__)` auto-includes SDK internal tools:
+- `calculate`: Always included
+- `read_skill`/`read_fact`: Only if `skills/` or `facts/` dirs exist with `.md` files
+
+**Current Pattern:**
+```python
+def get_tools() -> list:
+    return [*get_sdk_tools(__package__), api_get, fetch_file]
+```
+
+**Evidence:** `src/macsdk/tools/sdk_tools.py`, all agent templates
 
 ---
 
@@ -835,6 +846,16 @@ skills/
 
 ---
 
+### Knowledge Tools Flag Removed (v0.7.0+)
+
+**False Positive:** "Should use `macsdk new agent --with-knowledge`"
+
+**Reality:** Flag removed. All agents include `skills/` and `facts/` dirs with `.gitkeep`. `get_sdk_tools(__package__)` auto-detects `.md` files. No manual configuration.
+
+**Evidence:** `src/macsdk/cli/commands/new.py`, `src/macsdk/tools/sdk_tools.py`
+
+---
+
 ### Calculate Tool DoS Limits
 
 **False Positive:** "Limits too restrictive (factorial max 100, pow max ±1000)"
@@ -852,6 +873,38 @@ skills/
 **Reality:** `is_relative_to()` prevents bypass attacks (e.g., symlinks). `str.startswith()` is vulnerable. Always use `Path.is_relative_to()`.
 
 **Evidence:** `src/macsdk/tools/knowledge/helpers.py`
+
+---
+
+### API Service Registration Pattern
+
+**False Positive:** "API services registered at module level cause side effects on import"
+
+**Reality:** Agents use lazy registration via `_ensure_api_registered()` with global flag. Called in `get_tools()` before returning tools. No import-time side effects.
+
+**Evidence:** Templates and examples
+
+---
+
+### SDK Tools Double get_knowledge_bundle Call
+
+**False Positive:** "Calling `get_knowledge_bundle` twice (tools + middleware) is inefficient, should cache"
+
+**Reality:** Acceptable startup cost. Called once during agent initialization (not per-request). Typical: <10ms for glob checks on 2 directories. Caching adds complexity for negligible benefit.
+
+**Evidence:** `src/macsdk/tools/sdk_tools.py` - `get_sdk_tools` and `get_sdk_middleware` both call `get_knowledge_bundle`
+
+---
+
+### Example Markdown Files in skills/facts Directories
+
+**False Positive:** "Should include example `.md` files in `skills/` and `facts/` directories for new agents"
+
+**Reality:** Example `.md` files would auto-trigger knowledge tools (`any(glob("*.md"))`), causing the LLM to read placeholder content as real knowledge. This creates confusion between example vs production content.
+
+**Correct approach:** Agent README includes inline example showing file format + link to full documentation.
+
+**Evidence:** `src/macsdk/cli/templates/agent/README.md.j2` - inline example without triggering auto-detection
 
 ---
 
@@ -917,12 +970,18 @@ START → supervisor_node → formatter_node → END
 
 ### Specialist Agent Architecture (CAPABILITIES = SYSTEM_PROMPT)
 
-**For reviewers:** Specialist agents use `SYSTEM_PROMPT = CAPABILITIES` pattern. This is intentional:
-- No separate `prompts.py` for specialists (only supervisor/formatter have one)
-- `CAPABILITIES` serves dual purpose: supervisor routing + agent system prompt
-- Domain knowledge added via skills/facts, not prompt files
+**For reviewers:** Specialist agents use `SYSTEM_PROMPT = CAPABILITIES`. No separate `prompts.py` (only supervisor/formatter have one). SDK tools auto-included via `get_sdk_tools(__package__)` and `get_sdk_middleware(__package__)`.
 
-**Do NOT suggest:** Creating `prompts.py` for specialist agents, separating CAPABILITIES from SYSTEM_PROMPT.
+**Current patterns:**
+```python
+def get_tools() -> list:
+    _ensure_api_registered()
+    return [*get_sdk_tools(__package__), api_get, fetch_file]
+
+middleware = [DatetimeContextMiddleware(), *get_sdk_middleware(__package__)]
+```
+
+**Do NOT suggest:** Creating `prompts.py` for specialists, separating CAPABILITIES from SYSTEM_PROMPT, manually importing `calculate`/knowledge tools.
 
 ---
 

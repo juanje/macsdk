@@ -20,9 +20,7 @@ from macsdk.middleware import (
     DatetimeContextMiddleware,
     PromptDebugMiddleware,
 )
-{% if with_knowledge %}
-from macsdk.tools.knowledge import get_knowledge_bundle
-{% endif %}
+from macsdk.tools import get_sdk_middleware
 
 from .models import AgentResponse
 from .tools import get_tools
@@ -44,6 +42,7 @@ Uses api_get and fetch_file tools with API schema in the prompt."""
 
 SYSTEM_PROMPT = CAPABILITIES
 
+
 def create_{{ agent_slug }}(
     debug: bool | None = None,
 ) -> Any:
@@ -56,7 +55,7 @@ def create_{{ agent_slug }}(
     Returns:
         Configured agent instance.
     """
-    # Get all tools (includes knowledge tools if enabled)
+    # Get all tools (includes SDK internal + manual tools)
     tools = get_tools()
 
     # Build system prompt with task planning guidance (CoT prompts)
@@ -65,7 +64,7 @@ def create_{{ agent_slug }}(
     # Build middleware list
     middleware: list[Any] = []
 
-    # Add debug middleware if enabled (via parameter or config)
+    # Add debug middleware if enabled
     debug_enabled = debug if debug is not None else config.debug
     if debug_enabled:
         middleware.append(
@@ -78,12 +77,9 @@ def create_{{ agent_slug }}(
 
     # Add datetime context middleware
     middleware.append(DatetimeContextMiddleware())
-{% if with_knowledge %}
 
-    # Add knowledge middleware (auto-injects usage instructions)
-    _, knowledge_middleware = get_knowledge_bundle(__package__)
-    middleware.extend(knowledge_middleware)
-{% endif %}
+    # Add SDK middleware (auto-detects knowledge if dirs exist)
+    middleware.extend(get_sdk_middleware(__package__))
 
     agent = create_agent(
         model=get_answer_model(),
@@ -140,7 +136,7 @@ class {{ agent_class }}:
     tools: list = []  # Loaded lazily
 
     def __init__(self) -> None:
-        """Initialize the agent with tools{% if with_knowledge %} (includes knowledge tools){% endif %}."""
+        """Initialize the agent with tools."""
         self.tools = get_tools()
 
     async def run(

@@ -37,10 +37,9 @@ def get_knowledge_bundle(
 ) -> tuple[list[Any], list[Any]]:
     """Get knowledge tools and middleware for a package.
 
-    This is a convenience function that returns tools and middleware
-    configured correctly for the knowledge system. The middleware
-    auto-detects which tools are included and injects appropriate
-    usage instructions along with the inventory of available skills/facts.
+    Tools are only created if directories exist AND contain .md files.
+    This enables auto-detection: create the directory and add files
+    to enable the feature automatically.
 
     Args:
         package: Package name. Use __package__ for current package.
@@ -50,17 +49,15 @@ def get_knowledge_bundle(
         include_facts: Include facts tools (read_fact).
 
     Returns:
-        Tuple of (tools, middleware).
+        Tuple of (tools, middleware). Empty lists if no knowledge exists.
 
     Example:
         >>> from macsdk.tools.knowledge import get_knowledge_bundle
         >>>
+        >>> # Auto-detection: only creates tools if dirs have content
         >>> knowledge_tools, knowledge_mw = get_knowledge_bundle(__package__)
-        >>> agent = create_agent(
-        ...     tools=[*my_tools, *knowledge_tools],
-        ...     middleware=[*my_mw, *knowledge_mw],
-        ...     system_prompt=SYSTEM_PROMPT,
-        ... )
+        >>> len(knowledge_tools)  # 0 if no skills/ or facts/ with .md files
+        0
 
     Example with partial inclusion:
         >>> # Only include skills, not facts
@@ -82,20 +79,31 @@ def get_knowledge_bundle(
     skills_path: Path | None = None
     facts_path: Path | None = None
 
-    # Create skills tools if requested
+    # Create skills tools ONLY if directory exists with .md content
     if include_skills:
-        skills_path = Path(str(package_root.joinpath(skills_subdir)))
-        skills_tools = create_skills_tools(skills_path)
-        tools.extend(skills_tools)  # Now just [read_skill]
+        candidate_path = Path(str(package_root.joinpath(skills_subdir)))
+        if (
+            candidate_path.exists()
+            and candidate_path.is_dir()
+            and any(candidate_path.glob("*.md"))
+        ):
+            skills_path = candidate_path
+            skills_tools = create_skills_tools(skills_path)
+            tools.extend(skills_tools)
 
-    # Create facts tools if requested
+    # Create facts tools ONLY if directory exists with .md content
     if include_facts:
-        facts_path = Path(str(package_root.joinpath(facts_subdir)))
-        facts_tools = create_facts_tools(facts_path)
-        tools.extend(facts_tools)  # Now just [read_fact]
+        candidate_path = Path(str(package_root.joinpath(facts_subdir)))
+        if (
+            candidate_path.exists()
+            and candidate_path.is_dir()
+            and any(candidate_path.glob("*.md"))
+        ):
+            facts_path = candidate_path
+            facts_tools = create_facts_tools(facts_path)
+            tools.extend(facts_tools)
 
-    # Create middleware configured for the included tools
-    # Pass directory paths for inventory injection into system prompt
+    # Middleware ONLY if we have tools
     middleware = (
         [
             ToolInstructionsMiddleware(

@@ -15,8 +15,8 @@ from langchain_core.tools import InjectedToolArg, tool
 
 from macsdk.agents.supervisor import SPECIALIST_PLANNING_PROMPT
 from macsdk.core import get_answer_model, run_agent_with_tools
-from macsdk.middleware import DatetimeContextMiddleware, TodoListMiddleware
-from macsdk.tools.knowledge import get_knowledge_bundle
+from macsdk.middleware import DatetimeContextMiddleware
+from macsdk.tools import get_sdk_middleware
 
 from .models import AgentResponse
 from .tools import get_tools
@@ -85,12 +85,8 @@ def create_devops_specialist(debug: bool = False) -> Any:
     # Build middleware list
     middleware: list[Any] = [
         DatetimeContextMiddleware(),
-        TodoListMiddleware(enabled=True),
+        *get_sdk_middleware(__package__),  # Auto-detect knowledge
     ]
-
-    # Add knowledge middleware (auto-injects skills/facts inventory)
-    _, knowledge_middleware = get_knowledge_bundle(__package__)
-    middleware.extend(knowledge_middleware)
 
     agent: Any = create_agent(
         model=get_answer_model(),

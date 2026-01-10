@@ -21,20 +21,28 @@ from __future__ import annotations
 from langchain_core.tools import tool
 
 from macsdk.core.api_registry import register_api_service
-from macsdk.tools import api_get, fetch_file, make_api_request
+from macsdk.tools import api_get, fetch_file, get_sdk_tools, make_api_request
 
 # =============================================================================
 # SERVICE REGISTRATION
 # =============================================================================
 
-# Register DevOps Mock API as a service
-# Hosted on my-json-server.typicode.com using juanje/devops-mock-api repo
-register_api_service(
-    name="devops",
-    base_url="https://my-json-server.typicode.com/juanje/devops-mock-api",
-    timeout=10,
-    max_retries=2,
-)
+_api_registered = False
+
+
+def _ensure_api_registered() -> None:
+    """Register the API service on first use."""
+    global _api_registered
+    if not _api_registered:
+        # Register DevOps Mock API as a service
+        # Hosted on my-json-server.typicode.com using juanje/devops-mock-api repo
+        register_api_service(
+            name="devops",
+            base_url="https://my-json-server.typicode.com/juanje/devops-mock-api",
+            timeout=10,
+            max_retries=2,
+        )
+        _api_registered = True
 
 
 # =============================================================================
@@ -168,10 +176,14 @@ async def investigate_failed_job(job_id: int) -> str:
 def get_tools() -> list:
     """Get all tools for this agent.
 
-    Returns both generic SDK tools (for flexible API access)
-    and custom tools (for specialized operations).
+    Returns SDK internal tools (calculate), generic SDK tools
+    (for flexible API access), and custom tools (for specialized operations).
     """
+    _ensure_api_registered()
+
     return [
+        # SDK internal tools (calculate always included)
+        *get_sdk_tools(None),  # No package = only calculate
         # Generic SDK tools - LLM uses these with any endpoint
         api_get,
         fetch_file,

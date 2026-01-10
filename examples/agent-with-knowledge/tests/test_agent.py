@@ -19,10 +19,8 @@ class TestDevOpsSpecialist:
         agent = DevOpsSpecialist()
         tool_names = {tool.name for tool in agent.tools}
 
-        # Should have knowledge tools
-        assert "list_skills" in tool_names
+        # Should have knowledge tools (auto-detected from skills/ and facts/)
         assert "read_skill" in tool_names
-        assert "list_facts" in tool_names
         assert "read_fact" in tool_names
 
     def test_agent_has_calculate_tool(self) -> None:

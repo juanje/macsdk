@@ -248,13 +248,13 @@ def get_tools():
 
 ### Adding Knowledge (Skills and Facts)
 
-Create an agent with knowledge tools:
+Create an agent (knowledge tools are auto-detected):
 
 ```bash
-macsdk new agent devops-specialist --with-knowledge
+macsdk new agent devops-specialist
 ```
 
-Or add knowledge to an existing agent manually:
+Add knowledge files to enable knowledge tools:
 
 **Skills** (`skills/deploy-service.md`):
 ```markdown

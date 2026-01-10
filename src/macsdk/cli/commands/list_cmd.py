@@ -16,7 +16,33 @@ console = Console()
 # SDK Tools Information
 # =============================================================================
 
-SDK_TOOLS = [
+# Internal tools (auto-included via get_sdk_tools)
+INTERNAL_TOOLS = [
+    {
+        "name": "calculate",
+        "category": "Math",
+        "description": "Safe math evaluation (LLMs are unreliable at arithmetic)",
+        "params": "expression",
+        "condition": "always",
+    },
+    {
+        "name": "read_skill",
+        "category": "Knowledge",
+        "description": "Read a skill document (step-by-step instructions)",
+        "params": "path",
+        "condition": "if skills/ has .md",
+    },
+    {
+        "name": "read_fact",
+        "category": "Knowledge",
+        "description": "Read a fact document (contextual information)",
+        "params": "path",
+        "condition": "if facts/ has .md",
+    },
+]
+
+# Manual tools (add explicitly to get_tools)
+MANUAL_TOOLS = [
     # API tools
     {
         "name": "api_get",
@@ -88,22 +114,48 @@ SERVICE_CONFIG_OPTIONS = [
 
 def list_sdk_tools() -> None:
     """List tools provided by the MACSDK."""
-    # Tools table
-    table = Table(title="🔧 MACSDK Tools")
-    table.add_column("Tool", style="cyan", no_wrap=True)
-    table.add_column("Category", style="yellow")
-    table.add_column("Description", style="white")
-    table.add_column("Parameters", style="dim")
+    # Internal tools table (auto-included)
+    internal_table = Table(
+        title="🔧 Internal Tools (auto-included via get_sdk_tools)",
+        title_style="bold cyan",
+    )
+    internal_table.add_column("Tool", style="cyan", no_wrap=True)
+    internal_table.add_column("Category", style="yellow")
+    internal_table.add_column("Description", style="white")
+    internal_table.add_column("Parameters", style="dim")
+    internal_table.add_column("Condition", style="magenta")
 
-    for tool_info in SDK_TOOLS:
-        table.add_row(
+    for tool_info in INTERNAL_TOOLS:
+        internal_table.add_row(
+            tool_info["name"],
+            tool_info["category"],
+            tool_info["description"],
+            tool_info["params"],
+            tool_info["condition"],
+        )
+
+    console.print(internal_table)
+    console.print()
+
+    # Manual tools table
+    manual_table = Table(
+        title="🛠️  Manual Tools (add explicitly to get_tools)",
+        title_style="bold green",
+    )
+    manual_table.add_column("Tool", style="cyan", no_wrap=True)
+    manual_table.add_column("Category", style="yellow")
+    manual_table.add_column("Description", style="white")
+    manual_table.add_column("Parameters", style="dim")
+
+    for tool_info in MANUAL_TOOLS:
+        manual_table.add_row(
             tool_info["name"],
             tool_info["category"],
             tool_info["description"],
             tool_info["params"],
         )
 
-    console.print(table)
+    console.print(manual_table)
     console.print()
 
     # Service configuration options
@@ -117,43 +169,36 @@ def list_sdk_tools() -> None:
     console.print(config_table)
     console.print()
 
-    # Usage example
+    # Usage examples
     usage_text = """\
-[bold]Register a service:[/bold]
+[bold]Using get_sdk_tools (recommended):[/bold]
+
+[cyan]from macsdk.tools import api_get, fetch_file, get_sdk_tools[/cyan]
+
+[cyan]def get_tools():[/cyan]
+[cyan]    return [[/cyan]
+[cyan]        *get_sdk_tools(__package__),  [dim]# calculate + auto-detect knowledge[/dim][/cyan]
+[cyan]        api_get,[/cyan]
+[cyan]        fetch_file,[/cyan]
+[cyan]    ][/cyan]
+
+[bold]Enabling knowledge tools:[/bold]
+
+[dim]# Create directories with .md files[/dim]
+[cyan]mkdir -p src/my_agent/skills src/my_agent/facts[/cyan]
+[cyan]echo "---\\nname: example\\n---\\n# Example" > src/my_agent/skills/example.md[/cyan]
+
+[dim]# read_skill and read_fact will be auto-detected on next run[/dim]
+
+[bold]Registering API services:[/bold]
 
 [cyan]from macsdk.core.api_registry import register_api_service[/cyan]
 
-[dim]# Basic service with token[/dim]
 [cyan]register_api_service([/cyan]
 [cyan]    "github",[/cyan]
 [cyan]    "https://api.github.com",[/cyan]
 [cyan]    token=os.environ["GITHUB_TOKEN"],[/cyan]
 [cyan])[/cyan]
-
-[dim]# Internal service with custom SSL cert[/dim]
-[cyan]register_api_service([/cyan]
-[cyan]    "internal",[/cyan]
-[cyan]    "https://api.internal.company.com",[/cyan]
-[cyan]    token=os.environ["INTERNAL_TOKEN"],[/cyan]
-[cyan]    ssl_cert="/path/to/company-ca.pem",[/cyan]
-[cyan])[/cyan]
-
-[dim]# Test server (no SSL verification)[/dim]
-[cyan]register_api_service([/cyan]
-[cyan]    "test",[/cyan]
-[cyan]    "https://localhost:8443",[/cyan]
-[cyan]    ssl_verify=False,  [red]# Insecure![/red][/cyan]
-[cyan])[/cyan]
-
-[bold]Use in your tools:[/bold]
-
-[cyan]@tool[/cyan]
-[cyan]async def get_users():[/cyan]
-[cyan]    return await api_get.ainvoke({[/cyan]
-[cyan]        "service": "github",[/cyan]
-[cyan]        "endpoint": "/users",[/cyan]
-[cyan]        "extract": "$[*].login",  # JSONPath[/cyan]
-[cyan]    })[/cyan]
 """
 
     console.print(Panel(usage_text, title="Examples", border_style="green"))

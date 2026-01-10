@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from macsdk.tools import api_get, calculate, fetch_file
+from macsdk.tools import api_get, fetch_file, get_sdk_tools
 
 # =============================================================================
 # SERVICE REGISTRATION
@@ -32,25 +32,20 @@ def get_tools() -> list:
     """Get all tools for this agent, ensuring API is registered.
 
     Includes:
-    - Generic SDK tools (api_get, fetch_file, calculate)
-    - Knowledge tools (read_skill, read_fact)
+    - SDK internal tools (calculate, and knowledge tools if dirs exist)
+    - Manual tools (api_get, fetch_file)
 
-    Note: calculate is included by default. LLMs are unreliable at math,
-    so always keep this tool available. Do not remove it.
+    Note:
+        Knowledge tools (read_skill, read_fact) are auto-detected.
+        Create skills/ or facts/ directories with .md files to enable them.
 
     Returns:
         List of all tools for the agent.
     """
-    from macsdk.tools.knowledge import get_knowledge_bundle
-
     _ensure_api_registered()
 
-    # Get knowledge tools configured for this package
-    knowledge_tools, _ = get_knowledge_bundle(__package__)
-
     return [
+        *get_sdk_tools(__package__),  # calculate + auto-detect knowledge
         api_get,
         fetch_file,
-        calculate,  # Required - LLMs cannot do math reliably
-        *knowledge_tools,  # Skills and facts tools
     ]

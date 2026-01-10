@@ -152,11 +152,31 @@ Remember to also update the `TOOLS` list in `cli.py`.
 
 ### Extending with Knowledge
 
-For more complex behavior, add skills and facts:
-- **Skills** (`skills/`): Step-by-step instructions for tasks
-- **Facts** (`facts/`): Domain context and reference data
+Add domain knowledge to your agent via skills and facts:
 
-See `macsdk new agent --with-knowledge` for knowledge-enabled agents.
+- **Skills** (`skills/*.md`): Step-by-step task instructions
+- **Facts** (`facts/*.md`): Domain context and reference data
+
+Knowledge tools are **auto-detected** - just add `.md` files to enable:
+
+```bash
+# Add a skill
+cat > src/{{ agent_slug }}/skills/example-task.md << 'EOF'
+---
+name: example-task
+description: How to perform example task
+---
+
+# Example Task
+
+1. First step
+2. Second step
+EOF
+
+# The agent will automatically include read_skill tool
+```
+
+**Documentation:** See [Using Knowledge Tools](https://github.com/juanje/macsdk/blob/main/docs/guides/using-knowledge-tools.md)
 
 ### Structured Responses
 

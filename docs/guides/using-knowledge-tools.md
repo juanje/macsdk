@@ -34,12 +34,12 @@ The knowledge system consists of:
 
 ## Quick Start
 
-### 1. Create Agent with Knowledge Tools
+### 1. Create Agent
 
-When creating a new agent, use the `--with-knowledge` flag:
+Create a new agent (knowledge tools are auto-detected):
 
 ```bash
-macsdk new agent devops-specialist --with-knowledge
+macsdk new agent devops-specialist
 ```
 
 This generates:
@@ -48,57 +48,45 @@ This generates:
 devops-specialist/
 └── src/
     └── devops_specialist/
-        ├── agent.py         # Pre-configured with knowledge bundle
-        ├── skills/          # Task instructions directory
-        │   └── example-skill.md
-        └── facts/           # Contextual info directory
-            └── example-fact.md
+        ├── agent.py         # Uses get_sdk_tools and get_sdk_middleware
+        ├── tools.py         # Configured for auto-detection
+        ├── skills/          # Empty, ready for use
+        └── facts/           # Empty, ready for use
 ```
 
 ### 2. Agent Code (Auto-Generated)
 
-The generated code uses a clean, zero-duplication architecture:
+The generated code uses SDK internal tools with auto-detection:
 
-**`tools.py`** - Single source of truth for all tools:
+**`tools.py`** - Uses `get_sdk_tools` for automatic inclusion:
 
 ```python
-from macsdk.tools import api_get, calculate, fetch_file
+from macsdk.tools import api_get, fetch_file, get_sdk_tools
 
 def get_tools() -> list:
     """Get all tools for this agent."""
-    from macsdk.tools.knowledge import get_knowledge_bundle
-    
     _ensure_api_registered()
     
-    # Lazy initialization - get knowledge tools when needed
-    knowledge_tools, _ = get_knowledge_bundle(__package__)
-    
     return [
+        *get_sdk_tools(__package__),  # calculate + auto-detect knowledge
         api_get,
         fetch_file,
-        calculate,
-        *knowledge_tools,  # Adds: read_skill, read_fact
     ]
 ```
 
-**`agent.py`** - Direct middleware setup:
+**`agent.py`** - Uses `get_sdk_middleware` for auto-detection:
 
 ```python
-from macsdk.tools.knowledge import get_knowledge_bundle
+from macsdk.tools import get_sdk_middleware
 from .tools import get_tools
 
 def create_agent_name():
-    # Get all tools in one call (includes knowledge tools)
-    tools = get_tools()
+    tools = get_tools()  # Already includes SDK tools
     
     middleware = [
         DatetimeContextMiddleware(),
-        TodoListMiddleware(enabled=True),
+        *get_sdk_middleware(__package__),  # Auto-detect knowledge
     ]
-    
-    # Add knowledge middleware directly
-    _, knowledge_middleware = get_knowledge_bundle(__package__)
-    middleware.extend(knowledge_middleware)
     
     return create_agent(
         tools=tools,
@@ -108,9 +96,9 @@ def create_agent_name():
 ```
 
 **Key benefits:**
-- ✅ Tools appear in `my-agent tools` command
-- ✅ Zero duplication - tools defined once
-- ✅ No risk of middleware/tools mismatch
+- ✅ `calculate` always included (LLMs need it)
+- ✅ Knowledge tools auto-detected when you add .md files
+- ✅ Zero configuration - just add files
 - ✅ Simple and maintainable
 
 ### 3. Add Your Skills and Facts
@@ -396,47 +384,36 @@ mkdir -p src/your_agent/skills src/your_agent/facts
 
 ### 3. Update `tools.py`
 
-Add knowledge tools to your `get_tools()` function:
+Use `get_sdk_tools` for automatic inclusion:
 
 ```python
-from macsdk.tools import api_get, calculate, fetch_file
+from macsdk.tools import api_get, fetch_file, get_sdk_tools
 
 def get_tools() -> list:
     """Get all tools for this agent."""
-    from macsdk.tools.knowledge import get_knowledge_bundle
-    
-    # Your existing initialization
     _ensure_api_registered()
     
-    # Get knowledge tools (lazy initialization)
-    knowledge_tools, _ = get_knowledge_bundle(__package__)
-    
     return [
+        *get_sdk_tools(__package__),  # calculate + auto-detect knowledge
         api_get,
         fetch_file,
-        calculate,
-        *knowledge_tools,  # read_skill, read_fact
     ]
 ```
 
 ### 4. Update `agent.py`
 
-Add knowledge middleware to your agent:
+Use `get_sdk_middleware` for auto-detection:
 
 ```python
-from macsdk.tools.knowledge import get_knowledge_bundle
+from macsdk.tools import get_sdk_middleware
 
 def create_your_agent():
-    tools = get_tools()  # Already includes knowledge tools
+    tools = get_tools()  # Already includes SDK tools
     
     middleware = [
         DatetimeContextMiddleware(),
-        TodoListMiddleware(enabled=True),
+        *get_sdk_middleware(__package__),  # Auto-detect knowledge
     ]
-    
-    # Add knowledge middleware
-    _, knowledge_middleware = get_knowledge_bundle(__package__)
-    middleware.extend(knowledge_middleware)
     
     return create_agent(
         tools=tools,
@@ -445,9 +422,9 @@ def create_your_agent():
     )
 ```
 
-### 5. Add example files
+### 5. Add .md files
 
-Create at least one skill and one fact to test the system.
+Add skills or facts as .md files with frontmatter. They'll be auto-detected on next run.
 
 ## Advanced Usage
 

@@ -1,6 +1,41 @@
-# API Tools
+# Tools Reference
 
 > **Security Note**: When using tools that access URLs (`fetch_file`, `api_get`, etc.), consider enabling URL Security to protect against Server-Side Request Forgery (SSRF) attacks. See [URL Security Configuration](configuration.md#url-security-configuration) for details.
+
+## Tool Categories
+
+MACSDK provides two categories of tools:
+
+### Internal Tools (Auto-included)
+
+These tools are automatically included via `get_sdk_tools()`:
+
+| Tool | Category | Description | Condition |
+|------|----------|-------------|-----------|
+| `calculate` | Math | Safe math evaluation | Always |
+| `read_skill` | Knowledge | Read skill documents | If `skills/` has .md files |
+| `read_fact` | Knowledge | Read fact documents | If `facts/` has .md files |
+
+**Usage:**
+
+```python
+from macsdk.tools import get_sdk_tools
+
+def get_tools():
+    return [
+        *get_sdk_tools(__package__),  # Auto-includes calculate + knowledge
+        # Your manual tools here
+    ]
+```
+
+### Manual Tools (Add Explicitly)
+
+These tools are added based on your agent's needs:
+
+- **API tools**: `api_get`, `api_post`, `api_put`, `api_delete`, `api_patch`
+- **Remote tools**: `fetch_file`, `fetch_and_save`, `fetch_json`
+
+Run `macsdk list-tools` to see all available tools and parameters.
 
 ## Philosophy: Fewer tools, more intelligence
 
@@ -122,13 +157,17 @@ Always use service="devops" when calling api_get."""
 SYSTEM_PROMPT = CAPABILITIES
 ```
 
-### 3. Use the generic tools
+### 3. Use SDK tools + manual tools
 
 ```python
-from macsdk.tools import api_get, fetch_file
+from macsdk.tools import api_get, fetch_file, get_sdk_tools
 
 def get_tools():
-    return [api_get, fetch_file]
+    return [
+        *get_sdk_tools(__package__),  # calculate + auto-detect knowledge
+        api_get,
+        fetch_file,
+    ]
 ```
 
 ### 4. The LLM does the rest
@@ -367,8 +406,8 @@ Knowledge tools enable agents to access task instructions (skills) and contextua
 ### Quick Start
 
 ```bash
-# Create agent with knowledge tools
-macsdk new agent my-agent --with-knowledge
+# Create agent (knowledge tools auto-detected)
+macsdk new agent my-agent
 ```
 
 This generates:
@@ -384,53 +423,47 @@ my-agent/
             └── example-fact.md
 ```
 
-### Using the Bundle
+### Using SDK Tools
 
-The recommended pattern uses lazy initialization in `get_tools()`:
+The recommended pattern uses `get_sdk_tools()` for automatic inclusion:
 
-**`tools.py`** - Single source of truth:
+**`tools.py`** - Simple and clean:
 
 ```python
-from macsdk.tools import api_get, calculate, fetch_file
+from macsdk.tools import api_get, fetch_file, get_sdk_tools
 
 def get_tools() -> list:
     """Get all tools for this agent."""
-    from macsdk.tools.knowledge import get_knowledge_bundle
-    
     _ensure_api_registered()
-    knowledge_tools, _ = get_knowledge_bundle(__package__)
     
     return [
+        *get_sdk_tools(__package__),  # calculate + auto-detect knowledge
         api_get,
         fetch_file,
-        calculate,
-        *knowledge_tools,  # read_skill, read_fact
     ]
 ```
 
-**`agent.py`** - Direct middleware setup:
+**`agent.py`** - Auto-detect middleware:
 
 ```python
-from macsdk.tools.knowledge import get_knowledge_bundle
+from macsdk.tools import get_sdk_middleware
 
 def create_agent_name():
-    tools = get_tools()  # Already includes knowledge tools
+    tools = get_tools()  # Already includes SDK tools
     
     middleware = [
         DatetimeContextMiddleware(),
-        TodoListMiddleware(enabled=True),
+        *get_sdk_middleware(__package__),  # Auto-detect knowledge
     ]
-    
-    _, knowledge_middleware = get_knowledge_bundle(__package__)
-    middleware.extend(knowledge_middleware)
     
     return create_agent(tools=tools, middleware=middleware)
 ```
 
 This pattern ensures:
-- ✅ Tools visible in CLI `tools` command
-- ✅ Zero duplication
-- ✅ No middleware/tools mismatch
+- ✅ `calculate` always included (LLMs need it)
+- ✅ Knowledge tools auto-detected
+- ✅ Zero configuration
+- ✅ No duplication
 
 ### File Format
 
