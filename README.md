@@ -10,18 +10,28 @@ A comprehensive SDK for building customizable multi-agent chatbots with RAG supp
 
 ## How does it work?
 
-The chatbot has a **"supervisor"** agent that knows about the registered agents and decides when to use one or another. It uses them as tools.
+MACSDK follows a **supervisor + specialist agents** architecture:
+
+- **Supervisor**: Routes user queries to the right specialist agent
+- **Specialist Agents**: Focused experts that handle specific tasks (APIs, monitoring, etc.)
+- **Formatter**: Ensures consistent, user-friendly responses
+
+**Philosophy**: Agents are **simple by default, extensible without code changes**:
+- Start with just `CAPABILITIES` (what the agent does)
+- Add tools for new actions (`api_get`, `fetch_file`, etc.)
+- Extend with **Skills** (how-to guides) and **Facts** (domain knowledge) - auto-detected
+- Use `EXTENDED_INSTRUCTIONS` for critical per-request guidelines
 
 ## Key Features
 
-- **🏗️ Scaffolding CLI**: Generate chatbot and agent projects with a single command.
-- **🤖 Intelligent Supervisor**: Automatic routing and orchestration of specialist agents.
-- **📚 RAG Support**: Enable RAG when creating a chatbot to pull docs from URLs (HTML/Markdown) or local files.
-- **🧠 Context Management**: Keeps user queries and final answers in context, auto-compressing messages if the history gets too large.
-- **🌐 Web Interface**: Built-in FastAPI + WebSocket server with real-time streaming (compatible with other WebSocket UIs).
-- **⏱️ Time Awareness**: Injects current time into prompts so agents are aware of the "now" (useful for logs/APIs).
-- **🔧 Built-in Tools**: Ready-to-use tools for REST APIs (with JSONPath extraction) and file downloads.
-- **🔄 Progress Tracking**: Shows real-time progress when an agent is selected and which tools are being used.
+- **🏗️ Zero-Config Scaffolding**: Generate production-ready chatbots and agents instantly
+- **🤖 Intelligent Supervisor**: Automatic routing and orchestration of specialist agents
+- **🔧 Auto-Detected Tools**: `calculate`, `read_skill`, `read_fact` included automatically
+- **📚 Knowledge Extension**: Add Skills and Facts without code changes - just drop .md files
+- **🌐 Web Interface**: Built-in FastAPI + WebSocket server with real-time streaming
+- **⏱️ Time Awareness**: Agents automatically know current date/time
+- **🔄 Progress Tracking**: Real-time visibility into agent selection and tool usage
+- **🎯 Simple & Extensible**: Agents work out-of-box, extend via tools/skills/facts
 
 ## Quick Start
 
@@ -64,7 +74,11 @@ cd infra-agent
 uv sync
 uv run infra-agent chat
 ```
-*It has its own chat for testing.*
+
+*Agents work immediately. Extend with:*
+- Tools in `tools.py` (actions)
+- Skills in `skills/*.md` (procedures)
+- Facts in `facts/*.md` (domain knowledge)
 
 ### 3. Register the Agent to the Chatbot
 
@@ -135,7 +149,8 @@ MIT
 
 ## 🤖 AI Tools Disclaimer
 
-This project was developed with the assistance of artificial intelligence tools:
+<details>
+<summary>This project was developed with the assistance of artificial intelligence tools</summary>
 
 **Tools used:**
 - **Cursor**: Code editor with AI capabilities
@@ -158,6 +173,7 @@ This project was developed with the assistance of artificial intelligence tools:
 - 💡 Technical implementation suggestions
 
 **Collaboration philosophy**: AI tools served as a highly capable technical assistant, while all design decisions and project directions were defined and validated by the human.
+</details>
 
 ---
 - author: Juanje Ojeda
