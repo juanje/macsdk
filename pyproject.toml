@@ -78,6 +78,7 @@ package = true
 
 [tool.uv.workspace]
 members = [
+    "examples/agent-with-knowledge",
     "examples/multirepo/api-agent",
     "examples/multirepo/devops-chatbot",
     "examples/monorepo/devops-chatbot",

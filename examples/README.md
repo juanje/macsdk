@@ -71,7 +71,8 @@ macsdk add-agent ./my-chatbot --path ./weather-agent
 
 | Directory | Description |
 |-----------|-------------|
+| [`agent-with-knowledge`](agent-with-knowledge/) | Standalone agent demonstrating knowledge tools (skills & facts) |
 | [`monorepo/devops-chatbot`](monorepo/devops-chatbot/) | DevOps chatbot with internal API agent |
 | [`multirepo/devops-chatbot`](multirepo/devops-chatbot/) | DevOps chatbot importing external agent |
-| [`multirepo/api-agent`](multirepo/api-agent/) | Standalone API agent for JSONPlaceholder |
+| [`multirepo/api-agent`](multirepo/api-agent/) | Standalone API agent for DevOps monitoring |
 
