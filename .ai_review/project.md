@@ -282,9 +282,10 @@ class SpecialistAgent(Protocol):
 **Key Principles:**
 1. **Protocol-based, not inheritance-based** - Agents don't need to inherit from a base class; they just need to implement the protocol methods.
 2. **CAPABILITIES as Single Source of Truth** - The `CAPABILITIES` constant serves dual purpose: it's used by the supervisor for routing AND as the agent's base `SYSTEM_PROMPT`. This eliminates duplication and ensures alignment.
-3. **Agents as Tools** - The `as_tool()` method wraps the agent for LangGraph tool invocation, enabling the supervisor to call agents like function tools.
-4. **Context dict pattern** - Agents receive optional context (conversation history, config) via dict parameter rather than constructor injection.
-5. **Extensibility via Skills/Facts** - Agents can be extended with domain knowledge through skills (step-by-step instructions) and facts (reference data) without modifying core code.
+3. **Optional EXTENDED_INSTRUCTIONS** - Agents can define additional instructions that are always included in their prompt but NOT sent to the supervisor. This keeps `CAPABILITIES` concise (avoiding supervisor prompt bloat) while allowing critical per-request instructions (formatting rules, domain guidelines) without relying on unpredictable on-demand tool calls (facts/skills).
+4. **Agents as Tools** - The `as_tool()` method wraps the agent for LangGraph tool invocation, enabling the supervisor to call agents like function tools.
+5. **Context dict pattern** - Agents receive optional context (conversation history, config) via dict parameter rather than constructor injection.
+6. **Extensibility via Skills/Facts** - Agents can be extended with domain knowledge through skills (step-by-step instructions) and facts (reference data) without modifying core code.
 
 ### LangGraph State Pattern
 
@@ -982,6 +983,50 @@ middleware = [DatetimeContextMiddleware(), *get_sdk_middleware(__package__)]
 ```
 
 **Do NOT suggest:** Creating `prompts.py` for specialists, separating CAPABILITIES from SYSTEM_PROMPT, manually importing `calculate`/knowledge tools.
+
+---
+
+### Extended Instructions Pattern (Optional Agent Instructions)
+
+**Pattern:** Agents can define `EXTENDED_INSTRUCTIONS` for critical instructions that must be present in EVERY agent prompt but should NOT be sent to the supervisor.
+
+**Purpose:**
+- **CAPABILITIES** stays concise (avoids supervisor prompt bloat with many agents)
+- Critical instructions always in prompt (no unpredictable on-demand tool calls)
+- Separates "what" (CAPABILITIES for routing) from "how" (EXTENDED_INSTRUCTIONS for execution)
+
+**Implementation:**
+```python
+CAPABILITIES = """Brief description of what agent does."""
+
+EXTENDED_INSTRUCTIONS = """
+## Optional detailed instructions
+- Behavior guidelines
+- API response handling rules
+- Data validation requirements
+"""
+
+SYSTEM_PROMPT = CAPABILITIES
+
+# In create_agent():
+system_prompt = SYSTEM_PROMPT
+if EXTENDED_INSTRUCTIONS:
+    system_prompt += "\n\n" + EXTENDED_INSTRUCTIONS
+system_prompt += "\n\n" + SPECIALIST_PLANNING_PROMPT
+```
+
+**When to use:**
+- Domain-specific behavior rules (always check X before Y)
+- API response handling guidelines (extract fields A, B, C)
+- Data validation requirements (enforce specific constraints)
+- Critical domain context (service naming conventions, data types)
+
+**When NOT to use:**
+- Long reference documentation (use Facts)
+- Step-by-step procedures (use Skills)
+- Information visible to supervisor (keep in CAPABILITIES)
+
+**False positive to avoid:** Suggesting to move EXTENDED_INSTRUCTIONS content to Facts/Skills when it needs to be reliably present in every request.
 
 ---
 

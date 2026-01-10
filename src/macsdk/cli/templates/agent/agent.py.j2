@@ -40,6 +40,17 @@ This agent can:
 
 Uses api_get and fetch_file tools with API schema in the prompt."""
 
+# Optional: Extended instructions for this agent only (not sent to supervisor)
+# Use this for critical instructions that must ALWAYS be in the agent's prompt:
+# - Domain-specific behavior guidelines
+# - API response handling rules
+# - Data validation requirements
+# - Important domain context
+#
+# Note: Final formatting is handled by the formatter agent, not here.
+# Keep CAPABILITIES concise (supervisor sees it). Put detailed instructions here.
+EXTENDED_INSTRUCTIONS = ""
+
 SYSTEM_PROMPT = CAPABILITIES
 
 
@@ -58,8 +69,15 @@ def create_{{ agent_slug }}(
     # Get all tools (includes SDK internal + manual tools)
     tools = get_tools()
 
-    # Build system prompt with task planning guidance (CoT prompts)
-    system_prompt = SYSTEM_PROMPT + "\n\n" + SPECIALIST_PLANNING_PROMPT
+    # Build system prompt
+    system_prompt = SYSTEM_PROMPT
+
+    # Add extended instructions if defined
+    if EXTENDED_INSTRUCTIONS:
+        system_prompt += "\n\n" + EXTENDED_INSTRUCTIONS
+
+    # Add task planning guidance (Chain-of-Thought prompts)
+    system_prompt += "\n\n" + SPECIALIST_PLANNING_PROMPT
 
     # Build middleware list
     middleware: list[Any] = []

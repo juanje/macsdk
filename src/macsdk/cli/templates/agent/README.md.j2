@@ -145,6 +145,10 @@ macsdk add-agent . --path ./{{ name }}
 Edit `CAPABILITIES` in `src/{{ agent_slug }}/agent.py` to define what your agent can do.
 This is the single source of truth - used both as the system prompt and for supervisor routing.
 
+For agents that need additional instructions always in the prompt (behavior guidelines, API handling rules),
+use `EXTENDED_INSTRUCTIONS`. These instructions are only sent to the agent, not to the supervisor.
+Note: Final response formatting is handled by the formatter agent in production.
+
 ### Adding Tools
 
 Edit `src/{{ agent_slug }}/tools.py` to add new tools.

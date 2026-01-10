@@ -119,6 +119,66 @@ CAPABILITIES = """General database assistant that helps with databases."""
     If you have many agents with very detailed CAPABILITIES, consider moving extensive
     documentation (API schemas, detailed instructions) to **Facts** or **Skills** instead.
 
+## Extended Instructions (Optional)
+
+For agents that need additional instructions **always present** in their prompt, use `EXTENDED_INSTRUCTIONS`:
+
+```python
+CAPABILITIES = """DevOps monitoring assistant.
+
+This agent can:
+- Check infrastructure service health
+- Monitor CI/CD pipelines
+- Review alerts
+
+Uses api_get tool with the DevOps API."""
+
+# Optional: Additional instructions for this agent only
+# These are NOT sent to the supervisor, only to the agent's prompt
+EXTENDED_INSTRUCTIONS = """
+## API Response Handling
+
+Always parse JSON responses and extract relevant fields.
+When services are unhealthy, include the `lastError` field.
+
+## Data Processing Rules
+
+- Convert API timestamps from UTC to local time
+- Extract only relevant metrics (CPU, memory, disk)
+- Include error messages when operations fail
+
+## Important Domain Context
+
+- Service names are case-sensitive
+- Pipeline IDs are integers, not strings
+- Critical alerts require immediate escalation
+"""
+
+SYSTEM_PROMPT = CAPABILITIES
+```
+
+### When to Use Each Approach
+
+| Approach | Best For | Visible to Supervisor | Always in Prompt |
+|----------|----------|----------------------|------------------|
+| **CAPABILITIES** | What the agent does | ✅ Yes | ✅ Yes |
+| **EXTENDED_INSTRUCTIONS** | How the agent works | ❌ No | ✅ Yes |
+| **Facts** | Reference data, schemas | ❌ No | ❌ On demand |
+| **Skills** | Step-by-step procedures | ❌ No | ❌ On demand |
+
+**Use EXTENDED_INSTRUCTIONS when:**
+
+- Information must be present in **every request** (not just on demand)
+- The LLM must follow specific behavior or data processing rules
+- You have critical domain guidelines that can't be missed
+- API response handling requires consistent patterns
+
+**Don't use it for:**
+
+- Information that can be fetched on demand (use Facts/Skills)
+- Very long documentation (keeps tokens low)
+- Things that should help supervisor routing (use CAPABILITIES)
+
 ## Running Your Agent
 
 ### Show Available Commands
