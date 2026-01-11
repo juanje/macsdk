@@ -15,11 +15,24 @@
 # Middleware Configuration
 # =============================================================================
 # include_datetime: true           # Inject current datetime into prompts
+# Note: Task planning (TODO middleware) is always enabled for all agents
 
 # Context summarization (for long conversations)
 # summarization_enabled: false
 # summarization_trigger_tokens: 100000
 # summarization_keep_messages: 6
+
+# =============================================================================
+# Agent Execution Configuration
+# =============================================================================
+# recursion_limit: 50             # Max iterations for agent tool calls
+# Use higher values (100+) for complex workflows with many agents/steps
+
+# Timeout configuration (seconds) - prevents hanging on long-running operations
+# supervisor_timeout: 120.0      # Supervisor execution (includes specialist calls)
+# specialist_timeout: 90.0       # Specialist agent execution (includes LLM + tools)
+# formatter_timeout: 30.0        # Response formatting
+# llm_request_timeout: 60.0      # Individual LLM HTTP requests
 
 # =============================================================================
 # Web Server Configuration (for macsdk web interface)

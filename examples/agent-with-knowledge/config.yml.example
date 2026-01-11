@@ -2,21 +2,46 @@
 # Copy this file to config.yml and customize as needed.
 #
 # API keys should be in .env, not here.
+#
+# This file is loaded automatically when running the agent standalone.
+# When registered with a chatbot, the chatbot's config is used instead.
 
-# =============================================================================
 # LLM Configuration
-# =============================================================================
-# llm_model: gemini-3-flash-preview      # Model for responses
-# llm_temperature: 0.3             # Creativity (0.0 - 1.0)
+# llm_model: gemini-3-flash-preview
+# llm_temperature: 0.3
+# llm_reasoning_effort: medium
 
-# =============================================================================
-# Agent Configuration
-# =============================================================================
-# recursion_limit: 50             # Max iterations for agent tool calls
+# Agent Execution Configuration
+# recursion_limit: 50             # Max iterations for agent tool calls (default: 50)
+# Use higher values (100+) for complex workflows with many steps
 
-# =============================================================================
-# Debug Configuration
-# =============================================================================
-# debug: false                    # Enable debug mode (shows prompts sent to LLM)
-# Use --show-llm-calls flag with chat command, or set debug: true here
+# Timeout configuration (seconds) - prevents hanging on long-running operations
+# supervisor_timeout: 120.0      # Supervisor execution (includes specialist calls)
+# specialist_timeout: 90.0       # Specialist agent execution (includes LLM + tools)
+# formatter_timeout: 30.0        # Response formatting
+# llm_request_timeout: 60.0      # Individual LLM HTTP requests
+
+# Logging Configuration
+# log_level: INFO              # DEBUG, INFO, WARNING, ERROR
+# log_dir: ./logs              # Directory for log files
+# log_filename:                # Custom filename (default: auto with date)
+
+# Debug middleware settings (when --debug or debug: true)
+# debug_prompt_max_length: 10000   # Max chars per prompt in logs
+# debug_show_response: true        # Show model responses in debug
+
+# URL Security Configuration (SSRF Protection)
+# Control which URLs can be accessed by remote file tools and API tools.
+# Disabled by default. Enable when using tools that access URLs.
+#
+# url_security:
+#   enabled: true
+#   allow_domains:
+#     - "api.github.com"
+#     - "*.example.com"
+#   allow_localhost: false
+#   log_blocked_attempts: true
+
+# Add agent-specific settings below:
+# my_agent_setting: value
 

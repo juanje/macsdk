@@ -28,6 +28,12 @@
 # recursion_limit: 50             # Max iterations for agent tool calls
 # Use higher values (100+) for complex workflows with many agents/steps
 
+# Timeout configuration (seconds) - prevents hanging on long-running operations
+# supervisor_timeout: 120.0      # Supervisor execution (includes specialist calls)
+# specialist_timeout: 90.0       # Specialist agent execution (includes LLM + tools)
+# formatter_timeout: 30.0        # Response formatting
+# llm_request_timeout: 60.0      # Individual LLM HTTP requests
+
 # =============================================================================
 # Web Server Configuration (for macsdk web interface)
 # =============================================================================

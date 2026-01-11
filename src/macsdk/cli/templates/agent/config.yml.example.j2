@@ -11,6 +11,16 @@
 # llm_temperature: 0.3
 # llm_reasoning_effort: medium
 
+# Agent Execution Configuration
+# recursion_limit: 50             # Max iterations for agent tool calls (default: 50)
+# Use higher values (100+) for complex workflows with many steps
+
+# Timeout configuration (seconds) - prevents hanging on long-running operations
+# supervisor_timeout: 120.0      # Supervisor execution (includes specialist calls)
+# specialist_timeout: 90.0       # Specialist agent execution (includes LLM + tools)
+# formatter_timeout: 30.0        # Response formatting
+# llm_request_timeout: 60.0      # Individual LLM HTTP requests
+
 # Logging Configuration
 # log_level: INFO              # DEBUG, INFO, WARNING, ERROR
 # log_dir: ./logs              # Directory for log files
