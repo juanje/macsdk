@@ -131,10 +131,10 @@ devops-chatbot/
 │   │   ├── __init__.py
 │   │   └── api/           # API agent as internal module
 │   │       ├── __init__.py
-│   │       ├── agent.py   # CAPABILITIES + agent implementation
+│   │       ├── agent.py   # CAPABILITIES + EXTENDED_INSTRUCTIONS + agent
 │   │       ├── config.py
-│   │       ├── models.py
-│   │       └── tools.py
+│   │       ├── models.py  # AgentResponse = BaseAgentResponse
+│   │       └── tools.py   # get_tools() + get_sdk_tools()
 │   ├── agents.py          # Agent registration (relative imports)
 │   ├── cli.py             # CLI entry point
 │   ├── config.py          # Custom configuration
@@ -142,6 +142,34 @@ devops-chatbot/
 ├── config.yml.example     # RAG configuration example
 ├── .env.example           # Environment variables
 └── pyproject.toml
+```
+
+### Agent Structure
+
+Each agent follows the modern MACSDK pattern:
+
+**`agent.py`**:
+- `CAPABILITIES`: Brief description (3-5 lines) for supervisor routing
+- `EXTENDED_INSTRUCTIONS`: Detailed instructions for the agent
+- `create_agent()`: Agent creation with SDK middleware
+- `run_agent()`: Execution with extended instructions injection
+
+**`models.py`**:
+```python
+from macsdk.core import BaseAgentResponse
+AgentResponse = BaseAgentResponse  # Simple assignment
+```
+
+**`tools.py`**:
+```python
+from macsdk.tools import get_sdk_tools
+
+def get_tools():
+    return [
+        *get_sdk_tools(__package__),  # calculate + knowledge
+        api_get,
+        fetch_file,
+    ]
 ```
 
 ## Customization

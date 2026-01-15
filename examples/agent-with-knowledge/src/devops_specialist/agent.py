@@ -14,8 +14,11 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, tool
 
 from macsdk.agents.supervisor import SPECIALIST_PLANNING_PROMPT
-from macsdk.core import get_answer_model, run_agent_with_tools
-from macsdk.middleware import DatetimeContextMiddleware
+from macsdk.core import config, get_answer_model, run_agent_with_tools
+from macsdk.middleware import (
+    DatetimeContextMiddleware,
+    PromptDebugMiddleware,
+)
 from macsdk.tools import get_sdk_middleware
 
 from .models import AgentResponse
@@ -25,10 +28,9 @@ if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
 
 
-# CAPABILITIES is the single source of truth for this agent:
-# - Used as the system prompt for the LLM
-# - Used by the supervisor to decide when to route queries here
-# - Skills and facts extend these capabilities with detailed instructions
+# CAPABILITIES: Brief description for supervisor routing
+# The supervisor uses this to decide when to call this agent
+# Skills and facts extend these capabilities with detailed instructions
 CAPABILITIES = """DevOps specialist with knowledge-based task guidance.
 
 This agent can help with:
@@ -37,6 +39,19 @@ This agent can help with:
 - Infrastructure configuration
 - CI/CD pipeline management
 - Log analysis and debugging
+
+The agent learns dynamically from skills (procedures) and facts (context)."""
+
+# Optional: Extended instructions for this agent only (not sent to supervisor)
+# Use this for critical instructions that must ALWAYS be in the agent's prompt:
+# - Domain-specific behavior guidelines
+# - API response handling rules
+# - Data validation requirements
+# - Important domain context
+#
+# Note: Final formatting is handled by the formatter agent, not here.
+# Keep CAPABILITIES concise (supervisor sees it). Put detailed instructions here.
+EXTENDED_INSTRUCTIONS = """You are a DevOps specialist with access to knowledge tools.
 
 ## Tools Available
 
@@ -63,37 +78,60 @@ You have access to:
 mentally.
 """
 
-# CAPABILITIES is the system prompt
 SYSTEM_PROMPT = CAPABILITIES
 
 
-def create_devops_specialist(debug: bool = False) -> Any:
+def create_devops_specialist(
+    debug: bool | None = None,
+) -> Any:
     """Create the DevOps Specialist agent.
 
     Args:
-        debug: Whether to enable debug mode.
+        debug: Whether to enable debug mode (shows prompts).
+            If None, uses the config value (default: False).
 
     Returns:
         Configured agent instance.
     """
-    # Get all tools (includes knowledge tools)
+    # Get all tools (includes SDK internal + manual tools)
     tools = get_tools()
 
-    # Build system prompt with task planning
-    system_prompt = SYSTEM_PROMPT + "\n\n" + SPECIALIST_PLANNING_PROMPT
+    # Build system prompt
+    system_prompt = SYSTEM_PROMPT
+
+    # Add extended instructions if defined
+    if EXTENDED_INSTRUCTIONS:
+        system_prompt += "\n\n" + EXTENDED_INSTRUCTIONS
+
+    # Add task planning guidance (Chain-of-Thought prompts)
+    system_prompt += "\n\n" + SPECIALIST_PLANNING_PROMPT
 
     # Build middleware list
-    middleware: list[Any] = [
-        DatetimeContextMiddleware(),
-        *get_sdk_middleware(__package__),  # Auto-detect knowledge
-    ]
+    middleware: list[Any] = []
 
-    agent: Any = create_agent(
+    # Add debug middleware if enabled
+    debug_enabled = debug if debug is not None else config.debug
+    if debug_enabled:
+        middleware.append(
+            PromptDebugMiddleware(
+                enabled=True,
+                show_response=True,
+                max_length=int(config.debug_prompt_max_length),
+            )
+        )
+
+    # Add datetime context middleware
+    middleware.append(DatetimeContextMiddleware())
+
+    # Add SDK middleware (auto-detects knowledge if dirs exist)
+    middleware.extend(get_sdk_middleware(__package__))
+
+    agent = create_agent(
         model=get_answer_model(),
         tools=tools,
         middleware=middleware,
-        system_prompt=system_prompt,
         response_format=AgentResponse,
+        system_prompt=system_prompt,
     )
 
     return agent
@@ -103,7 +141,7 @@ async def run_devops_specialist(
     query: str,
     context: dict | None = None,
     run_config: RunnableConfig | None = None,
-    debug: bool = False,
+    debug: bool | None = None,
 ) -> dict:
     """Run the DevOps Specialist agent.
 
@@ -111,7 +149,8 @@ async def run_devops_specialist(
         query: User query to process.
         context: Optional context from previous interactions.
         run_config: Optional runnable configuration.
-        debug: Whether to enable debug mode.
+        debug: Whether to enable debug mode (shows prompts).
+            If None, uses the config value (default: False).
 
     Returns:
         Agent response dictionary.
@@ -126,20 +165,19 @@ async def run_devops_specialist(
     )
 
 
-class DevOpsSpecialist:
-    """DevOps Specialist agent that implements the SpecialistAgent protocol.
+class DevOpsSpecialistAgent:
+    """DevOps Specialist agent with knowledge-based capabilities.
 
-    This agent extends its capabilities through knowledge tools:
-    - Skills: Step-by-step instructions for tasks (skills/*.md)
-    - Facts: Contextual information and reference data (facts/*.md)
+    This agent demonstrates how to use skills and facts to extend
+    agent capabilities without modifying code.
     """
 
     name: str = "devops_specialist"
     capabilities: str = CAPABILITIES
-    tools: list = []
+    tools: list = []  # Loaded lazily
 
     def __init__(self) -> None:
-        """Initialize the agent with tools (includes knowledge tools)."""
+        """Initialize the agent with tools."""
         self.tools = get_tools()
 
     async def run(
@@ -147,7 +185,7 @@ class DevOpsSpecialist:
         query: str,
         context: dict | None = None,
         run_config: RunnableConfig | None = None,
-        debug: bool = False,
+        debug: bool | None = None,
     ) -> dict:
         """Execute the agent.
 
@@ -155,7 +193,7 @@ class DevOpsSpecialist:
             query: User query to process.
             context: Optional context from previous interactions.
             run_config: Optional runnable configuration.
-            debug: Whether to enable debug mode.
+            debug: Whether to enable debug mode (shows prompts).
 
         Returns:
             Agent response dictionary.
@@ -164,6 +202,9 @@ class DevOpsSpecialist:
 
     def as_tool(self) -> "BaseTool":
         """Return this agent as a LangChain tool.
+
+        This allows the supervisor to call this agent as a tool,
+        enabling dynamic agent orchestration.
 
         Returns:
             A LangChain tool wrapping this agent.
@@ -175,14 +216,14 @@ class DevOpsSpecialist:
             query: str,
             config: Annotated[RunnableConfig, InjectedToolArg],
         ) -> str:
-            """Query the DevOps specialist with a natural language request.
+            """Query this specialist agent with a natural language request.
 
             Args:
-                query: What you want the specialist to do or find out.
+                query: What you want this agent to do or find out.
                 config: Runnable configuration (injected automatically).
 
             Returns:
-                The specialist's response text.
+                The agent's response text.
             """
             result = await agent_instance.run(query, run_config=config)
             return str(result["response"])

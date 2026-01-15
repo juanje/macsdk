@@ -60,10 +60,10 @@ async def get_failed_pipeline_names() -> str:
 │           └───────────┴─────────────┘                       │
 │                       │                                     │
 │                       ▼                                     │
-│  ┌─────────────────────────────────────────────────────┐   │
+│  ┌──────────────────────────────────────────────────────┐   │
 │  │         DevOps Mock API                              │   │
 │  │  /pipelines  /jobs  /services  /alerts  /deployments │   │
-│  └─────────────────────────────────────────────────────┘   │
+│  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -157,6 +157,83 @@ uv run api-agent info
 | `get_failed_pipeline_names` | Custom | Just names of failed pipelines |
 | `investigate_failed_job` | Custom | Full investigation with log excerpt |
 
+## Code Structure
+
+### CAPABILITIES vs EXTENDED_INSTRUCTIONS
+
+This agent demonstrates the clean separation between routing and behavior:
+
+**`CAPABILITIES`** (brief, ~5 lines):
+```python
+CAPABILITIES = """DevOps monitoring assistant using MACSDK API tools.
+
+This agent can:
+- Monitor CI/CD pipelines and investigate failures
+- Check infrastructure service health
+- Review alerts (critical, warnings, unacknowledged)
+- Track deployments across environments
+- Download and analyze job logs"""
+```
+
+Used by the supervisor to decide when to route queries to this agent.
+
+**`EXTENDED_INSTRUCTIONS`** (detailed):
+```python
+EXTENDED_INSTRUCTIONS = """You are a DevOps monitoring specialist...
+
+## API Service: "devops"
+... (full API schema documentation)
+
+## Available Tools
+... (tool usage guidelines)
+
+## Guidelines
+... (behavior rules)
+"""
+```
+
+Sent only to the agent, provides all the context needed for execution.
+
+### Agent Creation
+
+Modern pattern with SDK middleware auto-detection:
+
+```python
+def create_api_agent():
+    """Create the agent with tools and middleware."""
+    return create_agent(
+        model=get_answer_model(),
+        tools=get_tools(),
+        middleware=[
+            DatetimeContextMiddleware(),
+            *get_sdk_middleware(__package__),  # Auto-detects knowledge
+        ],
+        response_format=AgentResponse,
+    )
+
+async def run_api_agent(query, context=None, config=None):
+    """Run the agent with extended instructions."""
+    agent = create_api_agent()
+    return await run_agent_with_tools(
+        agent=agent,
+        query=query,
+        extended_instructions=EXTENDED_INSTRUCTIONS,  # Injected here
+        agent_name="api_agent",
+        context=context,
+        config=config,
+    )
+```
+
+### Response Model
+
+Uses the default SDK response model:
+
+```python
+from macsdk.core import BaseAgentResponse
+
+AgentResponse = BaseAgentResponse
+```
+
 ## Using with Chatbots
 
 Register the agent in your chatbot:
@@ -173,6 +250,7 @@ register_agent(ApiAgent())
 ```bash
 uv run ruff check src/
 uv run ruff format src/
+uv run pytest
 ```
 
 ## 🤖 AI Tools Disclaimer

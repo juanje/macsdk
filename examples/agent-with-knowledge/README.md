@@ -99,22 +99,25 @@ def get_tools() -> list:
 
 **2. Agent (`agent.py`)** - Direct middleware setup:
 ```python
-def create_devops_specialist(debug: bool = False) -> Any:
-    tools = get_tools()  # All tools in one call
-    
-    middleware = [
-        DatetimeContextMiddleware(),
-        *get_sdk_middleware(__package__),  # Auto-detect knowledge
-    ]
-    
-    return create_agent(...)
+def create_devops_specialist():
+    """Create the agent with tools and middleware."""
+    return create_agent(
+        model=get_answer_model(),
+        tools=get_tools(),
+        middleware=[
+            DatetimeContextMiddleware(),
+            *get_sdk_middleware(__package__),  # Auto-detect knowledge
+        ],
+        response_format=AgentResponse,
+    )
 ```
 
-**3. Models (`models.py`)** - Extensible responses:
+**3. Models (`models.py`)** - Simple response model:
 ```python
-class AgentResponse(BaseAgentResponse):
-    """Can be extended with custom fields if needed."""
-    pass
+from macsdk.core.models import BaseAgentResponse
+
+# Default: Use the SDK's base response directly
+AgentResponse = BaseAgentResponse
 ```
 
 ### Key Features
@@ -137,13 +140,14 @@ The agent can discover and use these resources whether installed system-wide or 
 ## Development
 
 The agent structure:
-- `agent.py`: CAPABILITIES (system prompt) + agent creation + middleware
+- `agent.py`: CAPABILITIES + EXTENDED_INSTRUCTIONS + agent creation
 - `tools.py`: Single source of truth for all tools
-- `models.py`: Response model (extends BaseAgentResponse)
+- `models.py`: Response model (uses BaseAgentResponse)
 - `cli.py`: Command-line interface (chat, tools, info commands)
 - `skills/`: Task instruction documents (6 DevOps skills)
 - `facts/`: Contextual information (3 reference documents)
 
-**Note**: `CAPABILITIES` in `agent.py` is the single source of truth - it's
-used both as the system prompt and for supervisor routing. Skills and facts
-extend the agent's knowledge without code changes.
+**Note**: 
+- `CAPABILITIES` is brief and used by the supervisor for routing decisions
+- `EXTENDED_INSTRUCTIONS` contains detailed instructions for the agent
+- Skills and facts extend the agent's knowledge without code changes

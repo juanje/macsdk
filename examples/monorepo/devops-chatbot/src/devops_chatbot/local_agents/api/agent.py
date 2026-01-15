@@ -21,8 +21,8 @@ from macsdk.core import config, get_answer_model, run_agent_with_tools
 from macsdk.middleware import (
     DatetimeContextMiddleware,
     PromptDebugMiddleware,
-    TodoListMiddleware,
 )
+from macsdk.tools import get_sdk_middleware
 
 from .models import AgentResponse
 from .tools import get_tools
@@ -31,9 +31,8 @@ if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
 
 
-# CAPABILITIES is the single source of truth for this agent:
-# - Used as the system prompt for the LLM
-# - Used by the supervisor to decide when to route queries here
+# CAPABILITIES: Brief description for supervisor routing
+# The supervisor uses this to decide when to call this agent
 CAPABILITIES = """DevOps monitoring assistant using MACSDK API tools.
 
 This agent can:
@@ -41,7 +40,18 @@ This agent can:
 - Check infrastructure service health
 - Review alerts (critical, warnings, unacknowledged)
 - Track deployments across environments
-- Download and analyze job logs
+- Download and analyze job logs"""
+
+# Optional: Extended instructions for this agent only (not sent to supervisor)
+# Use this for critical instructions that must ALWAYS be in the agent's prompt:
+# - Domain-specific behavior guidelines
+# - API response handling rules
+# - Data validation requirements
+# - Important domain context
+#
+# Note: Final formatting is handled by the formatter agent, not here.
+# Keep CAPABILITIES concise (supervisor sees it). Put detailed instructions here.
+EXTENDED_INSTRUCTIONS = """You are a DevOps monitoring specialist with access to MACSDK API tools.
 
 ## API Service: "devops"
 
@@ -80,6 +90,7 @@ You have access to a DevOps monitoring API with these endpoints:
 ### Generic Tools (use with any endpoint)
 - **api_get**: Make GET requests to any endpoint above
 - **fetch_file**: Download files (logs, configs) from URLs
+- **calculate**: Safe math evaluation (always use for numbers)
 
 ### Custom Tools (specialized operations)
 - **get_service_health_summary**: Quick overview of all services health
@@ -93,16 +104,16 @@ You have access to a DevOps monitoring API with these endpoints:
 3. For failed jobs, use `investigate_failed_job` to get full details with logs
 4. When asked about services, `get_service_health_summary` gives a quick overview
 5. Always provide actionable insights based on the data
+6. Always use calculate() for any math operations - never compute mentally
 """
 
-# CAPABILITIES is the system prompt
 SYSTEM_PROMPT = CAPABILITIES
 
 
 def create_api_agent(
     debug: bool | None = None,
 ) -> Any:
-    """Create the api-agent agent.
+    """Create the api-agent.
 
     Args:
         debug: Whether to enable debug mode (shows prompts).
@@ -111,26 +122,42 @@ def create_api_agent(
     Returns:
         Configured agent instance.
     """
-    # Build system prompt with task planning integrated
-    system_prompt = SYSTEM_PROMPT + "\n\n" + SPECIALIST_PLANNING_PROMPT
+    # Get all tools (includes SDK internal + manual tools)
+    tools = get_tools()
+
+    # Build system prompt
+    system_prompt = SYSTEM_PROMPT
+
+    # Add extended instructions if defined
+    if EXTENDED_INSTRUCTIONS:
+        system_prompt += "\n\n" + EXTENDED_INSTRUCTIONS
+
+    # Add task planning guidance (Chain-of-Thought prompts)
+    system_prompt += "\n\n" + SPECIALIST_PLANNING_PROMPT
 
     # Build middleware list
     middleware: list[Any] = []
 
-    # Add debug middleware if enabled (via parameter or config)
+    # Add debug middleware if enabled
     debug_enabled = debug if debug is not None else config.debug
     if debug_enabled:
-        middleware.append(PromptDebugMiddleware(enabled=True, show_response=True))
+        middleware.append(
+            PromptDebugMiddleware(
+                enabled=True,
+                show_response=True,
+                max_length=int(config.debug_prompt_max_length),
+            )
+        )
 
     # Add datetime context middleware
     middleware.append(DatetimeContextMiddleware())
 
-    # Add todo middleware (always enabled for task planning)
-    middleware.append(TodoListMiddleware(enabled=True))
+    # Add SDK middleware (auto-detects knowledge if dirs exist)
+    middleware.extend(get_sdk_middleware(__package__))
 
     agent = create_agent(
         model=get_answer_model(),
-        tools=get_tools(),
+        tools=tools,
         middleware=middleware,
         response_format=AgentResponse,
         system_prompt=system_prompt,
@@ -145,7 +172,7 @@ async def run_api_agent(
     run_config: RunnableConfig | None = None,
     debug: bool | None = None,
 ) -> dict:
-    """Run the api-agent agent.
+    """Run the api-agent.
 
     Args:
         query: User query to process.
@@ -179,7 +206,7 @@ class ApiAgent:
 
     name: str = "api_agent"
     capabilities: str = CAPABILITIES
-    tools: list = []  # Loaded in __init__
+    tools: list = []  # Loaded lazily
 
     def __init__(self) -> None:
         """Initialize the agent with tools."""
@@ -206,7 +233,14 @@ class ApiAgent:
         return await run_api_agent(query, context, run_config, debug)
 
     def as_tool(self) -> "BaseTool":
-        """Return this agent as a LangChain tool."""
+        """Return this agent as a LangChain tool.
+
+        This allows the supervisor to call this agent as a tool,
+        enabling dynamic agent orchestration.
+
+        Returns:
+            A LangChain tool wrapping this agent.
+        """
         agent_instance = self
 
         @tool

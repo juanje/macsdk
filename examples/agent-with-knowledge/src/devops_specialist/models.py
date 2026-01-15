@@ -1,27 +1,16 @@
 """Response models for DevOps Specialist.
 
-This module defines the response format for the agent.
-You can extend BaseAgentResponse with additional fields if needed.
+By default, agents use BaseAgentResponse which provides:
+- response_text: str - Human-readable response
+- tools_used: list[str] - Tools that were called
+
+This is sufficient for most agents. The supervisor receives
+the response_text via the tool wrapper.
 """
 
 from __future__ import annotations
 
 from macsdk.core.models import BaseAgentResponse
 
-
-class AgentResponse(BaseAgentResponse):
-    """Response model for DevOps Specialist.
-
-    Inherits from BaseAgentResponse and can be extended with additional fields.
-
-    By default, this class doesn't add any fields, but you can customize it:
-
-    Example:
-        class AgentResponse(BaseAgentResponse):
-            # Add custom fields for your agent
-            confidence_score: float = 0.0
-            processing_time_ms: int = 0
-            data_sources_used: list[str] = []
-    """
-
-    pass
+# Default: Use the SDK's base response directly
+AgentResponse = BaseAgentResponse
