@@ -1,0 +1,57 @@
+"""Local configuration for Vm Provision.
+
+Extend MACSDKConfig to add your own settings.
+"""
+
+from macsdk.core import MACSDKConfig
+from pydantic_settings import SettingsConfigDict
+
+# Uncomment to use Pydantic types for validation:
+# from pydantic import HttpUrl, SecretStr
+
+
+class VmProvisionConfig(MACSDKConfig):
+    """Configuration for Vm Provision.
+
+    Add your chatbot-specific settings here.
+    They will be loaded from environment variables or .env file.
+
+    Example:
+        # In .env:
+        EXTERNAL_API_TOKEN=your_token_here
+        MAX_RETRIES=5
+
+        # Access in code:
+        from .config import config
+        retries = config.max_retries  # Regular values work directly
+        if config.external_api_token:  # Check optional SecretStr before accessing
+            token = config.external_api_token.get_secret_value()
+    """
+
+    # Add your custom settings here. Common patterns:
+    #
+    # Secrets (hidden in logs/repr):
+    # external_api_token: SecretStr | None = None
+    #
+    # URLs (validated format):
+    # webhook_url: HttpUrl | None = None
+    #
+    # Simple values:
+    # max_retries: int = 3
+    # debug_mode: bool = False
+    #
+    # Values with validation (recommended for user-facing config):
+    # from pydantic import Field
+    # retry_count: int = Field(default=3, ge=0, le=10)
+    # temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    # timeout_seconds: int = Field(default=30, gt=0)
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+
+config = VmProvisionConfig()
