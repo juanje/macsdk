@@ -72,14 +72,51 @@ Available Endpoints:
 
 - POST /testing-farm/vm-provisioning
   Description: Creates a new VM in the Test Console environment.
-  The request payload (body) MUST contain the following fields: comment, duration, Arch, Distro, User.
-  Default values to be used if not provided by user: 
-    arch = x86_64, 
-    distro = RHIVOS (latest-RHIVOS-2), 
-    User = chatbot, 
-    comment = None, 
-    duration = 30.
+  The request payload (body) MUST contain the following REQUIRED fields: comment, duration, Arch, Distro, User.
+  **CRITICAL: When creating a VM, you MUST ALWAYS include ALL required fields in the body.**
+  
+  Default values to use if not provided by user: 
+    Arch = "x86_64", 
+    Distro = "RHIVOS (latest-RHIVOS-2)", 
+    User = "chatbot", 
+    comment = null (or omit the field), 
+    duration = 30
+  
   Possible values for Arch: x86_64, aarch64, s390x, pp64le
+  
+  **TYPICAL BODY STRUCTURE (example with all common fields):**
+  {
+    "Arch": "x86_64",
+    "Distro": "RHIVOS (latest-RHIVOS-2)",
+    "User": "chatbot",
+    "comment": "Testing",
+    "duration": 30,
+    "disk_space": "100 Gb",
+    "reservation_time": 30,
+    "virtualization_is_supported": "true",
+    "image": "latest-RHIVOS-1",
+    "memory": "4 Gb",
+    "public_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ...",
+    "scheduling_priority": "low",
+    "start_time": "2026-01-17 00:00:00",
+    "end_time": "2026-01-17 00:30:00"
+  }
+  
+  **MINIMUM REQUIRED BODY (for basic VM creation):**
+  {
+    "Arch": "x86_64",
+    "Distro": "RHIVOS (latest-RHIVOS-2)",
+    "User": "chatbot",
+    "duration": 30,
+    "comment": null
+  }
+  
+  **CRITICAL FIELD NAME REQUIREMENTS:**
+  - Use "Arch" (capital A), NOT "arch"
+  - Use "Distro" (capital D), NOT "distro"  
+  - Use "User" (capital U), NOT "user" or "username"
+  - Use "duration" (lowercase), NOT "reservation_time" or "Duration"
+  - Field names are case-sensitive - the API requires exact capitalization
 
 
 ## 📝 Guidelines
@@ -88,7 +125,32 @@ Available Endpoints:
 2.  **Create VM:** When asked to create a new VM, use api_post with:
     - service="vm-provisioning"
     - endpoint="/testing-farm/vm-provisioning"
-    - body: A dictionary containing the required fields (comment, duration, Arch, Distro, User)
+    - body: A dictionary containing ALL required fields (comment, duration, Arch, Distro, User)
+    - **CRITICAL:** You MUST construct the body dictionary with actual values. DO NOT pass an empty dictionary {}.
+    - **MANDATORY:** You MUST ALWAYS include all 5 required fields in the body. NEVER send an empty body {}.
+    - **When calling api_post, you MUST write out the complete body dictionary like this:**
+      api_post(
+        service="vm-provisioning",
+        endpoint="/testing-farm/vm-provisioning",
+        body={
+          "Arch": "x86_64",
+          "Distro": "RHIVOS (latest-RHIVOS-2)",
+          "User": "chatbot",
+          "duration": 30,
+          "comment": null
+        }
+      )
+    - **Minimum body structure (use these defaults if user doesn't specify):**
+      {
+        "Arch": "x86_64",
+        "Distro": "RHIVOS (latest-RHIVOS-2)",
+        "User": "chatbot",
+        "duration": 30,
+        "comment": null
+      }
+    - Optional fields you can include if specified: disk_space, reservation_time, memory, image, public_key, scheduling_priority, start_time, end_time, virtualization_is_supported
+    - Copy the field names exactly - they are case-sensitive (Arch, Distro, User must be capitalized)
+    - **IMPORTANT:** The body parameter must be a complete dictionary with all fields - do not pass {} and expect it to be filled automatically
 3. **Getting VM Lists:** When asked to get VMs, ALWAYS make EXACTLY ONE api_get call to get all the results (no one than one for one user query) and then perform any filtering operation if needed:
     - service="vm-provisioning"
     - endpoint="/testing-farm/vm-provisioning"
