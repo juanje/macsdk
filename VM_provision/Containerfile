@@ -1,0 +1,35 @@
+# Build a binary distributable for VM_provision
+FROM registry.access.redhat.com/ubi10/ubi:latest as builder
+WORKDIR /code
+ENV DNF_OPTS="--setopt=install_weak_deps=False --setopt=tsflags=nodocs"
+RUN dnf install -y \
+                python3-pip \
+ && dnf clean all -y
+RUN pip install --no-cache-dir uv
+COPY pyproject.toml uv.lock README.md ./
+COPY src src
+RUN uv build --no-cache
+# Build wheel and export exact dependency versions from lockfile
+RUN uv build --no-cache && \
+    uv export --frozen --no-hashes --no-dev -o requirements.txt
+
+# Use the binary distributable in the system Python environment
+# so it's accessible globally in containers
+FROM registry.access.redhat.com/ubi10/ubi:latest
+ENV DNF_OPTS="--setopt=install_weak_deps=False --setopt=tsflags=nodocs"
+RUN dnf install -y \
+                python3-pip \
+ && dnf clean all -y
+COPY --from=builder /code/dist/*.whl /tmp/
+COPY --from=builder /code/requirements.txt /tmp/
+COPY --from=builder /code/pyproject.toml /tmp/
+COPY --from=builder /code/README.md /tmp/
+# Install exact versions from lockfile, then the wheel
+RUN cd /tmp && \
+    pip3.12 install --no-cache-dir -r requirements.txt && \
+    pip3.12 install --no-cache-dir --no-deps *.whl && \
+    rm *.whl requirements.txt pyproject.toml README.md
+
+# Default command - can be overridden
+ENTRYPOINT ["vm-provision"]
+

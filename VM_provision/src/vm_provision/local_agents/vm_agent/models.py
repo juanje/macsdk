@@ -1,0 +1,47 @@
+"""Response models for vm-agent.
+
+By default, agents use BaseAgentResponse which provides:
+- response_text: str - Human-readable response
+- tools_used: list[str] - Tools that were called
+
+This is sufficient for most agents. The supervisor receives
+the response_text via the tool wrapper.
+
+To add custom structured fields (for advanced use cases like
+inter-agent coordination), uncomment and extend below.
+"""
+
+from macsdk.core import BaseAgentResponse
+
+# Default: Use the SDK's base response directly
+AgentResponse = BaseAgentResponse
+
+# Advanced: Uncomment to add custom structured fields
+# Note: Only if you really need to add custom fields to the response.
+# from pydantic import Field
+#
+# class AgentResponse(BaseAgentResponse):
+#     """Custom response model for vm-agent.
+#
+#     Example fields for vm-agent:
+#     """
+#
+#     # Service health summary
+#     services_healthy: int = Field(default=0, description="Number of healthy services")
+#     services_degraded: int = Field(default=0, description="Number of degraded services")
+#
+#     # Pipeline status
+#     pipeline_status: str | None = Field(
+#         default=None, description="Pipeline status (passed/failed/running/pending)"
+#     )
+#     failed_jobs: list[str] = Field(
+#         default_factory=list, description="Names of failed jobs"
+#     )
+#
+#     # Alerts summary
+#     critical_alerts: int = Field(default=0, description="Number of critical alerts")
+#
+#     # Error information
+#     error_summary: str | None = Field(
+#         default=None, description="Summary of errors found"
+#     )

@@ -1,0 +1,135 @@
+"""Tools for the vm-agent agent.
+
+=============================================================================
+TOOL CATEGORIES
+=============================================================================
+
+This agent uses two categories of tools:
+
+1. INTERNAL TOOLS (via get_sdk_tools):
+   Auto-included by the SDK. You don't need to add these manually.
+
+   - calculate     Always included. LLMs are unreliable at math.
+   - read_skill    Auto-detected if skills/ directory has .md files.
+   - read_fact     Auto-detected if facts/ directory has .md files.
+
+2. MANUAL TOOLS:
+   Added explicitly below. Choose based on your agent's needs.
+
+   - api_get       GET requests to registered API services
+   - api_post      POST requests with JSON body
+   - fetch_file    Download files from URLs
+   - fetch_json    Fetch and parse JSON from URLs
+
+Run `macsdk list-tools` to see all available tools and parameters.
+
+=============================================================================
+ENABLING KNOWLEDGE TOOLS
+=============================================================================
+
+To enable read_skill and read_fact:
+
+  mkdir -p src/vm_agent/skills
+  mkdir -p src/vm_agent/facts
+
+Then add .md files with YAML frontmatter:
+
+  ---
+  name: my-skill
+  description: How to do something
+  ---
+
+  # My Skill
+  ...
+
+The tools will be auto-detected on next run.
+
+=============================================================================
+"""
+
+from __future__ import annotations
+
+from macsdk.tools import api_get, api_post, fetch_file, get_sdk_tools
+
+# =============================================================================
+# SERVICE REGISTRATION
+# =============================================================================
+
+_api_registered = False
+
+
+def _ensure_api_registered() -> None:
+    """Register the API service on first use."""
+    global _api_registered
+    if not _api_registered:
+        from macsdk.core.api_registry import register_api_service
+
+        # Register DevOps Mock API as a service
+        # Replace with your own API endpoint for production use
+        register_api_service(
+            name="vm-provisioning",
+            base_url="https://api.test-console.corp.redhat.com",
+            timeout=10,
+            max_retries=3,
+            ssl_verify=False,
+        )
+        _api_registered = True
+
+
+# =============================================================================
+# TOOLS
+# =============================================================================
+
+
+def get_tools() -> list:
+    """Get all tools for this agent.
+
+    Returns:
+        List of tools including:
+        - SDK internal tools (calculate, and knowledge tools if dirs exist)
+        - Manual tools (api_get, api_post, fetch_file)
+
+    Note:
+        Knowledge tools (read_skill, read_fact) are auto-detected.
+        Create skills/ or facts/ directories with .md files to enable them.
+    """
+    _ensure_api_registered()
+
+    return [
+        # SDK internal tools (calculate + auto-detect knowledge)
+        *get_sdk_tools(__package__),
+        # Manual tools - add/remove based on your needs
+        api_get,
+        api_post,
+        fetch_file,
+    ]
+
+
+# Tools exposed for CLI inspection
+TOOLS = get_tools()
+
+
+# =============================================================================
+# CUSTOMIZATION
+# =============================================================================
+#
+# To use your own API with authentication:
+#
+# 1. Add your credentials to config.py:
+#
+#        api_token: SecretStr | None = None
+#        api_base_url: str = "https://api.example.com"
+#
+# 2. Use them in _ensure_api_registered():
+#
+#    from .config import config
+#
+#    register_api_service(
+#        name="myapi",
+#        base_url=config.api_base_url,
+#        token=config.api_token.get_secret_value() if config.api_token else None,
+#    )
+#
+# 3. Update CAPABILITIES in agent.py to describe your API endpoints
+#
+# For creating custom tools, see docs/reference/tools.md
