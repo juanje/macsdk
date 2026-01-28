@@ -118,9 +118,9 @@ async def _make_request(
         )
     if headers:
         request_headers.update(headers)
-    if body:
-        request_headers.setdefault("Content-Type", "application/json")
-
+    # Note: When using json= parameter with httpx, Content-Type is set automatically.
+    # We'll remove any existing Content-Type header later to avoid conflicts.
+      
     # Configure SSL verification
     verify: bool | str | ssl.SSLContext = True
     if not service_config.ssl_verify:
@@ -147,10 +147,64 @@ async def _make_request(
     # Configure event hooks to validate redirects
     validator = create_redirect_validator(app_config.url_security)
     event_hooks = {"request": [validator]} if validator else {}
+    
+    # Add debug logging hook to see actual request being sent
+    async def log_request(request: httpx.Request) -> None:
+        """Log request details for debugging."""
+        # Always log at INFO level to ensure visibility
+        logger.info(f"[API REQUEST] {request.method} {request.url}")
+        logger.info(f"[API REQUEST] Headers: {dict(request.headers)}")
+        # Check Content-Type specifically
+        content_type = request.headers.get("Content-Type") or request.headers.get("content-type")
+        logger.info(f"[API REQUEST] Content-Type header: {content_type}")
+        if request.content:
+            try:
+                body_preview = request.content[:500] if len(request.content) > 500 else request.content
+                if isinstance(body_preview, bytes):
+                    body_preview = body_preview.decode("utf-8", errors="replace")
+                logger.info(f"[API REQUEST] Body preview: {body_preview}")
+            except Exception as e:
+                logger.warning(f"[API REQUEST] Could not log body: {e}")
+        else:
+            logger.info("[API REQUEST] No request body")
+    
+    # Always add logging hook to see what's actually being sent
+    if "request" not in event_hooks:
+        event_hooks["request"] = []
+    event_hooks["request"].append(log_request)
 
     # Retry logic with exponential backoff
     # Create client outside retry loop for connection pooling
     last_error = None
+    
+    # Prepare request body and headers for JSON requests
+    request_body = None
+    if body is not None and (not isinstance(body, dict) or len(body) > 0):
+        # Serialize JSON body explicitly (skip if body is None or empty dict)
+        request_body = json.dumps(body, ensure_ascii=False)
+        
+        # Remove any existing Content-Type header (case-insensitive)
+        headers_to_remove = [
+            key for key in request_headers.keys()
+            if key.lower() == "content-type"
+        ]
+        for key in headers_to_remove:
+            del request_headers[key]
+        
+        # Explicitly set Content-Type for JSON body
+        # Using standard capitalization as HTTP headers are case-insensitive but some servers are strict
+        request_headers["Content-Type"] = "application/json"
+        
+        logger.info(f"[API] Prepared JSON body ({len(request_body)} chars): {request_body[:200]}...")
+        # For debugging: log full body for vm-provisioning
+        if service == "vm-provisioning" and len(request_body) > 200:
+            logger.info(f"[API] Full JSON body: {request_body}")
+        logger.info(f"[API] Set Content-Type header to: {request_headers.get('Content-Type')}")
+    else:
+        logger.info("[API] No request body (body is None)")
+    
+    logger.info(f"[API] Final request headers before sending: {dict(request_headers)}")
+    
     async with httpx.AsyncClient(
         verify=verify,
         timeout=service_config.timeout,
@@ -159,11 +213,13 @@ async def _make_request(
     ) as client:
         for attempt in range(service_config.max_retries):
             try:
+                # Use content= with explicit JSON serialization and Content-Type header
+                # This gives us full control over the request format
                 response = await client.request(
                     method=method,
                     url=url,
                     params=params,
-                    json=body if body else None,
+                    content=request_body.encode("utf-8") if request_body else None,
                     headers=request_headers,
                 )
 
@@ -302,15 +358,34 @@ async def api_post(
     Args:
         service: Name of the registered API service (e.g., "github", "devops").
         endpoint: API endpoint path WITHOUT query string (e.g., "/users", "/items").
-        body: Request body as a dictionary (will be sent as JSON).
+        body: Request body as a dictionary (will be sent as JSON). 
+            **CRITICAL: The body MUST be a non-empty dictionary with the required fields.**
+            **NEVER pass an empty dictionary {} - always include the required fields.**
+            Example for vm-provisioning: {"Arch": "x86_64", "Distro": "RHIVOS (latest-RHIVOS-2)", "User": "chatbot", "duration": 30, "comment": null}
         params: Query parameters as a dictionary. Do NOT put these in the endpoint.
 
     Returns:
         JSON response data.
 
     Raises:
-        ToolException: If the API request fails.
+        ToolException: If the API request fails or body is empty.
     """
+    # Validate that body is not empty
+    if not body or (isinstance(body, dict) and len(body) == 0):
+        # For other services, provide helpful error with example
+        if service == "vm-provisioning":
+            raise ToolException(
+                f"API POST to '{service}' failed: Request body cannot be empty. "
+                "You must provide the required fields in the body dictionary. "
+                "Example with required fields: {{\"arch\": \"x86_64\", \"distro\": \"RHIVOS (latest-RHIVOS-2)\", "
+                "\"username\": \"VM_provision_chatbot\", \"reservation_time\": 60, \"immediate_execution\": 1, \"debug_kernel\": 0}}"
+            )
+        else:
+            raise ToolException(
+                f"API POST to '{service}' failed: Request body cannot be empty. "
+                "You must provide the required fields in the body dictionary."
+            )
+    
     result = await _make_request("POST", service, endpoint, params=params, body=body)
 
     if result["success"]:

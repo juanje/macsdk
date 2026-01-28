@@ -1,0 +1,59 @@
+"""Local configuration for vm-agent.
+
+Extend MACSDKConfig to add your own settings.
+"""
+
+from macsdk.core import MACSDKConfig
+from pydantic_settings import SettingsConfigDict
+
+# Uncomment to use Pydantic types for validation:
+# from pydantic import HttpUrl, SecretStr
+
+
+class VmAgentConfig(MACSDKConfig):
+    """Configuration for vm-agent.
+
+    Add your agent-specific settings here.
+    They will be loaded from environment variables or .env file.
+
+    Example:
+        # In .env:
+        API_TOKEN=your_token_here
+        API_TIMEOUT=30
+
+        # Access in code:
+        from .config import config
+        timeout = config.api_timeout  # Regular values work directly
+        if config.api_token:  # Check optional SecretStr before accessing
+            token = config.api_token.get_secret_value()
+    """
+
+    # Add your custom settings here. Common patterns:
+    #
+    # Secrets (hidden in logs/repr):
+    # api_token: SecretStr | None = None
+    #
+    # URLs (validated format):
+    # api_base_url: HttpUrl | None = None
+    #
+    # Simple values:
+    # api_timeout: int = 30
+    # debug_mode: bool = False
+    # project_id: str = ""
+    #
+    # Values with validation (recommended for user-facing config):
+    # from pydantic import Field
+    # max_retries: int = Field(default=3, ge=0, le=10)
+    # temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    # port: int = Field(default=8080, ge=1, le=65535)
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+
+config = VmAgentConfig()
+
