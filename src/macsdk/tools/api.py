@@ -372,49 +372,19 @@ async def api_post(
     """
     # Validate that body is not empty
     if not body or (isinstance(body, dict) and len(body) == 0):
-        # TEMPORARY DEBUG: Auto-fill default body for vm-provisioning to test the flow
-        if service == "vm-provisioning" and endpoint == "/testing-farm/vm-provisioning":
-            logger.warning(
-                "[DEBUG] Empty body detected for vm-provisioning. "
-                "Auto-filling with default values for testing."
+        # For other services, provide helpful error with example
+        if service == "vm-provisioning":
+            raise ToolException(
+                f"API POST to '{service}' failed: Request body cannot be empty. "
+                "You must provide the required fields in the body dictionary. "
+                "Example with required fields: {{\"arch\": \"x86_64\", \"distro\": \"RHIVOS (latest-RHIVOS-2)\", "
+                "\"username\": \"VM_provision_chatbot\", \"reservation_time\": 60, \"immediate_execution\": 1, \"debug_kernel\": 0}}"
             )
-            # Based on API error message, these are the actual field names the API expects (lowercase!)
-            # The API error said these fields must be "in the payload" - trying with null values
-            # If that doesn't work, we may need to omit optional fields entirely
-            body = {
-                "arch": "x86_64",
-                "distro": "RHIVOS (latest-RHIVOS-2)",
-                "username": "chatbot",
-                "reservation_time": 30,
-                "immediate_execution": True,
-                # API requires these fields to be present - trying null instead of empty strings
-                "starting_at_date": None,
-                "starting_at_time": None,
-                "starting_at_timezone": None,
-                "xstream": None,
-                "image": None,
-                "image_name": None,
-                "image_type": None,
-                "debug_kernel": None,
-                "disk_space": None,
-                "memory": None,
-                "comment": None,
-                "ssh_key": None
-            }
         else:
-            # For other services, provide helpful error with example
-            if service == "vm-provisioning":
-                raise ToolException(
-                    f"API POST to '{service}' failed: Request body cannot be empty. "
-                    "You must provide the required fields in the body dictionary. "
-                    "Example: {{\"Arch\": \"x86_64\", \"Distro\": \"RHIVOS (latest-RHIVOS-2)\", "
-                    "\"User\": \"chatbot\", \"duration\": 30, \"comment\": null}}"
-                )
-            else:
-                raise ToolException(
-                    f"API POST to '{service}' failed: Request body cannot be empty. "
-                    "You must provide the required fields in the body dictionary."
-                )
+            raise ToolException(
+                f"API POST to '{service}' failed: Request body cannot be empty. "
+                "You must provide the required fields in the body dictionary."
+            )
     
     result = await _make_request("POST", service, endpoint, params=params, body=body)
 
