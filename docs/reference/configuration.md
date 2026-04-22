@@ -107,7 +107,7 @@ rag:
   chunk_size: 1000          # Size of text chunks
   chunk_overlap: 200        # Overlap between chunks
   max_depth: 3              # Crawl depth for HTML URLs
-  embedding_model: "models/embedding-001"
+  embedding_model: "gemini-embedding-001"
 
   # Retrieval settings
   retriever_k: 6            # Documents to retrieve
