@@ -115,7 +115,7 @@ class RAGConfig(EnvPrioritySettingsMixin, BaseSettings):
         description="Maximum crawl depth for documentation URLs",
     )
     embedding_model: str = Field(
-        default="models/embedding-001",
+        default="gemini-embedding-001",
         description="Google embedding model to use",
     )
 
