@@ -207,9 +207,7 @@ def create_web_app(
                     # inner timeouts fire first with better error messages)
                     hard_timeout = config.supervisor_timeout + 10
                     async with asyncio.timeout(hard_timeout):
-                        stream = graph.astream(
-                            state, stream_mode=["values", "custom"]
-                        )
+                        stream = graph.astream(state, stream_mode=["values", "custom"])
                         async for chunk in stream:
                             if websocket.client_state != WebSocketState.CONNECTED:
                                 await stream.aclose()
@@ -262,8 +260,7 @@ def create_web_app(
                         {
                             "type": "error",
                             "content": (
-                                "Request timed out. "
-                                "Try a more specific question."
+                                "Request timed out. Try a more specific question."
                             ),
                         },
                     )
