@@ -103,6 +103,7 @@ def create_web_app(
         Configured FastAPI application.
     """
     app = FastAPI(title=title, version=__version__)
+    active_connections = 0
 
     # Mount static files if provided
     if static_dir and static_dir.exists():
@@ -158,7 +159,9 @@ def create_web_app(
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:
         """WebSocket endpoint for real-time chat streaming."""
+        nonlocal active_connections
         await websocket.accept()
+        active_connections += 1
         state = create_initial_state()
 
         try:
@@ -282,11 +285,16 @@ def create_web_app(
         except Exception as e:
             logger.error(f"WebSocket error: {e}")
             await safe_send_json(websocket, {"type": "error", "content": str(e)})
+        finally:
+            active_connections -= 1
 
     @app.get("/health")
-    async def health() -> dict[str, str]:
+    async def health() -> dict[str, object]:
         """Health check endpoint."""
-        return {"status": "healthy"}
+        return {
+            "status": "healthy",
+            "active_connections": active_connections,
+        }
 
     return app
 
