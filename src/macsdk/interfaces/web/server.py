@@ -199,32 +199,43 @@ def create_web_app(
                 )
 
                 try:
-                    # Use same stream modes as CLI for consistency
-                    stream = graph.astream(state, stream_mode=["values", "custom"])
-                    async for chunk in stream:
-                        if websocket.client_state != WebSocketState.CONNECTED:
-                            break
+                    # Hard ceiling above per-node timeouts (+10s buffer so
+                    # inner timeouts fire first with better error messages)
+                    hard_timeout = config.supervisor_timeout + 10
+                    async with asyncio.timeout(hard_timeout):
+                        stream = graph.astream(
+                            state, stream_mode=["values", "custom"]
+                        )
+                        async for chunk in stream:
+                            if websocket.client_state != WebSocketState.CONNECTED:
+                                break
 
-                        if isinstance(chunk, tuple) and len(chunk) == 2:
-                            stream_mode_type, stream_data = chunk
+                            if isinstance(chunk, tuple) and len(chunk) == 2:
+                                stream_mode_type, stream_data = chunk
 
-                            if stream_mode_type == "custom":
-                                if isinstance(stream_data, str):
-                                    await safe_send_json(
-                                        websocket,
-                                        {"type": "progress", "content": stream_data},
-                                    )
-                                elif isinstance(stream_data, dict):
-                                    for value in stream_data.values():
-                                        if isinstance(value, str):
-                                            await safe_send_json(
-                                                websocket,
-                                                {"type": "progress", "content": value},
-                                            )
-                            elif stream_mode_type == "values":
-                                # Update state with final values
-                                if isinstance(stream_data, dict):
-                                    state.update(stream_data)  # type: ignore
+                                if stream_mode_type == "custom":
+                                    if isinstance(stream_data, str):
+                                        await safe_send_json(
+                                            websocket,
+                                            {
+                                                "type": "progress",
+                                                "content": stream_data,
+                                            },
+                                        )
+                                    elif isinstance(stream_data, dict):
+                                        for value in stream_data.values():
+                                            if isinstance(value, str):
+                                                await safe_send_json(
+                                                    websocket,
+                                                    {
+                                                        "type": "progress",
+                                                        "content": value,
+                                                    },
+                                                )
+                                elif stream_mode_type == "values":
+                                    # Update state with final values
+                                    if isinstance(stream_data, dict):
+                                        state.update(stream_data)  # type: ignore
 
                     final_response = state.get("chatbot_response", "")
                     if final_response:
@@ -235,6 +246,20 @@ def create_web_app(
 
                     await safe_send_json(websocket, {"type": "complete"})
 
+                except TimeoutError:
+                    logger.warning(
+                        "WebSocket request timed out after %ss", hard_timeout
+                    )
+                    await safe_send_json(
+                        websocket,
+                        {
+                            "type": "error",
+                            "content": (
+                                "Request timed out. "
+                                "Try a more specific question."
+                            ),
+                        },
+                    )
                 except asyncio.CancelledError:
                     logger.info("Graph execution cancelled")
                     raise
