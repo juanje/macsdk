@@ -1,0 +1,88 @@
+# Vm Provision Configuration
+# Copy this file to config.yml and customize as needed.
+#
+# This file is loaded automatically if present.
+# API keys should be in .env, not here.
+
+# =============================================================================
+# LLM Configuration
+# =============================================================================
+# llm_model: gemini-3-flash-preview      # Model for responses
+# llm_temperature: 0.3             # Creativity (0.0 - 1.0)
+# llm_reasoning_effort: medium     # low, medium, high
+
+# =============================================================================
+# Middleware Configuration
+# =============================================================================
+# include_datetime: true           # Inject current datetime into prompts
+# Note: Task planning (TODO middleware) is always enabled for all agents
+
+# Context summarization (for long conversations)
+# summarization_enabled: false
+# summarization_trigger_tokens: 100000
+# summarization_keep_messages: 6
+
+# =============================================================================
+# Agent Execution Configuration
+# =============================================================================
+# recursion_limit: 50             # Max iterations for agent tool calls
+# Use higher values (100+) for complex workflows with many agents/steps
+
+# Timeout configuration (seconds) - prevents hanging on long-running operations
+# supervisor_timeout: 120.0      # Supervisor execution (includes specialist calls)
+# specialist_timeout: 90.0       # Specialist agent execution (includes LLM + tools)
+# formatter_timeout: 30.0        # Response formatting
+# llm_request_timeout: 60.0      # Individual LLM HTTP requests
+
+# =============================================================================
+# Web Server Configuration (for macsdk web interface)
+# =============================================================================
+# server_host: 0.0.0.0
+# server_port: 8000
+# message_max_length: 5000
+# warmup_timeout: 15.0
+
+# =============================================================================
+# URL Security Configuration (SSRF Protection)
+# =============================================================================
+# Control which URLs can be accessed by remote file tools and API tools.
+# Disabled by default for backward compatibility.
+#
+# url_security:
+#   enabled: true                    # Enable URL filtering
+#   allow_localhost: false           # Allow localhost/127.0.0.1 (default: false)
+#   log_blocked_attempts: true       # Log blocked URL attempts (default: true)
+#
+#   # Allow list for domains (supports wildcards)
+#   allow_domains:
+#     - "api.github.com"
+#     - "*.example.com"
+#     - "internal.corp"
+#
+#   # Allow list for IP ranges (CIDR notation)
+#   allow_ips:
+#     - "203.0.113.0/24"             # Public IP range
+#     - "192.168.1.0/24"             # Private network (if needed)
+
+# =============================================================================
+# Debug Configuration
+# =============================================================================
+# debug: false                # Enable debug mode (shows prompts sent to LLM)
+# Use --debug flag with chat/web commands, or set debug: true here
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+# log_level: INFO              # DEBUG, INFO, WARNING, ERROR
+# log_dir: ./logs              # Directory for log files
+# log_filename:                # Custom filename (default: auto with date)
+
+# Debug middleware settings (when --debug or debug: true)
+# debug_prompt_max_length: 10000   # Max chars per prompt in logs
+# debug_show_response: true        # Show model responses in debug
+
+# =============================================================================
+# Custom Settings
+# =============================================================================
+# Add your chatbot-specific settings below:
+# my_custom_setting: value
