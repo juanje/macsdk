@@ -198,6 +198,7 @@ def create_web_app(
                     websocket, {"type": "user_message", "content": user_message}
                 )
 
+                stream = None
                 try:
                     # Hard ceiling above per-node timeouts (+10s buffer so
                     # inner timeouts fire first with better error messages)
@@ -208,6 +209,7 @@ def create_web_app(
                         )
                         async for chunk in stream:
                             if websocket.client_state != WebSocketState.CONNECTED:
+                                await stream.aclose()
                                 break
 
                             if isinstance(chunk, tuple) and len(chunk) == 2:
@@ -250,6 +252,8 @@ def create_web_app(
                     logger.warning(
                         "WebSocket request timed out after %ss", hard_timeout
                     )
+                    if stream is not None:
+                        await stream.aclose()
                     await safe_send_json(
                         websocket,
                         {
@@ -262,8 +266,12 @@ def create_web_app(
                     )
                 except asyncio.CancelledError:
                     logger.info("Graph execution cancelled")
+                    if stream is not None:
+                        await stream.aclose()
                     raise
                 except Exception as e:
+                    if stream is not None:
+                        await stream.aclose()
                     await safe_send_json(
                         websocket, {"type": "error", "content": str(e)}
                     )
